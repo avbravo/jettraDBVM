@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JettraDB Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Login View -->
+        <div id="login-view" class="view active">
+            <div class="login-container">
+                <div class="brand">
+                    <div class="logo-icon">J</div>
+                    <h1>JettraDB</h1>
+                </div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" placeholder="admin" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Sign In</button>
+                    <div id="login-error" class="error-message"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo-icon sm">J</div>
+                    <span>JettraDB</span>
+                </div>
+                <div class="sidebar-actions"
+                    style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-color);">
+                    <button id="create-db-btn" class="btn btn-sm btn-primary" style="width: 100%;">+ New
+                        Database</button>
+                </div>
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <!-- Databases Tree -->
+                        <ul id="db-list" class="tree-view">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+                </nav>
+                <div class="sidebar-footer">
+                    <div class="user-menu">
+                        <span id="user-display">User</span>
+                        <div class="user-actions">
+                            <button id="change-pass-btn" class="btn btn-ghost btn-sm">Change Password</button>
+                            <button id="logout-btn" class="btn btn-ghost btn-sm">Logout</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+            <main class="main-content">
+                <header class="top-bar">
+                    <div style="display: flex; align-items: center;">
+                        <button id="menu-toggle">☰</button>
+                        <div id="breadcrumbs">Dashboard</div>
+                    </div>
+                    <div class="actions">
+                        <!-- Collection Actions (Visible when collection selected) -->
+                        <div id="collection-actions" style="display: none; gap: 0.5rem;">
+                            <input type="text" id="doc-search" placeholder="Search..."
+                                style="padding: 0.4rem; font-size: 0.9rem; width: 200px;">
+                            <button id="add-doc-btn" class="btn btn-primary btn-sm">+ New Document</button>
+                            <select id="view-mode"
+                                style="padding: 0.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <option value="table">Table View</option>
+                                <option value="json">JSON View</option>
+                                <option value="tree">Tree View</option>
+                            </select>
+                        </div>
+                        <button id="theme-toggle-btn" class="btn btn-icon" title="Toggle Theme">🌓</button>
+                        <button id="refresh-btn" class="btn btn-icon" title="Refresh">↻</button>
+                    </div>
+                </header>
+                <div id="content-area">
+                    <!-- Dynamic Content -->
+                    <div class="empty-state">
+                        <h2>Welcome to JettraDB</h2>
+                        <p>Select a database to get started.</p>
+                    </div>
+                </div>
+                <footer class="app-footer">
+                    &copy; 2025 JettraDB. All Rights Reserved.
+                </footer>
+            </main>
+        </div>
+    </div>
+
+    <!-- Deprecated Modals Removed: Using Center View Router -->
+    <script src="js/app.js"></script>
+</body>
+
+</html>
