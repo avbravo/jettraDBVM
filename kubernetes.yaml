@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: jettradb
+spec:
+  serviceName: "jettradb"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: jettradb
+  template:
+    metadata:
+      labels:
+        app: jettradb
+    spec:
+      containers:
+      - name: jettradb
+        image: jettradb:latest
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: data
+          mountPath: /app/data
+        env:
+        - name: HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jettradb
+spec:
+  ports:
+  - port: 8080
+    name: http
+  clusterIP: None
+  selector:
+    app: jettradb

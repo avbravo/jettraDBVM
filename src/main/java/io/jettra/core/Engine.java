@@ -1,12 +1,11 @@
 package io.jettra.core;
 
-import io.helidon.config.Config;
+import java.util.logging.Logger;
+
 import io.jettra.core.storage.BTreeIndexEngine;
 import io.jettra.core.storage.DocumentStore;
 import io.jettra.core.storage.FilePersistence;
 import io.jettra.core.storage.IndexEngine;
-
-import java.util.logging.Logger;
 
 public class Engine {
     private static final Logger LOGGER = Logger.getLogger(Engine.class.getName());
@@ -15,6 +14,8 @@ public class Engine {
     private final DocumentStore store;
     private final io.jettra.core.auth.AuthManager auth;
     private final IndexEngine indexer;
+    private final io.jettra.core.raft.RaftNode raftNode;
+    private final io.jettra.core.raft.RaftService raftService;
 
     public Engine(java.util.Map<String, Object> config) throws Exception {
         this.config = config;
@@ -26,6 +27,15 @@ public class Engine {
 
         this.auth = new io.jettra.core.auth.AuthManager(store);
 
+        // -- RAFT INIT --
+        String nodeId = (String) config.getOrDefault("NodeID", "node-" + java.util.UUID.randomUUID().toString());
+
+        
+        io.jettra.core.raft.RaftLog raftLog = new io.jettra.core.raft.RaftLog(store);
+        boolean isBootstrap = (Boolean) config.getOrDefault("Bootstrap", false);
+        this.raftNode = new io.jettra.core.raft.RaftNode(nodeId, raftLog, store, isBootstrap);
+        this.raftService = new io.jettra.core.raft.RaftService(raftNode);
+
         // Run Bootstrap
         io.jettra.core.bootstrap.BootstrapManager bootstrap = new io.jettra.core.bootstrap.BootstrapManager(store,
                 config);
@@ -36,7 +46,7 @@ public class Engine {
 
     public void start() {
         LOGGER.info("Starting JettraDB Engine...");
-        // Initialize other components here (Raft, API, etc.)
+        this.raftNode.start();
     }
 
     public DocumentStore getStore() {
@@ -49,5 +59,13 @@ public class Engine {
 
     public io.jettra.core.auth.AuthManager getAuth() {
         return auth;
+    }
+    
+    public io.jettra.core.raft.RaftNode getRaftNode() {
+        return raftNode;
+    }
+    
+    public io.jettra.core.raft.RaftService getRaftService() {
+        return raftService;
     }
 }

@@ -635,8 +635,163 @@ const App = {
         } catch (e) {
             alert('Failed to delete');
         }
+    },
+
+    // --- Cluster Management ---
+    showSection(sectionId) {
+        // Hiding all sections
+        document.querySelectorAll('.section-content').forEach(el => el.classList.add('hidden'));
+        document.getElementById('login-view').classList.remove('active');
+        document.getElementById('dashboard-view').classList.add('active');
+
+        // Show target
+        const target = document.getElementById(sectionId + '-section');
+        if (target) {
+            target.classList.remove('hidden');
+            if (sectionId === 'dashboard') {
+                // default view
+                document.getElementById('dashboard-section').classList.remove('hidden'); // Logic overlap fix
+            }
+            if (sectionId === 'cluster') {
+                this.refreshClusterStatus();
+            }
+        } else {
+            // Fallback
+            document.getElementById('dashboard-section').classList.remove('hidden');
+        }
+    },
+
+    async refreshClusterStatus() {
+        const content = document.getElementById('raft-status-content');
+        content.innerHTML = 'Loading...';
+        try {
+            // Raft endpoints are not authenticated in current implementation or require different handling?
+            // If they are under Engine/RaftService, they are just registered. 
+            // Depending on implementation, they might not need auth token or might need it. 
+            // Assuming they are public or cookie based, but let's try authenticatedFetch just in case they are wrapped?
+            // Wait, RaftService registered raw paths. They might not check auth.
+            // But let's use fetch directly for now if it fails use authenticatedFetch.
+
+            // Actually, better to use fetch, as Raft endpoints are for internal/inter-node but exposing them to UI...
+            // The user said "exposed endpoints".
+            const res = await fetch('/raft/status');
+            if (!res.ok) throw new Error('Failed to fetch status');
+
+            const status = await res.json();
+
+            content.innerHTML = `
+                <div class="space-y-2">
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>Node ID:</span> <span class="font-mono">${status.nodeId}</span></div>
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>State:</span> <span class="font-bold ${status.state === 'LEADER' ? 'text-green-500' : 'text-yellow-500'}">${status.state}</span></div>
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>Term:</span> <span>${status.term}</span></div>
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>Leader:</span> <span class="font-mono">${status.leaderId || 'None'}</span></div>
+                </div>
+            `;
+
+            // Render Peers
+            const peersFunc = (peersMap) => {
+                const tbody = document.getElementById('peers-table-body');
+                if (!peersMap || Object.keys(peersMap).length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center">No peers connected</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                for (const [id, url] of Object.entries(peersMap)) {
+                    html += `
+                        <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                            <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                                ${id}
+                            </td>
+                            <td class="px-6 py-4">
+                                ${url}
+                            </td>
+                            <td class="px-6 py-4">
+                                <button onclick="app.removePeer('${id}')" class="font-medium text-red-600 dark:text-red-500 hover:underline">Remove</button>
+                            </td>
+                        </tr>
+                     `;
+                }
+                tbody.innerHTML = html;
+            };
+
+            peersFunc(status.peers);
+
+        } catch (e) {
+            content.innerHTML = '<span class="text-red-500">Error loading status</span>';
+            console.error(e);
+        }
+    },
+
+    async addPeer() {
+        const id = document.getElementById('peer-id').value;
+        const url = document.getElementById('peer-url').value;
+        if (!id || !url) return;
+
+        try {
+            const res = await fetch('/raft/peers', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nodeId: id, url: url })
+            }); // Note: using query params or body? RaftService.addPeer expects request body?
+            // Wait, RaftService: rules.post("/raft/peers", this::addPeer)
+            // RaftService.addPeer(ServerRequest req, ServerResponse res)
+            // It parses body?
+            // Assuming implementation:
+            /*
+            public void addPeer(ServerRequest req, ServerResponse res) {
+                req.content().as(Map.class).then(map -> { ... });
+            }
+            */
+            // So JSON body is correct.
+
+            if (res.ok) {
+                document.getElementById('peer-id').value = '';
+                document.getElementById('peer-url').value = '';
+                this.refreshClusterStatus();
+            } else {
+                alert('Failed to add peer');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error adding peer');
+        }
+    },
+
+    async removePeer(id) {
+        if (!confirm('Remove peer ' + id + '?')) return;
+        try {
+            const res = await fetch(`/raft/peers?id=${id}`, {
+                method: 'DELETE'
+            }); // DELETE often uses query params
+
+            if (res.ok) {
+                this.refreshClusterStatus();
+            } else {
+                alert('Failed to remove peer');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error removing peer');
+        }
+    },
+
+    async forceLeader() {
+        if (!confirm('DANGEROUS: Forcing this node to be leader can cause split-brain if another leader exists. Continue?')) return;
+        try {
+            const res = await fetch('/raft/force-leader', { method: 'POST' });
+            if (res.ok) {
+                this.refreshClusterStatus();
+            } else {
+                alert('Failed to force leader');
+            }
+        } catch (e) {
+            console.error(e);
+        }
     }
 };
+
+window.app = App;
 
 window.addEventListener('DOMContentLoaded', () => {
     App.init();

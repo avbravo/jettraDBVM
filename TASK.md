@@ -5,6 +5,24 @@
 
 curl -u admin:adminadmin "http://localhost:8080/..."
 
+# Distributed Databases
+
+- [] Implementar la distribucion de datos (base de datos, colecciones y documentos a otros nodos estilo replicaset pero mediante el concepto
+de bases de datos distribuida aplicando algoritmos Raft, ten presente que se pueden crear varios nodos desde codigo nativo es decir
+ejecuando instancias de la base de datos en diversos servidores o mediante imagenes de contenedores de docker o podman 
+o en entornos Kubernetes. Crea los archivos necesarios y crea la documentacion para implementar en cada caso
+en el archivo /books/guide/distributed.md
+Ademas permite que se configuren los nodos desde la interfaces web, y que tambien se configure cada archivo config.json para indicar los nodos
+y el lider que se usara. Ten en cuaenta que si falla el lider otro nodo debe convertirse en lider.
+- [] El proceso seria primero crear un cluster que se almacena en _cluster y luego al ejecutar cada instancia el que tiene marcado en el archivo
+config.json  "Bootstrap": true, sera usado como lider, y debe contarse con una opcion del menu en la interface web que indique Cluster
+donde se muestre el nodo actual, se muestren todos los nodos asignados el cluster se muestre el nodo lider y permita añadir, remover, ver el estado 
+de cada nodo. Ten presente que si el lider se detiene otro nodo debe tomar por consenso el rol de lider. Esto debe ser un proceso automatico
+en el caso que solo existan dos nodos y uno se detiene usar un rol de consenso especial ya que no hay mas nodos el que este activo tomara el rol de lider
+
+
+
+
 # Start
 
 - [] Cuando incia la aplicacion verificar si existe el archivo config.json si no existe crearlo con una estructura similar

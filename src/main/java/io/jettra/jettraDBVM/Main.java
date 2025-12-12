@@ -39,8 +39,8 @@ public class Main {
                 jettraConfig.put("SessionTimeout", 0);
                 jettraConfig.put("Bootstrap", true);
                 jettraConfig.put("ClusterID", "cluster-1");
-                jettraConfig.put("NodeID", "node-1");
-
+                jettraConfig.put("NodeID", "node-" + java.util.UUID.randomUUID().toString());
+                
                 mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, jettraConfig);
                 LOGGER.info("Created default config.json");
             }

@@ -41,6 +41,12 @@ public class WebServices {
                 .get("/api/query", this::queryDocuments)
                 // Auth Middleware for API
                 .any("/api/*", this::authMiddleware);
+        
+        // Register Raft Services
+        // Note: RaftService registers its own paths (e.g. /raft/...) which are NOT under /api/
+        // If we want them secured or under /api, we should change RaftService or wrap here.
+        // For now, let's just register them.
+        engine.getRaftService().register(rules);
     }
 
     private void authMiddleware(ServerRequest req, ServerResponse res) {
