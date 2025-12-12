@@ -5,7 +5,23 @@
 
 curl -u admin:adminadmin "http://localhost:8080/..."
 
+
+# jAVA 25
+- [] Usar compact Header
+
+
+# Shell
+
+- [x] Se creo un documento llamado /guide/JettraShell.md que tiene la sintaxis basica por favor incluye el soporte para todas las operaciones crud  de bases datos, operaciones cruid de coleccion y operaciones crurd a nivel de documentos, incluue crud para indices y busquedas por indices, ademas incluye agrupaciones, aggregaciones para operaciones mas complejas, referencias entre documentos e esto usando el lemguaje propio JettraQueryLanguaje, tambien incluye spporte para SQL y un lenguaje similar a MongoDB. Estos deben ser documentados con ejemplos de todo tipo para que sirvan de referencia al usuario.
+
 # Distributed Databases
+
+-[] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
+-[] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
+-[] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
+
+
+
 
 - [] Implementar la distribucion de datos (base de datos, colecciones y documentos a otros nodos estilo replicaset pero mediante el concepto
 de bases de datos distribuida aplicando algoritmos Raft, ten presente que se pueden crear varios nodos desde codigo nativo es decir
