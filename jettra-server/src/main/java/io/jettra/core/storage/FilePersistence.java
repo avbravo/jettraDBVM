@@ -197,10 +197,33 @@ public class FilePersistence implements DocumentStore {
     // Implement dummy methods for the rest of the interface for now
     @Override
     public void renameDatabase(String oldName, String newName) throws Exception {
+        lock.writeLock().lock();
+        try {
+            Path oldDir = Paths.get(dataDirectory, oldName);
+            Path newDir = Paths.get(dataDirectory, newName);
+            if (Files.exists(oldDir)) {
+                Files.move(oldDir, newDir);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
     public void deleteDatabase(String name) throws Exception {
+        lock.writeLock().lock();
+        try {
+            Path dir = Paths.get(dataDirectory, name);
+            if (Files.exists(dir)) {
+                try (Stream<Path> walk = Files.walk(dir)) {
+                    walk.sorted(java.util.Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
@@ -210,6 +233,13 @@ public class FilePersistence implements DocumentStore {
 
     @Override
     public void createCollection(String database, String collection) throws Exception {
+        lock.writeLock().lock();
+        try {
+            Path dir = Paths.get(dataDirectory, database, collection);
+            Files.createDirectories(dir);
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
@@ -218,6 +248,19 @@ public class FilePersistence implements DocumentStore {
 
     @Override
     public void deleteCollection(String database, String collection) throws Exception {
+        lock.writeLock().lock();
+        try {
+            Path dir = Paths.get(dataDirectory, database, collection);
+            if (Files.exists(dir)) {
+                try (Stream<Path> walk = Files.walk(dir)) {
+                    walk.sorted(java.util.Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override

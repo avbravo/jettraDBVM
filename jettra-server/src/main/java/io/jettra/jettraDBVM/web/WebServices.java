@@ -42,6 +42,10 @@ public class WebServices {
                 .delete("/api/doc", this::deleteDocument)
                 .get("/api/query", this::queryDocuments)
                 .post("/api/command", this::executeCommand)
+                // Index Management
+                .get("/api/index", this::getIndexes)
+                .post("/api/index", this::createIndex)
+                .delete("/api/index", this::deleteIndex)
                 // Auth Middleware for API
                 .any("/api/*", this::authMiddleware);
 
@@ -386,6 +390,81 @@ public class WebServices {
             } else {
                  res.send(jsonMapper.writeValueAsString(result));
             }
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getIndexes(ServerRequest req, ServerResponse res) {
+        try {
+            String db = req.query().get("db");
+            String col = req.query().get("col");
+            if (db == null || col == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db or col");
+                return;
+            }
+            List<io.jettra.core.storage.IndexEngine.IndexDefinition> indexes = engine.getIndexer().getIndexes(db, col);
+            
+            // Map to simpler structure
+             List<Map<String, Object>> result = new java.util.ArrayList<>();
+             for (io.jettra.core.storage.IndexEngine.IndexDefinition def : indexes) {
+                 Map<String, Object> map = new java.util.HashMap<>();
+                 // Flatten "fields" list to single field for UI simplicity (or comma separated)
+                 String field = String.join(",", def.fields());
+                 
+                 map.put("field", field);
+                 map.put("unique", def.unique());
+                 map.put("sequential", def.sequential());
+                 result.add(map);
+             }
+            res.send(jsonMapper.writeValueAsString(result));
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void createIndex(ServerRequest req, ServerResponse res) {
+        try {
+            byte[] content = req.content().as(byte[].class);
+            Map<String, Object> body = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
+            
+            String db = (String) body.get("database");
+            String col = (String) body.get("collection");
+            String field = (String) body.get("field");
+            Boolean unique = (Boolean) body.get("unique");
+            Boolean sequential = (Boolean) body.get("sequential");
+            if (unique == null) unique = false;
+            if (sequential == null) sequential = false;
+            
+            if (db == null || col == null || field == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing field, database, or collection");
+                return;
+            }
+            
+            List<String> fields = java.util.Arrays.asList(field.split(","));
+            engine.getIndexer().createIndex(db, col, fields, unique, sequential);
+            
+            res.send(jsonMapper.createObjectNode().put("status", "created").toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void deleteIndex(ServerRequest req, ServerResponse res) {
+        try {
+            String db = req.query().get("db");
+            String col = req.query().get("col");
+            String field = req.query().get("field");
+            
+            if (db == null || col == null || field == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db, col, or field");
+                return;
+            }
+            
+            List<String> fields = java.util.Arrays.asList(field.split(","));
+            engine.getIndexer().deleteIndex(db, col, fields);
+            
+            res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }

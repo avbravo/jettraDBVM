@@ -9,3 +9,4 @@ alterado y si no ha expirado para evitar ataques.
 Cuando un nuevo lider es asignado todos los nodos envian su certificado al nuevo lider que procede 
 a firmarlos para interactuar con ellos.
 
+

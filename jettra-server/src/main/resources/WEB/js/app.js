@@ -282,12 +282,19 @@ const App = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ oldName, newName })
-            }).then(() => {
-                this.closeInputModal();
-                this.loadDatabases();
+            }).then(res => {
+                if (res.ok) {
+                    alert('Database renamed successfully');
+                    this.closeInputModal();
+                    this.loadDatabases();
+                } else {
+                    alert('Failed to rename database');
+                }
             });
         });
     },
+
+
 
     confirmDeleteDatabase(name) {
         if (confirm(`Delete database '${name}'? This cannot be undone.`)) {
@@ -862,6 +869,9 @@ const App = {
                 li.innerHTML = `
                     <strong>${idx.field}</strong> 
                     <span class="badge ${idx.unique ? 'badge-primary' : 'badge-secondary'}">${idx.unique ? 'Unique' : 'Standard'}</span>
+                    ${idx.sequential ? '<span class="badge badge-secondary">Sequential</span>' : ''}
+                    <button class="btn btn-xs btn-danger" style="margin-left: 1rem;" 
+                        onclick="app.deleteIndex('${db}', '${col}', '${idx.field}')">Delete</button>
                 `;
                 list.appendChild(li);
             });
@@ -876,6 +886,7 @@ const App = {
         const col = document.getElementById('idx-col-select').value;
         const field = document.getElementById('idx-field').value;
         const type = document.getElementById('idx-type').value;
+        const sequential = document.getElementById('idx-sequential').checked;
 
         if (!db || !col || !field) {
             alert("Please fill all fields");
@@ -890,13 +901,15 @@ const App = {
                     database: db,
                     collection: col,
                     field: field,
-                    unique: type === 'unique'
+                    unique: type === 'unique',
+                    sequential: sequential
                 })
             });
 
             if (res.ok) {
                 alert('Index created');
                 document.getElementById('idx-field').value = '';
+                document.getElementById('idx-sequential').checked = false; // Reset
                 this.loadIndexes();
             } else {
                 alert('Failed to create index');
@@ -904,6 +917,21 @@ const App = {
         } catch (e) {
             console.error(e);
             alert('Error creating index');
+        }
+    },
+
+    async deleteIndex(db, col, field) {
+        if (!confirm(`Delete index on '${field}'?`)) return;
+        try {
+            const res = await this.authenticatedFetch(`/api/index?db=${db}&col=${col}&field=${field}`, { method: 'DELETE' });
+            if (res.ok) {
+                this.loadIndexes();
+            } else {
+                alert('Failed to delete index');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error deleting index');
         }
     },
 
