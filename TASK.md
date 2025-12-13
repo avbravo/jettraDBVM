@@ -16,7 +16,8 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 # Driver Java
 
 - [x] Implementacion basica del driver
-- [] El driver debe permitir Convertirlo a Java records y viceversa
+- [x] El driver debe permitir Convertirlo a Java records y viceversa y añade a la documentacion ejemplos de uso
+- [x] Ejemplo con una interface repository con agregaciones
 
 
 

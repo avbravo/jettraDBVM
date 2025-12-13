@@ -52,7 +52,8 @@ client.createCollection("my_app_db", "users");
 
 ## Document Operations
 
-### Save Document
+### Using Maps (Dynamic Data)
+
 ```java
 Map<String, Object> user = new HashMap<>();
 user.put("username", "jdoe");
@@ -60,19 +61,32 @@ user.put("email", "john@example.com");
 
 String id = client.saveDocument("my_app_db", "users", user);
 System.out.println("Saved user with ID: " + id);
-```
 
-### Get Document
-```java
 Map<String, Object> savedUser = client.getDocument("my_app_db", "users", id);
-System.out.println("User: " + savedUser);
 ```
 
-### Query Documents
+### Using Java Records (Type-Safe)
+
+You can use Java Records to automatically map your data to and from the database.
+
 ```java
-// List first 10 users
-List<Map<String, Object>> users = client.query("my_app_db", "users", 10, 0);
-users.forEach(u -> System.out.println(u.get("username")));
+public record User(String username, String email, int age) {}
+
+// ...
+
+User newUser = new User("alice", "alice@example.com", 30);
+
+// Save Record
+String id = client.save("my_app_db", "users", newUser);
+System.out.println("Saved Record ID: " + id);
+
+// Get Record
+User retrievedUser = client.get("my_app_db", "users", id, User.class);
+System.out.println("User email: " + retrievedUser.email());
+
+// Query Records
+List<User> users = client.query("my_app_db", "users", 10, 0, User.class);
+users.forEach(u -> System.out.println(u.username()));
 ```
 
 ## Error Handling
@@ -85,4 +99,136 @@ try {
 } catch (DriverException e) {
     System.err.println("Error: " + e.getMessage());
 }
+```
+
+## Repository Pattern Example
+
+For larger applications, it is recommended to abstract the database access using the Repository Pattern. Here is a reusable implementation.
+
+### 1. The Generic Repository Interface
+
+```java
+public interface CrudRepository<T, ID> {
+    ID save(T entity);
+    T findById(ID id);
+    List<T> findAll(int limit, int offset);
+}
+```
+
+### 2. The Abstract Implementation
+
+```java
+import io.jettra.driver.JettraClient;
+import java.util.List;
+
+public abstract class JettraRepository<T> implements CrudRepository<T, String> {
+    private final JettraClient client;
+    private final String dbName;
+    private final String collectionName;
+    private final Class<T> entityClass;
+
+    public JettraRepository(JettraClient client, String dbName, String collectionName, Class<T> entityClass) {
+        this.client = client;
+        this.dbName = dbName;
+        this.collectionName = collectionName;
+        this.entityClass = entityClass;
+        // Ensure collection exists
+        client.createCollection(dbName, collectionName);
+    }
+
+    @Override
+    public String save(T entity) {
+        return client.save(dbName, collectionName, entity);
+    }
+
+    @Override
+    public T findById(String id) {
+        return client.get(dbName, collectionName, id, entityClass);
+    }
+
+    @Override
+    public List<T> findAll(int limit, int offset) {
+        return client.query(dbName, collectionName, limit, offset, entityClass);
+    }
+}
+```
+
+### 3. Usage Example
+
+Define your Entity (Record) and Repository:
+
+```java
+// Entity
+public record Product(String name, double price) {}
+
+// Repository
+public class ProductRepository extends JettraRepository<Product> {
+    public ProductRepository(JettraClient client) {
+        super(client, "ecommerce_db", "products", Product.class);
+    }
+}
+```
+
+Use it in your application:
+
+```java
+JettraClient client = new JettraClient("localhost", 8080, "admin", "pwd");
+ProductRepository productRepo = new ProductRepository(client);
+
+// Create
+String id = productRepo.save(new Product("Laptop", 999.99));
+
+// Read
+Product laptop = productRepo.findById(id);
+System.out.println("Found: " + laptop.name());
+```
+
+## Advanced Patterns
+
+Since JettraDB is a simple document store, specialized features like joins and server-side aggregations are implemented on the client side.
+
+### 1. Document References (Joins)
+
+To model relationships, store the ID of one document in another.
+
+```java
+public record Author(String name) {}
+public record Book(String title, String authorId) {}
+
+// 1. Create Author
+String authorId = client.save("library", "authors", new Author("J.K. Rowling"));
+
+// 2. Create Book referencing Author
+client.save("library", "books", new Book("Harry Potter", authorId));
+
+// 3. Fetch Book and "Join" Author
+Book book = client.query("library", "books", 1, 0, Book.class).getFirst();
+Author author = client.get("library", "authors", book.authorId(), Author.class);
+
+System.out.println("Book: " + book.title() + ", Author: " + author.name());
+```
+
+### 2. Client-Side Aggregations
+
+Use Java Streams to perform aggregations on data retrieved from JettraDB.
+
+```java
+public record Order(double amount, String status) {}
+
+// Imagine we have many orders in the database
+List<Order> orders = client.query("sales", "orders", 1000, 0, Order.class);
+
+// Calculate Total Revenue using Java Streams
+double totalRevenue = orders.stream()
+    .filter(o -> "COMPLETED".equals(o.status()))
+    .mapToDouble(Order::amount)
+    .sum();
+
+System.out.println("Total Revenue: $" + totalRevenue);
+
+// Group by Status
+Map<String, Long> countByStatus = orders.stream()
+    .collect(Collectors.groupingBy(Order::status, Collectors.counting()));
+
+System.out.println("Orders per status: " + countByStatus);
 ```

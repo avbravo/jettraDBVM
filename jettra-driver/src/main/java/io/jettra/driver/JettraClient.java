@@ -133,4 +133,65 @@ public class JettraClient {
                     .build();
           return sendRequest(request, new TypeReference<List<Map<String, Object>>>() {});
     }
+    // Generic Document Operations (Support for Records/POJOs)
+    public <T> String save(String db, String col, T document) {
+        try {
+            String body = mapper.writeValueAsString(document);
+             HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/doc?db=" + db + "&col=" + col))
+                    .header("Authorization", getAuthHeader())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            Map<String, String> res = sendRequest(request, new TypeReference<Map<String, String>>() {});
+            return res.get("id");
+        } catch (Exception e) {
+             throw new DriverException("Failed to save document", e);
+        }
+    }
+    
+    public <T> T get(String db, String col, String id, Class<T> clazz) {
+          HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/doc?db=" + db + "&col=" + col + "&id=" + id))
+                    .header("Authorization", getAuthHeader())
+                    .GET()
+                    .build();
+          try {
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                     if (response.body() != null && !response.body().isEmpty()) {
+                        return mapper.readValue(response.body(), clazz);
+                    }
+                    return null;
+                } else if (response.statusCode() == 404) {
+                    return null;
+                } else {
+                    throw new DriverException("Request failed: " + response.statusCode() + " - " + response.body());
+                }
+            } catch (Exception e) {
+                throw new DriverException("Communication error", e);
+            }
+    }
+
+    public <T> List<T> query(String db, String col, int limit, int offset, Class<T> clazz) {
+         HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/query?db=" + db + "&col=" + col + "&limit=" + limit + "&offset=" + offset))
+                    .header("Authorization", getAuthHeader())
+                    .GET()
+                    .build();
+          try {
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                     if (response.body() != null && !response.body().isEmpty()) {
+                         // Need to handle List<T> deserialization
+                        return mapper.readValue(response.body(), mapper.getTypeFactory().constructCollectionType(List.class, clazz));
+                    }
+                    return Collections.emptyList();
+                } else {
+                    throw new DriverException("Request failed: " + response.statusCode() + " - " + response.body());
+                }
+            } catch (Exception e) {
+                throw new DriverException("Communication error", e);
+            }
+    }
 }
