@@ -11,6 +11,7 @@
     <modules>
         <module>jettra-server</module>
         <module>jettra-shell</module>
+        <module>jettra-driver</module>
     </modules>
 
     <properties>

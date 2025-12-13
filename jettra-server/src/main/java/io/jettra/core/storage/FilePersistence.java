@@ -98,9 +98,13 @@ public class FilePersistence implements DocumentStore {
                         }
                     }
 
-                    Map<String, Object> docMap = mapper.readValue(file.toFile(),
-                            new TypeReference<Map<String, Object>>() {
-                            });
+                    Map<String, Object> docMap = null;
+                    try {
+                        docMap = mapper.readValue(file.toFile(), new TypeReference<Map<String, Object>>() {});
+                    } catch (Exception e) {
+                        System.err.println("Skipping corrupted file: " + file.getFileName() + " - " + e.getMessage());
+                        continue;
+                    }
 
                     if (filter != null && !filter.isEmpty()) {
                         boolean match = true;

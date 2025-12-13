@@ -55,12 +55,10 @@
                     <div class="nav-section">
                         <ul class="tree-view">
                             <li>
-                                <a href="#"
-                                    class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-                                    onclick="app.showSection('indexes')">
-                                    <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white"
-                                        aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none"
-                                        viewBox="0 0 24 24" stroke="currentColor">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('indexes')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                                     </svg>
@@ -68,12 +66,10 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="#"
-                                    class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
-                                    onclick="app.showSection('cluster')">
-                                    <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white"
-                                        aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none"
-                                        viewBox="0 0 24 24" stroke="currentColor">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('cluster')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                             d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 01-2 2v4a2 2 0 012 2h14a2 2 0 012-2v-4a2 2 0 01-2-2m-2-4h.01M17 16h.01" />
                                     </svg>
@@ -135,27 +131,26 @@
                     <!-- Cluster Section -->
                     <div id="cluster-section" class="section-content hidden">
                         <div class="p-4" style="padding: 2rem;">
-                            <h2 class="text-2xl font-bold mb-4">Cluster Management</h2>
+                            <div class="section-header">
+                                <h2 class="section-title">Cluster Management</h2>
+                            </div>
 
-                            <div class="card mb-6"
-                                style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 2rem;">
+                            <div class="glass-panel">
                                 <h3 class="text-xl font-semibold mb-2">Node Status</h3>
                                 <div id="raft-status-content">Loading...</div>
-                                <div class="mt-4" style="margin-top: 1rem;">
+                                <div class="mt-4" style="margin-top: 1rem; display: flex; gap: 0.5rem;">
                                     <button onclick="app.refreshClusterStatus()"
                                         class="btn btn-sm btn-secondary">Refresh Status</button>
-                                    <button onclick="app.forceLeader()" class="btn btn-sm btn-danger"
-                                        style="margin-left: 0.5rem; background: #ef4444; color: white; border: none;">Force
-                                        Leader (Debug)</button>
+                                    <button onclick="app.forceLeader()" class="btn btn-sm btn-danger">Force Leader
+                                        (Debug)</button>
                                 </div>
                             </div>
 
-                            <div class="card"
-                                style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div class="glass-panel">
                                 <h3 class="text-xl font-semibold mb-4">Peers</h3>
 
                                 <div class="table-container mb-4" style="margin-bottom: 1.5rem;">
-                                    <table class="data-table" style="width: 100%;">
+                                    <table class="data-table">
                                         <thead>
                                             <tr>
                                                 <th>Node ID</th>
@@ -169,18 +164,18 @@
                                     </table>
                                 </div>
 
-                                <div class="add-peer-form" style="display: flex; gap: 1rem; align-items: flex-end;">
-                                    <div class="form-group" style="flex: 1;">
+                                <div class="add-peer-form form-grid">
+                                    <div class="form-group">
                                         <label>Peer Node ID</label>
                                         <input type="text" id="peer-id" placeholder="e.g. node-2" class="form-control">
                                     </div>
-                                    <div class="form-group" style="flex: 2;">
+                                    <div class="form-group">
                                         <label>Peer URL</label>
                                         <input type="text" id="peer-url" placeholder="http://192.168.1.x:8080"
                                             class="form-control">
                                     </div>
-                                    <button onclick="app.addPeer()" class="btn btn-primary"
-                                        style="height: 40px; margin-bottom: 2px;">Add Peer</button>
+                                    <button onclick="app.addPeer()" class="btn btn-primary" style="height: 48px;">Add
+                                        Peer</button>
                                 </div>
                             </div>
                         </div>
@@ -189,52 +184,50 @@
                     <!-- Indexes Section -->
                     <div id="indexes-section" class="section-content hidden">
                         <div class="p-4" style="padding: 2rem;">
-                            <h2 class="text-2xl font-bold mb-4">Index Management</h2>
+                            <div class="section-header">
+                                <h2 class="section-title">Index Management</h2>
+                            </div>
 
-                            <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+                            <div class="form-grid-2 mb-8" style="margin-bottom: 2rem;">
                                 <div class="form-group">
                                     <label>Database</label>
                                     <select id="idx-db-select" onchange="app.loadIndexCollections()"
-                                        class="form-control" style="width: 200px; padding: 0.5rem;"></select>
+                                        class="form-control"></select>
                                 </div>
                                 <div class="form-group">
                                     <label>Collection</label>
-                                    <select id="idx-col-select" onchange="app.loadIndexes()" class="form-control"
-                                        style="width: 200px; padding: 0.5rem;"></select>
+                                    <select id="idx-col-select" onchange="app.loadIndexes()"
+                                        class="form-control"></select>
                                 </div>
                             </div>
 
-                            <div class="card"
-                                style="background: var(--bg-secondary); padding: 1.5rem; border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div class="glass-panel">
                                 <h3 class="text-xl font-semibold mb-4">Existing Indexes</h3>
-                                <ul id="indexes-list" style="list-style: none; padding: 0; margin-bottom: 2rem;">
+                                <ul id="indexes-list" class="modern-list" style="margin-bottom: 2rem;">
                                     <!-- Indexes list -->
                                 </ul>
 
                                 <h3 class="text-xl font-semibold mb-4">Create New Index</h3>
-                                <div style="display: flex; gap: 1rem; align-items: flex-end;">
+                                <div class="form-grid">
                                     <div class="form-group">
                                         <label>Field Name</label>
                                         <input type="text" id="idx-field" placeholder="e.g. email" class="form-control">
                                     </div>
                                     <div class="form-group">
                                         <label>Type</label>
-                                        <select id="idx-type" class="form-control"
-                                            style="padding: 0.5rem; height: 40px;">
+                                        <select id="idx-type" class="form-control">
                                             <option value="unique">Unique</option>
                                             <option value="non-unique">Non-Unique (Standard)</option>
                                         </select>
                                     </div>
-                                    <div class="form-group">
-                                        <label class="flex items-center" style="margin-top: 2rem;">
-                                            <!-- Quick layout fix -->
-                                            <input type="checkbox" id="idx-sequential"
-                                                style="width: 20px; height: 20px;">
-                                            <span style="margin-left: 0.5rem;">Sequential</span>
+                                    <div class="form-group" style="display: flex; align-items: center; height: 48px;">
+                                        <label class="checkbox-wrapper">
+                                            <input type="checkbox" id="idx-sequential">
+                                            <span>Sequential</span>
                                         </label>
                                     </div>
                                     <button onclick="app.createIndex()" class="btn btn-primary"
-                                        style="height: 40px; margin-bottom: 2px;">Create Index</button>
+                                        style="height: 48px;">Create Index</button>
                                 </div>
                             </div>
                         </div>

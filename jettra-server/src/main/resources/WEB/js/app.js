@@ -646,7 +646,9 @@ const App = {
             }
             // Return to list
             this.selectCollection(this.state.currentDb, this.state.currentCol);
+            this.closeInputModal(); // Fix: Close modal on success
         } catch (e) {
+            console.error(e);
             alert('Failed to save document');
         }
     },
@@ -665,19 +667,24 @@ const App = {
 
     // --- Cluster Management ---
     showSection(sectionId) {
+        console.log('Showing section:', sectionId);
         // Hiding all sections
-        document.querySelectorAll('.section-content').forEach(el => el.classList.add('hidden'));
+        const sections = document.querySelectorAll('.section-content');
+        sections.forEach(el => {
+            el.classList.add('hidden');
+            el.style.display = 'none'; // Force hide
+        });
+
         document.getElementById('login-view').classList.remove('active');
         document.getElementById('dashboard-view').classList.add('active');
 
         // Show target
-        const target = document.getElementById(sectionId + '-section');
+        const targetId = sectionId + '-section';
+        const target = document.getElementById(targetId);
         if (target) {
             target.classList.remove('hidden');
-            if (sectionId === 'dashboard') {
-                // default view
-                document.getElementById('dashboard-section').classList.remove('hidden'); // Logic overlap fix
-            }
+            target.style.display = 'block'; // Force show
+
             if (sectionId === 'cluster') {
                 this.refreshClusterStatus();
             }
@@ -685,8 +692,13 @@ const App = {
                 this.initIndexesView();
             }
         } else {
+            console.error('Target section not found:', targetId);
             // Fallback
-            document.getElementById('dashboard-section').classList.remove('hidden');
+            const dbSection = document.getElementById('dashboard-section');
+            if (dbSection) {
+                dbSection.classList.remove('hidden');
+                dbSection.style.display = 'block';
+            }
         }
     },
 
@@ -710,10 +722,18 @@ const App = {
 
             content.innerHTML = `
                 <div class="space-y-2">
-                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>Node ID:</span> <span class="font-mono">${status.nodeId}</span></div>
-                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>State:</span> <span class="font-bold ${status.state === 'LEADER' ? 'text-green-500' : 'text-yellow-500'}">${status.state}</span></div>
-                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>Term:</span> <span>${status.term}</span></div>
-                    <div class="flex justify-between border-b dark:border-gray-700 pb-1"><span>Leader:</span> <span class="font-mono">${status.leaderId || 'None'}</span></div>
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1" style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                        <span>Node ID:</span> <span class="font-mono">${status.nodeId}</span>
+                    </div>
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1" style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                        <span>State:</span> <span class="status-badge ${status.state === 'LEADER' ? 'success' : 'warning'}">${status.state}</span>
+                    </div>
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1" style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                        <span>Term:</span> <span>${status.term}</span>
+                    </div>
+                    <div class="flex justify-between border-b dark:border-gray-700 pb-1" style="display: flex; justify-content: space-between; padding-bottom: 0.5rem;">
+                        <span>Leader:</span> <span class="font-mono">${status.leaderId || 'None'}</span>
+                    </div>
                 </div>
             `;
 

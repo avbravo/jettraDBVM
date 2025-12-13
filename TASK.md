@@ -10,6 +10,16 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 - [] Usar compact Header
 
 
+
+# Referencias entre documentos
+
+# Driver Java
+
+- [x] Implementacion basica del driver
+- [] El driver debe permitir Convertirlo a Java records y viceversa
+
+
+
 # Shell
 
 - [x] Se creo un documento llamado /guide/JettraShell.md que tiene la sintaxis basica por favor incluye el soporte para todas las operaciones crud  de bases datos, operaciones cruid de coleccion y operaciones crurd a nivel de documentos, incluue crud para indices y busquedas por indices, ademas incluye agrupaciones, aggregaciones para operaciones mas complejas, referencias entre documentos e esto usando el lemguaje propio JettraQueryLanguaje, tambien incluye spporte para SQL y un lenguaje similar a MongoDB. Estos deben ser documentados con ejemplos de todo tipo para que sirvan de referencia al usuario.

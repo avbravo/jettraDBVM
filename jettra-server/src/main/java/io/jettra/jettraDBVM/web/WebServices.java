@@ -298,12 +298,16 @@ public class WebServices {
         try {
             String db = req.query().get("db");
             String col = req.query().get("col");
+            System.out.println("DEBUG: saveDocument called for " + db + "/" + col);
+
             byte[] content = req.content().as(byte[].class);
             Map<String, Object> doc = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
             });
             String id = engine.getStore().save(db, col, doc);
+            System.out.println("DEBUG: Document saved with ID: " + id);
             res.send(jsonMapper.createObjectNode().put("id", id).toString());
         } catch (Exception e) {
+            e.printStackTrace();
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
@@ -359,6 +363,7 @@ public class WebServices {
         try {
             String db = req.query().get("db");
             String col = req.query().get("col");
+            System.out.println("DEBUG: queryDocuments called for " + db + "/" + col);
             int limit = 100;
             int offset = 0;
 
@@ -368,8 +373,10 @@ public class WebServices {
                 offset = Integer.parseInt(req.query().get("offset"));
 
             List<Map<String, Object>> docs = engine.getStore().query(db, col, null, limit, offset);
+            System.out.println("DEBUG: Found " + docs.size() + " documents");
             res.send(jsonMapper.writeValueAsString(docs));
         } catch (Exception e) {
+            e.printStackTrace();
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
