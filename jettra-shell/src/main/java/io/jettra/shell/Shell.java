@@ -5,9 +5,20 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
-import java.util.Scanner;
+
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.impl.completer.AggregateCompleter;
+import org.jline.reader.impl.completer.ArgumentCompleter;
+import org.jline.reader.impl.completer.StringsCompleter;
+import org.jline.reader.impl.history.DefaultHistory;
+import org.jline.reader.Completer;
+import org.jline.reader.UserInterruptException;
+import org.jline.reader.EndOfFileException;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
 
 public class Shell {
 
@@ -16,7 +27,9 @@ public class Shell {
     private static String baseUrl = "http://localhost:8080";
     private static String token = null;
     private static String currentDb = null;
+
     private static String currentTx = null;
+    private static LineReader reader = null;
 
     public static void main(String[] args) {
         System.out.println("""
@@ -31,17 +44,61 @@ public class Shell {
         """);
         System.out.println("Type 'help' for commands.");
 
-        Scanner scanner = new Scanner(System.in);
 
-        while (true) {
-            String prompt = "jettra";
-            if (currentDb != null) prompt += ":" + currentDb;
-            prompt += "> ";
+
+        try {
+            Terminal terminal = TerminalBuilder.builder()
+                .system(true)
+                .build();
+
+            // Completers
+            Completer commandCompleter = new StringsCompleter(
+                "connect", "login", "use", "show", "create", "insert", 
+                "find", "delete", "backup", "restore", "export", "import", 
+                "history", "revert", "exit", "quit", "help", "clear", "cls", 
+                "begin", "commit", "rollback"
+            );
             
-            System.out.print(prompt);
-            if (currentTx != null) System.out.print("(TX:" + currentTx.substring(0,4) + ") ");
-            String line = scanner.nextLine().trim();
-            if (line.isEmpty()) continue;
+            Completer showCompleter = new ArgumentCompleter(
+                new StringsCompleter("show"),
+                new StringsCompleter("dbs", "collections", "version")
+            );
+
+            Completer createCompleter = new ArgumentCompleter(
+                new StringsCompleter("create"),
+                new StringsCompleter("db", "col", "user")
+            );
+            
+             Completer aggCompleter = new AggregateCompleter(
+                showCompleter,
+                createCompleter,
+                commandCompleter 
+            );
+
+            reader = LineReaderBuilder.builder()
+                .terminal(terminal)
+                .completer(aggCompleter)
+                .variable(LineReader.HISTORY_FILE, System.getProperty("user.home") + "/.jettra_history")
+                .build();
+
+            while (true) {
+                String prompt = "jettra";
+                if (currentDb != null) prompt += ":" + currentDb;
+                prompt += "> ";
+                if (currentTx != null) prompt += "(TX:" + currentTx.substring(0,4) + ") ";
+
+                String line = null;
+                try {
+                    line = reader.readLine(prompt);
+                } catch (UserInterruptException e) {
+                    continue;
+                } catch (EndOfFileException e) {
+                    System.out.println("Goodbye!");
+                    return;
+                }
+                
+                line = line.trim();
+                if (line.isEmpty()) continue;
 
             String[] parts = line.split("\\s+", 2);
             String cmd = parts[0].toLowerCase();
@@ -68,7 +125,11 @@ public class Shell {
                         System.out.println("Switched to db " + currentDb);
                         break;
                     case "show":
-                        handleShow(arg);
+                        if (arg.trim().startsWith("version ")) {
+                             handleShowVersion(arg.substring(8));
+                        } else {
+                             handleShow(arg);
+                        }
                         break;
                     case "create":
                         String createArg = arg.trim();
@@ -122,6 +183,12 @@ public class Shell {
                         System.out.print("\033[H\033[2J");
                         System.out.flush();
                         break;
+                    case "history":
+                        handleHistory(arg);
+                        break;
+                    case "revert":
+                        handleRevert(arg);
+                        break;
 
                     default:
                         // Treat as raw command (JQL/SQL/Mongo)
@@ -132,6 +199,41 @@ public class Shell {
             } catch (Exception e) {
                 System.out.println("Error: " + e.getMessage());
             }
+        }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void handleShowVersion(String arg) throws Exception {
+        if (currentDb == null) { System.out.println("No db selected."); return; }
+        
+        String[] parts = arg.trim().split("\\s+");
+        if (parts.length < 3) {
+            System.out.println("Usage: show version <col> <id> <version>");
+            return;
+        }
+        
+        String col = parts[0];
+        String id = parts[1];
+        String version = parts[2];
+        
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/api/version?db=" + currentDb + "&col=" + col + "&id=" + id + "&version=" + version))
+            .header("Authorization", token != null ? token : "")
+            .GET()
+            .build();
+            
+        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() == 200) {
+            try {
+                Object val = mapper.readValue(res.body(), Object.class);
+                System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(val));
+            } catch (Exception e) {
+                System.out.println(res.body());
+            }
+        } else {
+             System.out.println("Error: " + res.body());
         }
     }
 
@@ -185,6 +287,7 @@ public class Shell {
         System.out.println("  import <col> <fmt> <file> Import collection from file");
 
         System.out.println("  history <col> <id>     Show version history of a document");
+        System.out.println("  show version <col> <id> <ver> Show content of a specific version");
         System.out.println("  revert <col> <id> <ver> Revert document to a specific version");
         System.out.println("  exit                   Exit shell");
     }
@@ -202,8 +305,11 @@ public class Shell {
         String col = parts[0];
         String id = parts[1];
         
+        String url = baseUrl + "/api/versions?db=" + currentDb + "&col=" + col + "&id=" + id;
+        // System.out.println("DEBUG: Fetching " + url);
+        
         HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl + "/api/versions?db=" + currentDb + "&col=" + col + "&id=" + id))
+            .uri(URI.create(url))
             .header("Authorization", token != null ? token : "")
             .GET()
             .build();
@@ -256,26 +362,21 @@ public class Shell {
         
         String[] parts = arg.split("\\s+");
         String username = "";
+
         if (parts.length > 1) {
             username = parts[1];
         } else {
-            Scanner s = new Scanner(System.in);
-            System.out.print("Username: ");
-            username = s.nextLine().trim();
+            username = reader.readLine("Username: ").trim();
         }
         
         if (username.isEmpty()) return;
         
-        Scanner s = new Scanner(System.in);
-        System.out.print("Password: ");
-        String password = s.nextLine().trim();
+        String password = reader.readLine("Password: ", '*').trim();
         
-        System.out.print("Role (admin, owner, writereader, reader) [reader]: ");
-        String role = s.nextLine().trim();
+        String role = reader.readLine("Role (admin, owner, writereader, reader) [reader]: ").trim();
         if (role.isEmpty()) role = "reader";
         
-        System.out.print("Allowed DBs (comma separated, * for all) [*]: ");
-        String dbs = s.nextLine().trim();
+        String dbs = reader.readLine("Allowed DBs (comma separated, * for all) [*]: ").trim();
         if (dbs.isEmpty()) dbs = "*";
         
         java.util.List<String> allowedDbs = java.util.Arrays.asList(dbs.split(","));
@@ -500,9 +601,7 @@ public class Shell {
          String col = arg;
          int limit = 10;
          int offset = 0;
-         
-         Scanner scanner = new Scanner(System.in);
-         
+
          while (true) {
              HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/api/query?db=" + currentDb + "&col=" + col + "&limit=" + limit + "&offset=" + offset))
@@ -524,8 +623,7 @@ public class Shell {
                 boolean empty = "[]".equals(res.body()) || res.body().trim().equals("[]");
                 
                 System.out.println("\n--- Page " + ((offset/limit)+1) + " (Offset " + offset + ") ---");
-                System.out.print("[N]ext [B]ack [F]irst [L]ast [Q]uit > ");
-                String action = scanner.nextLine().trim().toLowerCase();
+                String action = reader.readLine("[N]ext [B]ack [F]irst [L]ast [Q]uit > ").trim().toLowerCase();
                 
                 if (action.startsWith("n")) {
                     if (!empty) offset += limit;

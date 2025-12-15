@@ -288,5 +288,39 @@ public class JettraClient {
               throw new DriverException("Import failed", e);
          }
     }
+    // Versioning
+    public List<String> getVersions(String db, String col, String id) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/versions?db=" + db + "&col=" + col + "&id=" + id))
+                .header("Authorization", getAuthHeader())
+                .GET()
+                .build();
+        return sendRequest(request, new TypeReference<List<String>>() {});
+    }
+
+    public Map<String, Object> getVersionContent(String db, String col, String id, String version) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/version?db=" + db + "&col=" + col + "&id=" + id + "&version=" + version))
+                .header("Authorization", getAuthHeader())
+                .GET()
+                .build();
+        return sendRequest(request, new TypeReference<Map<String, Object>>() {});
+    }
+
+    public void restoreVersion(String db, String col, String id, String version) {
+        try {
+            Map<String, String> payload = Map.of("db", db, "col", col, "id", id, "version", version);
+            String body = mapper.writeValueAsString(payload);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/restore-version"))
+                    .header("Authorization", getAuthHeader())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            sendRequest(request, null);
+        } catch (Exception e) {
+            throw new DriverException("Failed to restore version", e);
+        }
+    }
 }
 

@@ -40,27 +40,6 @@ Para ambas bases de datos ejecute test para medir cual formato es mas optimo par
 
 
 
-# Versiones
-- [x] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
-que pueden ser recuperadas desde una interface web , curl, shell o driver. Estas versiones no deben interferir en las operaciones
-normales que se realicen sobre la coleccion. Para su almacenamiento se usa un algoritmo de tipo LSM ya que solo se iran guardando y la ultima
-debe quedar como primera opcion para recuperacion y asi susecivamente.
-
-- [x] En la inteface web por favor muetra el contenido de cada version del documento lo que permitira decidir la restauracion 
-- [] Incluir el soporte para ver las versiones desde shell, curl, driver java y crear la documentacion de uso.
-
-
-# Generacion
-
-Permita la creacion de imagenes para 
-
-- [] Docker
-
-- [] Postman
-
-- [] Imagen Nativa
-
-- [] Criu/Crac
 
 
 
@@ -126,6 +105,31 @@ gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionale
 
 
 
+# Versiones
+- [x] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
+que pueden ser recuperadas desde una interface web , curl, shell o driver. Estas versiones no deben interferir en las operaciones
+normales que se realicen sobre la coleccion. Para su almacenamiento se usa un algoritmo de tipo LSM ya que solo se iran guardando y la ultima
+debe quedar como primera opcion para recuperacion y asi susecivamente.
+
+- [x] En la inteface web por favor muetra el contenido de cada version del documento lo que permitira decidir la restauracion 
+- [] Incluir el soporte para ver las versiones  y restaurar una version desde shell, curl, driver java y crear la documentacion de uso.
+
+
+# Shell
+- [x] Añadir la posibilidad de que se recorra el historial de comandos ejecutados en el shell y la opcion de autocompletado
+
+ 
+# Generacion
+
+Permita la creacion de imagenes para 
+
+- [x] Docker
+
+- [x] Postman
+
+- [x] Imagen Nativa
+
+- [x] Criu/Crac
 
 
 
