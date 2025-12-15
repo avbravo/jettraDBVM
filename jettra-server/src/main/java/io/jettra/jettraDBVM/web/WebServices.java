@@ -50,6 +50,7 @@ public class WebServices {
                 .post("/api/backup", this::backupDatabase)
                 .get("/api/backups", this::listBackups)
                 .get("/api/backup/download", this::downloadBackup)
+                .post("/api/restore", this::restoreDatabase)
                 // Transactions
                 .post("/api/tx/begin", this::beginTransaction)
                 .post("/api/tx/commit", this::commitTransaction)
@@ -691,8 +692,30 @@ public class WebServices {
              res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, "application/zip");
              // send file content
              res.send(java.nio.file.Files.readAllBytes(file.toPath()));
+             res.send(java.nio.file.Files.readAllBytes(file.toPath()));
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
+    }
+
+    private void restoreDatabase(ServerRequest req, ServerResponse res) {
+         if (!requireAdmin(req, res)) return;
+         try {
+             byte[] content = req.content().as(byte[].class);
+             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {});
+             
+             String file = body.get("file");
+             String db = body.get("db"); // Target DB
+             
+             if (file == null || db == null) {
+                 res.status(Status.BAD_REQUEST_400).send("Missing file or db");
+                 return;
+             }
+             
+             engine.getStore().restoreDatabase(file, db);
+             res.send(jsonMapper.createObjectNode().put("status", "restored").toString());
+         } catch (Exception e) {
+             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+         }
     }
 }

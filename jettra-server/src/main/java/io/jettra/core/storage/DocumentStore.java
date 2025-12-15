@@ -26,6 +26,8 @@ public interface DocumentStore {
 
     String backupDatabase(String database) throws Exception;
 
+    void restoreDatabase(String zipFilename, String targetDatabase) throws Exception;
+
     long getNextSequence(String database, String collection, String field) throws Exception;
 
     void createCollection(String database, String collection) throws Exception;

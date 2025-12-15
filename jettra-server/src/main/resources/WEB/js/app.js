@@ -199,14 +199,229 @@ const App = {
         document.getElementById('dashboard-view').classList.remove('active');
     },
 
+    showCluster() {
+        this.hideAllViews();
+        document.getElementById('nav-cluster').classList.add('active');
+        document.getElementById('cluster-view').classList.add('active');
+        this.loadCluster();
+    },
+
+    showBackups() {
+        this.hideAllViews();
+        document.getElementById('nav-backups').classList.add('active');
+        document.getElementById('backups-view').classList.add('active');
+        this.loadBackups();
+    },
+
+    async promptCreateBackup(preselectedDb = null) {
+        try {
+            const res = await this.authenticatedFetch('/api/dbs');
+            const dbs = await res.json();
+
+            this.renderCustomModal('Create Backup', `
+                <div class="form-group">
+                    <label>Select Database</label>
+                    <select id="backup-db-select" class="form-control" style="width: 100%; padding: 0.5rem;">
+                        ${dbs.map(d => `<option value="${d}" ${d === preselectedDb ? 'selected' : ''}>${d}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top: 1rem; color: #666; font-size: 0.9em;">
+                    <label>Estimated Filename:</label>
+                    <div id="backup-filename-preview" style="font-family: monospace; padding: 5px; background: #f5f5f5; border-radius: 4px;">...</div>
+                </div>
+            `, `
+                <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+                <button class="btn btn-primary" id="modal-backup-btn">Backup & Download</button>
+            `);
+
+            const select = document.getElementById('backup-db-select');
+            const preview = document.getElementById('backup-filename-preview');
+
+            const updatePreview = () => {
+                const db = select.value;
+                const date = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+                preview.textContent = `${db}_${date}.zip`;
+            };
+
+            select.addEventListener('change', updatePreview);
+            updatePreview(); // Init
+
+            document.getElementById('modal-backup-btn').addEventListener('click', () => {
+                const db = select.value;
+                if (db) {
+                    this.backupAndDownload(db);
+                    this.closeInputModal();
+                }
+            });
+
+            if (preselectedDb) {
+                select.disabled = true; // Lock if preselected? Or let them change? Let's default to letting them change but selecting it.
+                // User requirement "show the database" implied maybe just for that DB. But "select database" in create backup button implies choice.
+                // If called from sidebar, maybe we lock it or just select it. Let's just select it.
+            }
+
+        } catch (e) {
+            this.showNotification('Failed to load databases', 'error');
+        }
+    },
+
+    backupAndDownload(db) {
+        this.showNotification(`Creating backup for ${db}...`, 'info');
+        this.authenticatedFetch('/api/backup?db=' + db, { method: 'POST' })
+            .then(async res => {
+                if (res.ok) {
+                    const data = await res.json();
+                    this.showNotification('Backup created. Downloading...', 'success');
+                    // Trigger download
+                    window.location.href = `/api/backup/download?file=${data.file}&token=${this.state.token || localStorage.getItem('jettra_token')}`;
+
+                    if (document.getElementById('backups-view').classList.contains('active')) {
+                        this.loadBackups();
+                    }
+                } else {
+                    this.showNotification('Backup failed', 'error');
+                }
+            });
+    },
+
+    promptBackupDatabase(db) {
+        this.promptCreateBackup(db);
+    },
+
+    async loadBackups() {
+        try {
+            const res = await this.authenticatedFetch('/api/backups');
+            if (res.ok) {
+                const files = await res.json();
+                const tbody = document.getElementById('backups-list');
+                tbody.innerHTML = '';
+                files.forEach(f => {
+                    const tr = document.createElement('tr');
+                    // Parse date from filename: dbname_YYYYMMDDHHMMSS.zip
+                    let dateStr = 'Unknown';
+                    const parts = f.split('_');
+                    if (parts.length > 1) {
+                        const timePart = parts[parts.length - 1].replace('.zip', '');
+                        if (timePart.length === 14) {
+                            // YYYY-MM-DD HH:MM:SS
+                            dateStr = timePart.substring(0, 4) + '-' + timePart.substring(4, 6) + '-' + timePart.substring(6, 8) + ' ' +
+                                timePart.substring(8, 10) + ':' + timePart.substring(10, 12) + ':' + timePart.substring(12, 14);
+                        }
+                    }
+
+                    tr.innerHTML = `
+                        <td>${f}</td>
+                        <td>${dateStr}</td>
+                        <td class="actions-cell">
+                            <button onclick="app.downloadBackup('${f}')">Download</button>
+                            <button class="danger" onclick="app.promptRestore('${f}')">Restore</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch (e) {
+            this.showNotification('Failed to load backups', 'error');
+        }
+    },
+
+    downloadBackup(file) {
+        // Direct link download with auth is tricky. 
+        // For now, assume admin logged in browser context works or we use a temporary token param logic if implemented.
+        // Or simply:
+        window.location.href = `/api/backup/download?file=${file}&token=${localStorage.getItem('jettra_token')}`;
+        // Note: passing token in URL is not ideal security but common for file downloads
+    },
+
+    promptRestore(file) {
+        // Parse proposed DB name from file
+        let proposedName = '';
+        const parts = file.split('_');
+        if (parts.length > 1) {
+            proposedName = parts.slice(0, parts.length - 1).join('_');
+        }
+
+        this.renderCustomModal('Restore Database', `
+            <div class="alert alert-warning" style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 1em;">
+                <strong>⚠️ Warning:</strong> Restoring will overwrite the target database if it exists !.
+            </div>
+            <div class="form-group">
+                <label>Backup File:</label>
+                <div style="font-weight: bold; margin-bottom: 10px;">${file}</div>
+            </div>
+            <div class="form-group">
+                <label>Target Database Name</label>
+                <input type="text" id="restore-target-db" value="${proposedName}" class="form-control" style="width: 100%; padding: 0.5rem;">
+            </div>
+        `, `
+            <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+            <button class="btn danger" id="modal-restore-btn">Restore Database</button>
+        `);
+
+        document.getElementById('modal-restore-btn').addEventListener('click', () => {
+            const targetDb = document.getElementById('restore-target-db').value;
+            if (targetDb) {
+                if (confirm(`Are you sure you want to restore to "${targetDb}"? Data will be overwritten.`)) {
+                    this.restoreBackup(file, targetDb);
+                }
+            }
+        });
+    },
+
+    renderCustomModal(title, bodyHtml, footerHtml) {
+        const overlay = document.getElementById('modal-overlay');
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-body').innerHTML = bodyHtml;
+        document.getElementById('modal-footer').innerHTML = footerHtml;
+        overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
+    },
+
+    restoreBackup(file, targetDb) {
+        this.authenticatedFetch('/api/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file: file, db: targetDb })
+        }).then(async res => {
+            if (res.ok) {
+                this.showNotification('Restore successful', 'success');
+                this.closeInputModal();
+                this.loadDatabases(); // Refresh DB list
+            } else {
+                const t = await res.text();
+                this.showNotification('Restore failed: ' + t, 'error');
+            }
+        });
+    },
+
+    openPasswordView() {
+        this.renderView('password');
+    },
+
     showDashboard() {
         document.getElementById('login-view').classList.remove('active');
         document.getElementById('dashboard-view').classList.add('active');
         this.loadDatabases();
     },
 
-    openPasswordView() {
-        this.renderView('password');
+    // --- DB/Col Operations ---
+    promptCreateDatabase() {
+        this.renderSimpleForm('New Database Name', '', 'Create Database', (name) => {
+            if (!name) return;
+            this.authenticatedFetch('/api/dbs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            }).then(async res => {
+                if (res.ok) {
+                    this.showNotification('Database created', 'success');
+                    this.loadDatabases();
+                    this.closeInputModal();
+                } else {
+                    res.text().then(t => this.showNotification('Failed to create DB: ' + t, 'error'));
+                }
+            });
+        });
     },
 
     async changePassword(p1, p2) {
@@ -328,44 +543,7 @@ const App = {
         }
     },
 
-    // --- DB/Col Operations ---
-    promptCreateDatabase() {
-        this.renderSimpleForm('New Database Name', '', 'Create Database', (name) => {
-            if (!name) return;
-            this.authenticatedFetch('/api/dbs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name })
-            }).then(async res => {
-                if (res.ok) {
-                    this.showNotification('Database created', 'success');
-                    this.loadDatabases();
-                    this.closeInputModal();
-                } else {
-                    res.text().then(t => this.showNotification('Failed to create DB: ' + t, 'error'));
-                }
-            });
-        });
-    },
 
-    promptBackupDatabase(db) {
-        if (confirm(`Create backup for database '${db}'?`)) {
-            this.showNotification('Backup started...', 'info');
-            this.authenticatedFetch(`/api/backup?db=${db}`, { method: 'POST' })
-                .then(async res => {
-                    if (res.ok) {
-                        const data = await res.json();
-                        this.showNotification(`Backup created: ${data.file}`, 'success');
-                        // Trigger download
-                        window.location.href = `/api/backup/download?file=${data.file}`; // Assumes browser handles cookie/auth or we add token if needed
-                    } else {
-                        const t = await res.text();
-                        this.showNotification('Backup failed: ' + t, 'error');
-                    }
-                })
-                .catch(e => this.showNotification('Error: ' + e.message, 'error'));
-        }
-    },
 
     promptRenameDatabase(oldName) {
         this.renderSimpleForm(`Rename ${oldName}`, oldName, 'Rename', (newName) => {

@@ -286,6 +286,61 @@ public class FilePersistence implements DocumentStore {
     }
 
     @Override
+    public void restoreDatabase(String zipFilename, String targetDatabase) throws Exception {
+        lock.writeLock().lock();
+        try {
+            Path backupsDir = Paths.get("backups");
+            Path zipPath = backupsDir.resolve(zipFilename);
+
+            if (!Files.exists(zipPath)) {
+                throw new Exception("Backup file " + zipFilename + " not found");
+            }
+
+            // Restore logic:
+            // 1. Delete target DB if exists (Dangerous but that's what restore implies)
+            // 2. Unzip contents to target DB
+
+            Path targetDir = Paths.get(dataDirectory, targetDatabase);
+            
+            // Delete existing
+            if (Files.exists(targetDir)) {
+                 try (Stream<Path> walk = Files.walk(targetDir)) {
+                    walk.sorted(java.util.Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+                }
+            }
+            Files.createDirectories(targetDir);
+
+            // Unzip
+            try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(Files.newInputStream(zipPath))) {
+                java.util.zip.ZipEntry zipEntry = zis.getNextEntry();
+                while (zipEntry != null) {
+                    Path newPath = targetDir.resolve(zipEntry.getName());
+                    
+                    // Security: prevent zip slip
+                    if (!newPath.normalize().startsWith(targetDir.normalize())) {
+                         throw new Exception("Zip Entry outside of target directory");
+                    }
+
+                    if (zipEntry.isDirectory()) {
+                        Files.createDirectories(newPath);
+                    } else {
+                        // Create parent directories if needed
+                        Files.createDirectories(newPath.getParent());
+                        Files.copy(zis, newPath);
+                    }
+                    zipEntry = zis.getNextEntry();
+                }
+                zis.closeEntry();
+            }
+
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
     public long getNextSequence(String database, String collection, String field) throws Exception {
         return 0;
     }

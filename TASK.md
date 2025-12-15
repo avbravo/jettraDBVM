@@ -12,8 +12,11 @@ almacenar en este formato y comprobar que es mas eficiente que el formato actual
 Para implementar JettraStorageEngine el usuario debe indicar al inicio si usara el metodo tradicional que actualmente tiene o
 aplica Jettra Storage Engine para optimizacion.
 Modificar el shell, Driver , curl y la interface web para que soporten este nuevo formato optimizado.
-â
 
+- [] Cuando se crea una base de datos se debe indicar el motor storage a usar ya sea  Basic Compression o Jettra Store Engine
+
+
+# 
 
 
 curl -u admin:adminadmin "http://localhost:8080/..."
