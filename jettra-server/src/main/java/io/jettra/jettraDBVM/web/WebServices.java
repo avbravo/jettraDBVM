@@ -800,11 +800,30 @@ public class WebServices {
             res.headers().add(io.helidon.http.HeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + col + "." + ext + "\"");
             res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, contentType);
             res.send(content);
-
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
+
+
+
+    private String convertToCSV(List<Map<String, Object>> docs) {
+        if (docs.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        // Header
+        java.util.Set<String> keys = docs.get(0).keySet();
+        sb.append(String.join(",", keys)).append("\n");
+        // Rows
+        for (Map<String, Object> doc : docs) {
+            java.util.List<String> values = new java.util.ArrayList<>();
+            for (String key : keys) {
+                values.add(String.valueOf(doc.get(key)));
+            }
+            sb.append(String.join(",", values)).append("\n");
+        }
+        return sb.toString();
+    }
+
 
     private void importCollection(ServerRequest req, ServerResponse res) {
          try {
@@ -846,38 +865,7 @@ public class WebServices {
         }
     }
 
-    // Simple CSV Utilities
-    private String convertToCSV(List<Map<String, Object>> docs) {
-        if (docs.isEmpty()) return "";
-        
-        // Collect all keys
-        java.util.Set<String> keys = new java.util.LinkedHashSet<>();
-        // ID first
-        keys.add("_id");
-        for (Map<String, Object> doc : docs) {
-            keys.addAll(doc.keySet());
-        }
-        
-        StringBuilder sb = new StringBuilder();
-        // Header
-        sb.append(String.join(",", keys)).append("\n");
-        
-        // Rows
-        for (Map<String, Object> doc : docs) {
-            java.util.List<String> values = new java.util.ArrayList<>();
-            for (String key : keys) {
-                Object val = doc.get(key);
-                String sVal = val == null ? "" : String.valueOf(val);
-                // Escape quotes
-                if (sVal.contains(",") || sVal.contains("\"") || sVal.contains("\n")) {
-                    sVal = "\"" + sVal.replace("\"", "\"\"") + "\"";
-                }
-                values.add(sVal);
-            }
-            sb.append(String.join(",", values)).append("\n");
-        }
-        return sb.toString();
-    }
+
 
     private List<Map<String, Object>> parseCSV(String content) {
         List<Map<String, Object>> result = new java.util.ArrayList<>();

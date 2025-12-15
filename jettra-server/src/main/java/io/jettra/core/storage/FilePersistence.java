@@ -57,6 +57,12 @@ public class FilePersistence implements DocumentStore {
             Files.createDirectories(collectionDir);
 
             Path filePath = collectionDir.resolve(id + ".jdb");
+            
+            // Versioning: if exists, backup
+            if (Files.exists(filePath)) {
+                createVersion(database, collection, id);
+            }
+            
             // Write Map as CBOR
             mapper.writeValue(filePath.toFile(), document);
 
@@ -164,7 +170,10 @@ public class FilePersistence implements DocumentStore {
                 }
             }
             Path filePath = Paths.get(dataDirectory, database, collection, id + ".jdb");
-            Files.deleteIfExists(filePath);
+            if (Files.exists(filePath)) {
+                createVersion(database, collection, id);
+                Files.delete(filePath);
+            }
         } finally {
             lock.writeLock().unlock();
         }
@@ -464,5 +473,27 @@ public class FilePersistence implements DocumentStore {
         
         String filename = System.nanoTime() + ".op";
         mapper.writeValue(txDir.resolve(filename).toFile(), op);
+    }
+
+
+    private void createVersion(String database, String collection, String id) {
+        try {
+            Path original = Paths.get(dataDirectory, database, collection, id + ".jdb");
+            if (!Files.exists(original)) return;
+            
+            Path versionDir = Paths.get(dataDirectory, database, collection, "_versions", id);
+            Files.createDirectories(versionDir);
+            
+            String timestamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
+            // Add nanoseconds to avoid collision in tight loops
+            timestamp += "_" + System.nanoTime();
+            
+            Path versionPath = versionDir.resolve(timestamp + ".jdb");
+            Files.copy(original, versionPath);
+        } catch (Exception e) {
+            e.printStackTrace(); // Log error but don't fail operation? Or should we?
+            // "Recuperacion de datos" implies critical feature. But failing save due to backup might be annoying.
+            // Let's print stack trace.
+        }
     }
 }

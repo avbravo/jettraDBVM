@@ -1,12 +1,24 @@
 # TASK
 
 
+
+# Versionamiento
+- [] Crear un sistema de versionamiento que permitira la recuperacion de datos eliminados y cambiados y de auditoria.
+
+# Versiones
+- [] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
+que pueden ser recuperadas desde una interface web , curl, shell o driver. Estas versiones no deben interferir en las operaciones
+normales que se realicen sobre la coleccion. Para su almacenamiento se usa un algoritmo de tipo LSM ya que solo se iran guardando y la ultima
+debe quedar como primera opcion para recuperacion y asi susecivamente.
+
+
+
 curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Jettra Storage Engine
 
 -[] Crear un formato de serializacion Java optimizado para el almacenamiento y para la carga en memoria
-que sea eficiente y pequeño  comparado con JSON, apache Avro o ProtoBuf. Este formato debe permitir operaciones rapidas en Java
+que sea eficiente y pequeño  comparado con JSON, Apache Avro o ProtoBuf. Este formato debe permitir operaciones rapidas en Java
 ya el engine esta creado en Java, y pasar del storage a los objetos debe ser muy eficiente. Modificar la base de datos para que permitea
 almacenar en este formato y comprobar que es mas eficiente que el formato actual que se esta usando.
 Para implementar JettraStorageEngine el usuario debe indicar al inicio si usara el metodo tradicional que actualmente tiene o
@@ -15,14 +27,6 @@ Modificar el shell, Driver , curl y la interface web para que soporten este nuev
 
 - [] Cuando se crea una base de datos se debe indicar el motor storage a usar ya sea  Basic Compression o Jettra Store Engine
 
-# Shell
-
-- [] Añade la opcion de crear nuevos usuarios y su rol para cada base  de datos.
-- [] Implementar paginacion en los resultados es decir devolver 10 e implementar el desplazamiento usando (f) Primero
-(n) para siguiente (b) para anterior y (l) para el ultimo y mostrar el menu.
-
-# Versionamiento
-- [] Crear un sistema de versionamiento que permitira la recuperacion de datos eliminados y cambiados y de auditoria.
 
 # jAVA 25
 - [ ] Usar compact Header
@@ -31,12 +35,6 @@ Modificar el shell, Driver , curl y la interface web para que soporten este nuev
 
 
 # Distributed Databases
-
--[x] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
--[x] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
--[x] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
-
-
 
 
 - [] Implementar la distribucion de datos (base de datos, colecciones y documentos a otros nodos estilo replicaset pero mediante el concepto
@@ -58,21 +56,16 @@ Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
 gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionales y una estructura de servicio bien definida (via .proto).
 
 
-
+-[x] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
+-[x] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
+-[x] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
 
 
 - [x] El el formulario crear coleccion no se cierra el crear la colleccion desde la interface web y no envia el mesnsaje que fue guardado.
-- [] Implementar la opcion de respaldos de la base de datos desde el shell,. curl, driver 
 
 
 
-# Inteface Web
 
-# Versiones
-- [] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
-que pueden ser recuperadas desde una interface web , curl, shell o driver. Estas versiones no deben interferir en las operaciones
-normales que se realicen sobre la coleccion. Para su almacenamiento se usa un algoritmo de tipo LSM ya que solo se iran guardando y la ultima
-debe quedar como primera opcion para recuperacion y asi susecivamente.
 
 # JettraMemory
 - [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
@@ -91,11 +84,32 @@ debe quedar como primera opcion para recuperacion y asi susecivamente.
 
 - [] Criu/Crac
 
- # Database
- - [] El sistema debe contar con una base de datos llamada _system y una coleccion llamada _users que almacena los usuarios
-        y roles dentro del sistema cada vez que sea crea una base de datos se generan.
 
- - [] Añadir usuarios desde interface WEb, Curl o Shell
+
+
+# Shell
+
+- [x] Añade la opcion de crear nuevos usuarios y su rol para cada base  de datos.
+- [x] Implementar paginacion en los resultados es decir devolver 10 e implementar el desplazamiento usando (f) Primero
+(n) para siguiente (b) para anterior y (l) para el ultimo y mostrar el menu.
+- [x] Crea la documentación en /books/guide/shell.md
+
+
+
+# DataFrame EC
+
+- [x] Implmentar el soporte para la libreria Dataframe EC java https://github.com/vmzakharov/dataframe-ec y crear la documentacion en /books/guide/dataframeec.md
+la implementacion debe ser soportada por el driver, shell, curl y la interface web.
+
+# Eclipse Collections
+- [x] Implementar el Soporte para Eclipse Collections crear la documentacion en /books/guide/eclipsecollections.md
+la implementacion debe ser soportada por el driver, shell, curl y la interface web.
+
+
+
+ # Database
+ - [x] El sistema debe contar con una base de datos llamada _system y una coleccion llamada _users que almacena los usuarios
+        y roles dentro del sistema cada vez que sea crea una base de datos se generan.
 
 
 
@@ -220,13 +234,6 @@ esto brindara informacion sobre el ip y puerto de ejecucion ademas del cluster y
 
 # Interface Web
 - [x] Añade el formulario para crear usuarios para administrar base de datos y el rol permitido para cada base de datos.
-
-necesito que mejores el diseño usando un template que separe los elementos
--top
--footer
--left
--center
-todos los elementos de opciones se cargaran en la seccion center de manera que se reutilice la plantilla en todos los formularios, recuerda hacerla responsiva
 
 - [x] En el top superior de la plantilla mostrar la opcion para cambiar de tema dark a white,
 

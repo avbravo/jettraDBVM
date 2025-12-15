@@ -71,7 +71,12 @@ public class Shell {
                         handleShow(arg);
                         break;
                     case "create":
-                        handleCreate(arg);
+                        String createArg = arg.trim();
+                        if (createArg.toLowerCase().startsWith("user")) {
+                            handleCreateUser(createArg);
+                        } else {
+                            handleCreate(createArg);
+                        }
                         break;
                     case "insert":
                         if (arg.trim().toLowerCase().startsWith("into ")) {
@@ -169,15 +174,68 @@ public class Shell {
         System.out.println("  use <db>               Select database");
         System.out.println("  show dbs               List databases");
         System.out.println("  show collections       List collections in current db");
+        System.out.println("  create user <name>     Create new user (interactive)");
         System.out.println("  create db <name>       Create database");
         System.out.println("  create col <name>      Create collection in current db");
         System.out.println("  insert <col> <json>    Insert document");
-        System.out.println("  find <col>             Find all documents");
+        System.out.println("  find <col>             Find all documents (paginated)");
         System.out.println("  backup [db]            Create backup of current or specified db");
         System.out.println("  restore <file> <db>    Restore database from zip file");
         System.out.println("  export <col> <fmt> <file> Export collection to file (fmt: json/csv)");
         System.out.println("  import <col> <fmt> <file> Import collection from file");
         System.out.println("  exit                   Exit shell");
+    }
+
+    private static void handleCreateUser(String arg) throws Exception {
+        if (token == null) { System.out.println("Not logged in (Admin required)."); return; }
+        
+        String[] parts = arg.split("\\s+");
+        String username = "";
+        if (parts.length > 1) {
+            username = parts[1];
+        } else {
+            Scanner s = new Scanner(System.in);
+            System.out.print("Username: ");
+            username = s.nextLine().trim();
+        }
+        
+        if (username.isEmpty()) return;
+        
+        Scanner s = new Scanner(System.in);
+        System.out.print("Password: ");
+        String password = s.nextLine().trim();
+        
+        System.out.print("Role (admin, owner, writereader, reader) [reader]: ");
+        String role = s.nextLine().trim();
+        if (role.isEmpty()) role = "reader";
+        
+        System.out.print("Allowed DBs (comma separated, * for all) [*]: ");
+        String dbs = s.nextLine().trim();
+        if (dbs.isEmpty()) dbs = "*";
+        
+        java.util.List<String> allowedDbs = java.util.Arrays.asList(dbs.split(","));
+        
+        Map<String, Object> user = new java.util.HashMap<>();
+        user.put("username", username);
+        user.put("password", password);
+        user.put("role", role);
+        user.put("allowed_dbs", allowedDbs);
+        
+        String json = mapper.writeValueAsString(user);
+        
+        HttpRequest req = HttpRequest.newBuilder()
+                 .uri(URI.create(baseUrl + "/api/users"))
+                 .header("Authorization", token)
+                 .header("Content-Type", "application/json")
+                 .POST(HttpRequest.BodyPublishers.ofString(json))
+                 .build();
+                 
+        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() == 200) {
+            System.out.println("User created.");
+        } else {
+             System.out.println("Failed: " + res.body());
+        }
     }
 
     private static void handleLogin(String arg) throws Exception {
@@ -375,14 +433,53 @@ public class Shell {
          if (currentDb == null) { System.out.println("No DB selected"); return; }
          
          String col = arg;
-         // defaults to limit 10
-         HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl + "/api/query?db=" + currentDb + "&col=" + col + "&limit=20"))
-            .header("Authorization", token)
-            .GET()
-            .build();
-         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-         System.out.println(res.body());
+         int limit = 10;
+         int offset = 0;
+         
+         Scanner scanner = new Scanner(System.in);
+         
+         while (true) {
+             HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/query?db=" + currentDb + "&col=" + col + "&limit=" + limit + "&offset=" + offset))
+                .header("Authorization", token)
+                .GET()
+                .build();
+             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+             if (res.statusCode() != 200) {
+                 System.out.println("Error: " + res.body());
+                 return;
+             }
+             
+             // Print results
+             try {
+                Object val = mapper.readValue(res.body(), Object.class);
+                System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(val));
+                
+                // If it is a list and empty/less than limit, maybe hints end?
+                boolean empty = "[]".equals(res.body()) || res.body().trim().equals("[]");
+                
+                System.out.println("\n--- Page " + ((offset/limit)+1) + " (Offset " + offset + ") ---");
+                System.out.print("[N]ext [B]ack [F]irst [L]ast [Q]uit > ");
+                String action = scanner.nextLine().trim().toLowerCase();
+                
+                if (action.startsWith("n")) {
+                    if (!empty) offset += limit;
+                    else System.out.println("No more results.");
+                } else if (action.startsWith("b")) {
+                    offset = Math.max(0, offset - limit);
+                } else if (action.startsWith("f")) {
+                    offset = 0;
+                } else if (action.startsWith("l")) {
+                     // TODO: Need count API to do this properly. For now guessing a large offset or implementing later.
+                     System.out.println("Last page not fully implemented without count API.");
+                } else if (action.startsWith("q")) {
+                    break;
+                }
+             } catch (Exception e) {
+                 System.out.println(res.body());
+                 break;
+             }
+         }
     }
 
     private static void handleBackup(String arg) throws Exception {
