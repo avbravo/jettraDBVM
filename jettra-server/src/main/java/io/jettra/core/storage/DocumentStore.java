@@ -24,6 +24,8 @@ public interface DocumentStore {
 
     void deleteDatabase(String name) throws Exception;
 
+    String backupDatabase(String database) throws Exception;
+
     long getNextSequence(String database, String collection, String field) throws Exception;
 
     void createCollection(String database, String collection) throws Exception;

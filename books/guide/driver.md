@@ -43,6 +43,38 @@ client.createDatabase("my_app_db");
 client.deleteDatabase("my_app_db");
 ```
 
+### Backup Database
+```java
+String file = client.backupDatabase("my_app_db");
+System.out.println("Backup created: " + file);
+```
+
+### List Backups
+```java
+List<String> backups = client.listBackups();
+```
+
+## Transaction Management
+
+You can perform multiple operations atomically.
+
+```java
+// 1. Begin
+String txID = client.beginTransaction();
+
+try {
+    // 2. Perform operations passing txID
+    client.save("my_app_db", "users", new User("Bob", "bob@example.com"), txID);
+    client.deleteDocument("my_app_db", "logs", "old_log_id", txID);
+
+    // 3. Commit
+    client.commitTransaction(txID);
+} catch (Exception e) {
+    // 4. Rollback on error
+    client.rollbackTransaction(txID);
+}
+```
+
 ## Collection Operations
 
 ### Create Collection

@@ -11,6 +11,7 @@
 
 <body>
     <div id="app">
+        <div id="notification-container"></div>
         <!-- Login View -->
         <div id="login-view" class="view active">
             <div class="login-container">
@@ -74,6 +75,50 @@
                                             d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 01-2 2v4a2 2 0 012 2h14a2 2 0 012-2v-4a2 2 0 01-2-2m-2-4h.01M17 16h.01" />
                                     </svg>
                                     <span class="flex-1 ml-3 whitespace-nowrap">Cluster</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('rules')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Rules</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('transactions')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Transactions</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('query')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Query Console</span>
+                                </a>
+                            </li>
+                            <li id="menu-users" class="hidden">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('users')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Users</span>
                                 </a>
                             </li>
                             <!-- <li>
@@ -232,6 +277,240 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Rules Section -->
+                    <div id="rules-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Rules Management</h2>
+                            </div>
+
+                            <div class="form-grid-2 mb-8" style="margin-bottom: 2rem;">
+                                <div class="form-group">
+                                    <label>Database</label>
+                                    <select id="rule-db-select" onchange="app.loadRuleCollections()"
+                                        class="form-control"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Collection</label>
+                                    <select id="rule-col-select" onchange="app.loadRules()"
+                                        class="form-control"></select>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Existing Rules</h3>
+                                <div class="table-container mb-4" style="margin-bottom: 2rem;">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Field</th>
+                                                <th>Type</th>
+                                                <th>Value/Ref</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rules-table-body"></tbody>
+                                    </table>
+                                </div>
+
+                                <h3 class="text-xl font-semibold mb-4">Add New Rule</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Field Name</label>
+                                        <input type="text" id="rule-field" placeholder="e.g. email"
+                                            class="form-control">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Rule Type</label>
+                                        <select id="rule-type" class="form-control" onchange="app.toggleRuleInputs()">
+                                            <option value="validation">Validation (Simple)</option>
+                                            <option value="min_value">Min Value</option>
+                                            <option value="max_value">Max Value</option>
+                                            <option value="referenced">Referenced (Foreign Key)</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Simple/Min/Max Inputs -->
+                                    <div class="form-group" id="rule-val-group">
+                                        <label>Value</label>
+                                        <input type="text" id="rule-value" placeholder="notnull or number"
+                                            class="form-control">
+                                        <small class="text-muted">For simple: notnull, notempty. For min/max:
+                                            number.</small>
+                                    </div>
+
+                                    <!-- Referenced Inputs -->
+                                    <div class="form-group hidden" id="rule-ref-col-group">
+                                        <label>Referenced Collection</label>
+                                        <input type="text" id="rule-ref-col" class="form-control">
+                                    </div>
+                                    <div class="form-group hidden" id="rule-ref-field-group">
+                                        <label>External Field (Target)</label>
+                                        <input type="text" id="rule-ref-field" value="_id" class="form-control">
+                                    </div>
+
+                                    <button onclick="app.addRule()" class="btn btn-primary" style="height: 48px;">Add
+                                        Rule</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Transactions Section -->
+                    <div id="transactions-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Transaction Testing</h2>
+                            </div>
+
+                            <div class="form-grid-2 mb-8" style="margin-bottom: 2rem;">
+                                <div class="form-group">
+                                    <label>Database</label>
+                                    <select id="tx-db-select" class="form-control"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Collection</label>
+                                    <select id="tx-col-select" class="form-control"></select>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel" style="margin-bottom: 2rem;">
+                                <h3 class="text-xl font-semibold mb-4">Transaction Control</h3>
+                                <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                                    <button class="btn btn-primary" onclick="app.beginTx()">Begin Transaction</button>
+                                    <button class="btn btn-success" onclick="app.commitTx()">Commit</button>
+                                    <button class="btn btn-danger" onclick="app.rollbackTx()">Rollback</button>
+                                    <span id="tx-status"
+                                        style="font-family: monospace; font-weight: bold; color: var(--text-muted);">No
+                                        Active Tx</span>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Operations in Tx</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Document JSON</label>
+                                        <textarea id="tx-doc-json" class="form-control" rows="3"
+                                            placeholder='{"name": "test"}'></textarea>
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="app.addToTx('save')">Add Save
+                                        Operation</button>
+
+                                    <div style="margin: 1rem 0; border-top: 1px solid var(--border-color);"></div>
+
+                                    <div class="form-group">
+                                        <label>Document ID to Delete</label>
+                                        <input type="text" id="tx-del-id" class="form-control">
+                                    </div>
+                                    <button class="btn btn-danger" onclick="app.addToTx('delete')">Add Delete
+                                        Operation</button>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel" style="margin-top: 2rem;">
+                                <h3 class="text-xl font-semibold mb-2">Transaction Log</h3>
+                                <div id="tx-log"
+                                    style="background: #111; color: #0f0; padding: 1rem; border-radius: 4px; height: 200px; overflow-y: auto; font-family: monospace;">
+                                    <!-- Logs -->
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Query Section -->
+                    <div id="query-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Query Console</h2>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div class="lg:col-span-2 space-y-6">
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-4">Command Input</h3>
+                                        <div class="form-group">
+                                            <label>Database Context</label>
+                                            <select id="query-db-select" class="form-control"
+                                                style="width: 200px; margin-bottom: 1rem;"></select>
+                                        </div>
+                                        <div class="relative">
+                                            <textarea id="query-input" class="form-control font-mono" rows="5"
+                                                placeholder="Enter JQL or SQL command..."></textarea>
+                                            <div class="absolute bottom-2 right-2">
+                                                <button onclick="app.executeQuery()"
+                                                    class="btn btn-primary">Execute</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-2">Results</h3>
+                                        <div id="query-results"
+                                            class="bg-gray-900 rounded-lg p-4 font-mono text-sm overflow-x-auto min-h-[200px]"
+                                            style="white-space: pre-wrap; color: #00ff9d;">
+                                            // Results will appear here...
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="space-y-6">
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-4">JQL Reference</h3>
+                                        <div class="space-y-4 text-sm">
+                                            <div>
+                                                <p class="font-semibold text-primary">Find Documents</p><code
+                                                    class="block bg-black/20 p-2 rounded mt-1">FIND IN users WHERE age = 25</code>
+                                            </div>
+                                            <div>
+                                                <p class="font-semibold text-primary">Insert Document</p><code
+                                                    class="block bg-black/20 p-2 rounded mt-1">INSERT INTO users DOC {"name": "Alice"}</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-4">Join Example</h3>
+                                        <div class="bg-black/20 p-3 rounded text-sm">
+                                            <p class="font-semibold mb-2">Manual Join:</p>
+                                            <ol class="list-decimal pl-4 space-y-2 text-gray-300">
+                                                <li>Find User: <code
+                                                        class="text-xs text-primary">FIND IN users WHERE name="Bob"</code>
+                                                </li>
+                                                <li>Find Orders: <code
+                                                        class="text-xs text-primary">FIND IN orders WHERE uid="u1"</code>
+                                                </li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Users Manage Section -->
+                    <div id="users-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">User Management</h2>
+                                <button class="btn btn-primary" onclick="app.showAddUserModal()">+ Add User</button>
+                            </div>
+                            <div class="glass-panel">
+                                <div class="table-container">
+                                    <table class="w-full text-sm text-left custom-table">
+                                        <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+                                            <tr>
+                                                <th class="px-6 py-3">Username</th>
+                                                <th class="px-6 py-3">Role</th>
+                                                <th class="px-6 py-3 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="users-table-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
                 <footer class="app-footer">
                     &copy; 2025 JettraDB. All Rights Reserved.

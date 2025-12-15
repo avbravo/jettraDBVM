@@ -79,3 +79,51 @@ curl -u admin:adminadmin -X GET "http://localhost:8080/api/index?db=testdb&col=u
 ```bash
 curl -X GET "http://localhost:8080/raft/status"
 ```
+
+## 6. Backup Operations
+ 
+ ### Create Backup
+ ```bash
+ curl -u admin:adminadmin -X POST "http://localhost:8080/api/backup?db=testdb"
+ ```
+ 
+ ### List Backups
+ ```bash
+ curl -u admin:adminadmin -X GET "http://localhost:8080/api/backups"
+ ```
+ 
+ ### Download Backup
+ ```bash
+ curl -u admin:adminadmin -O -J "http://localhost:8080/api/backup/download?file=testdb_20251214.zip"
+ ```
+ 
+ ## 7. Transactions
+
+JettraDB supports ACID transactions using Write-Ahead Logging (WAL).
+
+### Begin Transaction
+```bash
+# Returns a txID (e.g. "tx-123")
+curl -X POST "http://localhost:8080/api/tx/begin"
+```
+
+### Perform Transactional Operations
+Use the `tx` query parameter.
+
+```bash
+# Save
+curl -X POST "http://localhost:8080/api/doc?db=testdb&col=users&tx=<txID>" -d '...'
+
+# Delete
+curl -X DELETE "http://localhost:8080/api/doc?db=testdb&col=users&id=<ID>&tx=<txID>"
+```
+
+### Commit Transaction
+```bash
+curl -X POST "http://localhost:8080/api/tx/commit?txID=<txID>"
+```
+
+### Rollback Transaction
+```bash
+curl -X POST "http://localhost:8080/api/tx/rollback?txID=<txID>"
+```

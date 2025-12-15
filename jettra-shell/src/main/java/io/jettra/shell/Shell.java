@@ -16,6 +16,7 @@ public class Shell {
     private static String baseUrl = "http://localhost:8080";
     private static String token = null;
     private static String currentDb = null;
+    private static String currentTx = null;
 
     public static void main(String[] args) {
         System.out.println("""
@@ -38,6 +39,7 @@ public class Shell {
             prompt += "> ";
             
             System.out.print(prompt);
+            if (currentTx != null) System.out.print("(TX:" + currentTx.substring(0,4) + ") ");
             String line = scanner.nextLine().trim();
             if (line.isEmpty()) continue;
 
@@ -84,6 +86,22 @@ public class Shell {
                         } else {
                             handleFind(arg);
                         }
+                        break;
+                    case "delete":
+                        handleDelete(arg);
+                        break;
+                    case "begin":
+                        handleBeginTx();
+                        break;
+                    case "commit":
+                        handleCommitTx();
+                        break;
+                    case "rollback":
+                        handleRollbackTx();
+                        break;
+
+                    case "backup":
+                        handleBackup(arg);
                         break;
                     case "cls":
                     case "clear":
@@ -250,14 +268,93 @@ public class Shell {
          String col = parts[0];
          String docJson = parts[1];
 
+          
+          String uri = baseUrl + "/api/doc?db=" + currentDb + "&col=" + col;
+          if (currentTx != null) uri += "&tx=" + currentTx;
+
+          HttpRequest req = HttpRequest.newBuilder()
+             .uri(URI.create(uri))
+             .header("Authorization", token)
+             .header("Content-Type", "application/json")
+             .POST(HttpRequest.BodyPublishers.ofString(docJson))
+             .build();
+          HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+          System.out.println(res.statusCode() == 200 ? "Inserted" : "Failed: " + res.body());
+    }
+
+    private static void handleDelete(String arg) throws Exception {
+         if (token == null) { System.out.println("Not logged in."); return; }
+         if (currentDb == null) { System.out.println("No DB selected"); return; }
+         
+         String[] parts = arg.split("\\s+");
+         if (parts.length < 2) { System.out.println("Usage: delete <col> <id>"); return; }
+         
+         String col = parts[0];
+         String id = parts[1];
+         
+         String uri = baseUrl + "/api/doc?db=" + currentDb + "&col=" + col + "&id=" + id;
+         if (currentTx != null) uri += "&tx=" + currentTx;
+         
          HttpRequest req = HttpRequest.newBuilder()
-            .uri(URI.create(baseUrl + "/api/doc?db=" + currentDb + "&col=" + col))
+            .uri(URI.create(uri))
             .header("Authorization", token)
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(docJson))
+            .DELETE()
             .build();
          HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-         System.out.println(res.statusCode() == 200 ? "Inserted" : "Failed: " + res.body());
+         System.out.println(res.statusCode() == 200 ? "Deleted" : "Failed: " + res.body());
+    }
+
+    private static void handleBeginTx() throws Exception {
+         if (token == null) { System.out.println("Not logged in."); return; }
+         if (currentTx != null) { System.out.println("Transaction already active: " + currentTx); return; }
+         
+         HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/api/tx/begin"))
+            .header("Authorization", token)
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+         if (res.statusCode() == 200) {
+             Map<String, Object> map = mapper.readValue(res.body(), Map.class);
+             currentTx = (String) map.get("txID");
+             System.out.println("Transaction started: " + currentTx);
+         } else {
+             System.out.println("Failed to start transaction: " + res.body());
+         }
+    }
+
+    private static void handleCommitTx() throws Exception {
+         if (currentTx == null) { System.out.println("No active transaction."); return; }
+         
+         HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/api/tx/commit?txID=" + currentTx))
+            .header("Authorization", token)
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+         if (res.statusCode() == 200) {
+             System.out.println("Transaction committed.");
+             currentTx = null;
+         } else {
+             System.out.println("Failed to commit: " + res.body());
+         }
+    }
+
+    private static void handleRollbackTx() throws Exception {
+         if (currentTx == null) { System.out.println("No active transaction."); return; }
+         
+         HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/api/tx/rollback?txID=" + currentTx))
+            .header("Authorization", token)
+            .POST(HttpRequest.BodyPublishers.noBody())
+            .build();
+         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+         if (res.statusCode() == 200) {
+             System.out.println("Transaction rolled back.");
+             currentTx = null;
+         } else {
+             System.out.println("Failed to rollback: " + res.body());
+         }
     }
 
     private static void handleFind(String arg) throws Exception {
@@ -273,5 +370,29 @@ public class Shell {
             .build();
          HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
          System.out.println(res.body());
+    }
+
+    private static void handleBackup(String arg) throws Exception {
+        if (token == null) { System.out.println("Not logged in."); return; }
+        
+        String db = arg.isEmpty() ? currentDb : arg;
+        if (db == null) {
+            System.out.println("No database specified. Usage: backup <dbname> or use <dbname> first.");
+            return;
+        }
+
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/backup?db=" + db))
+                .header("Authorization", token)
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        
+        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() == 200) {
+            Map<String, String> map = mapper.readValue(res.body(), Map.class);
+            System.out.println("Backup created: " + map.get("file"));
+        } else {
+             System.out.println("Backup failed: " + res.body());
+        }
     }
 }

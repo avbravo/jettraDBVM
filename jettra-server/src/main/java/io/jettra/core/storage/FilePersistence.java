@@ -17,22 +17,31 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
 
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
+import io.jettra.core.validation.Validator;
 
 public class FilePersistence implements DocumentStore {
     private final String dataDirectory;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     // Use CBOR Factory for binary storage
     private final ObjectMapper mapper = new ObjectMapper(new CBORFactory());
+    private Validator validator;
 
     public FilePersistence(String dataDirectory) throws Exception {
         this.dataDirectory = dataDirectory;
         Files.createDirectories(Paths.get(dataDirectory));
     }
 
+    public void setValidator(Validator validator) {
+        this.validator = validator;
+    }
+
     @Override
     public String save(String database, String collection, Map<String, Object> document) throws Exception {
         lock.writeLock().lock();
         try {
+            if (validator != null) {
+                validator.validate(database, collection, document);
+            }
             // Document is already a Map, no need to parse from bytes
 
             String id = (String) document.get("_id");
@@ -86,7 +95,7 @@ public class FilePersistence implements DocumentStore {
 
             List<Map<String, Object>> results = new ArrayList<>();
             try (Stream<Path> paths = Files.list(collectionDir)) {
-                List<Path> files = paths.filter(p -> p.toString().endsWith(".jdb")).toList();
+                List<Path> files = paths.filter(p -> p.toString().endsWith(".jdb") && !p.getFileName().toString().equals("_indexes.jdb")).toList();
 
                 int skipped = 0;
                 for (Path file : files) {
@@ -145,6 +154,15 @@ public class FilePersistence implements DocumentStore {
     public void delete(String database, String collection, String id) throws Exception {
         lock.writeLock().lock();
         try {
+            if (validator != null) {
+                // We need the document to validate deletion
+                Map<String, Object> document = findByID(database, collection, id);
+                if (document != null) {
+                     // Pass collection name just in case needed context (passed as arg)
+                     // document.put("_collection_temp_name_", collection); // Cleaner to rely on arg
+                     validator.validateDelete(database, collection, document);
+                }
+            }
             Path filePath = Paths.get(dataDirectory, database, collection, id + ".jdb");
             Files.deleteIfExists(filePath);
         } finally {
@@ -231,6 +249,43 @@ public class FilePersistence implements DocumentStore {
     }
 
     @Override
+    public String backupDatabase(String database) throws Exception {
+        lock.readLock().lock();
+        try {
+            Path dbDir = Paths.get(dataDirectory, database);
+            if (!Files.exists(dbDir)) {
+                throw new Exception("Database " + database + " does not exist");
+            }
+
+            Path backupsDir = Paths.get("backups");
+            Files.createDirectories(backupsDir);
+
+            String timestamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
+            String zipName = database + "_" + timestamp + ".zip";
+            Path zipPath = backupsDir.resolve(zipName);
+
+            try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(Files.newOutputStream(zipPath))) {
+                try (Stream<Path> walk = Files.walk(dbDir)) {
+                    walk.filter(path -> !Files.isDirectory(path))
+                        .forEach(path -> {
+                            java.util.zip.ZipEntry zipEntry = new java.util.zip.ZipEntry(dbDir.relativize(path).toString());
+                            try {
+                                zos.putNextEntry(zipEntry);
+                                Files.copy(path, zos);
+                                zos.closeEntry();
+                            } catch (Exception e) {
+                                System.err.println("Failed to zip file: " + path);
+                            }
+                        });
+                }
+            }
+            return zipName;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
     public long getNextSequence(String database, String collection, String field) throws Exception {
         return 0;
     }
@@ -269,23 +324,90 @@ public class FilePersistence implements DocumentStore {
 
     @Override
     public String beginTransaction() throws Exception {
-        return "tx-0";
+        String txID = UUID.randomUUID().toString();
+        Path txDir = Paths.get(dataDirectory, "_system", "_transactions", txID);
+        Files.createDirectories(txDir);
+        return txID;
     }
 
     @Override
     public void commitTransaction(String txID) throws Exception {
+        Path txDir = Paths.get(dataDirectory, "_system", "_transactions", txID);
+        if (!Files.exists(txDir)) {
+            throw new Exception("Transaction " + txID + " not found or already completed.");
+        }
+
+        try {
+            // Read all ops and sort by filename (timestamp)
+            try (Stream<Path> files = Files.list(txDir)) {
+                List<Path> ops = files.sorted().toList();
+                
+                // Replay
+                for (Path opFile : ops) {
+                    Map<String, Object> opData = mapper.readValue(opFile.toFile(), new TypeReference<Map<String, Object>>() {});
+                    String type = (String) opData.get("type");
+                    String db = (String) opData.get("db");
+                    String col = (String) opData.get("col");
+                    
+                    if ("save".equals(type)) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> doc = (Map<String, Object>) opData.get("doc");
+                        save(db, col, doc);
+                    } else if ("delete".equals(type)) {
+                        String id = (String) opData.get("id");
+                        delete(db, col, id);
+                    }
+                }
+            }
+        } finally {
+            // Cleanup: Rollback/Cleanup logs even if replay failed partial?
+            // "Atomicity": If replay fails halfway, we are in inconsistent state.
+            // A real WAL would redo on startup. supporting that requires loading logs on startup.
+            // For now, we just delete the log after attempt.
+            rollbackTransaction(txID); 
+        }
     }
 
     @Override
     public void rollbackTransaction(String txID) throws Exception {
+        Path txDir = Paths.get(dataDirectory, "_system", "_transactions", txID);
+        if (Files.exists(txDir)) {
+             try (Stream<Path> walk = Files.walk(txDir)) {
+                 walk.sorted(java.util.Comparator.reverseOrder())
+                     .map(Path::toFile)
+                     .forEach(File::delete);
+             }
+        }
     }
 
     @Override
     public void saveTx(String database, String collection, Object document, String txID) throws Exception {
+        Path txDir = Paths.get(dataDirectory, "_system", "_transactions", txID);
+        if (!Files.exists(txDir)) throw new Exception("Transaction " + txID + " not active");
+        
+        Map<String, Object> op = new HashMap<>();
+        op.put("type", "save");
+        op.put("db", database);
+        op.put("col", collection);
+        op.put("doc", document);
+        
+        // Use nanotime for ordering
+        String filename = System.nanoTime() + ".op";
+        mapper.writeValue(txDir.resolve(filename).toFile(), op);
     }
 
     @Override
     public void deleteTx(String database, String collection, String id, String txID) throws Exception {
-    }
+        Path txDir = Paths.get(dataDirectory, "_system", "_transactions", txID);
+        if (!Files.exists(txDir)) throw new Exception("Transaction " + txID + " not active");
 
+        Map<String, Object> op = new HashMap<>();
+        op.put("type", "delete");
+        op.put("db", database);
+        op.put("col", collection);
+        op.put("id", id);
+        
+        String filename = System.nanoTime() + ".op";
+        mapper.writeValue(txDir.resolve(filename).toFile(), op);
+    }
 }

@@ -6,6 +6,7 @@ import io.jettra.core.storage.BTreeIndexEngine;
 import io.jettra.core.storage.DocumentStore;
 import io.jettra.core.storage.FilePersistence;
 import io.jettra.core.storage.IndexEngine;
+import io.jettra.core.validation.ValidationManager;
 
 public class Engine {
     private static final Logger LOGGER = Logger.getLogger(Engine.class.getName());
@@ -22,6 +23,9 @@ public class Engine {
         String dataDir = (String) config.getOrDefault("DataDir", "data");
 
         this.store = new FilePersistence(dataDir);
+        ValidationManager validator = new ValidationManager(this.store);
+        ((FilePersistence) this.store).setValidator(validator);
+
         this.indexer = new BTreeIndexEngine(dataDir);
         ((BTreeIndexEngine) this.indexer).loadIndexes();
 

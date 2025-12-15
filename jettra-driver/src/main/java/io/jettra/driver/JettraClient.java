@@ -133,18 +133,41 @@ public class JettraClient {
                     .build();
           return sendRequest(request, new TypeReference<List<Map<String, Object>>>() {});
     }
+
+    public void deleteDocument(String db, String col, String id) {
+        deleteDocument(db, col, id, null);
+    }
+    
+    public void deleteDocument(String db, String col, String id, String txID) {
+        String uri = baseUrl + "/doc?db=" + db + "&col=" + col + "&id=" + id;
+        if (txID != null) uri += "&tx=" + txID;
+        
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(uri))
+                .header("Authorization", getAuthHeader())
+                .DELETE()
+                .build();
+        sendRequest(request, null);
+    }
     // Generic Document Operations (Support for Records/POJOs)
     public <T> String save(String db, String col, T document) {
+        return save(db, col, document, null);
+    }
+
+    public <T> String save(String db, String col, T document, String txID) {
         try {
             String body = mapper.writeValueAsString(document);
+             String uri = baseUrl + "/doc?db=" + db + "&col=" + col;
+             if (txID != null) uri += "&tx=" + txID;
+             
              HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/doc?db=" + db + "&col=" + col))
+                    .uri(URI.create(uri))
                     .header("Authorization", getAuthHeader())
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
                     .build();
             Map<String, String> res = sendRequest(request, new TypeReference<Map<String, String>>() {});
-            return res.get("id");
+            return res != null ? res.get("id") : null;
         } catch (Exception e) {
              throw new DriverException("Failed to save document", e);
         }
@@ -193,5 +216,45 @@ public class JettraClient {
             } catch (Exception e) {
                 throw new DriverException("Communication error", e);
             }
+    }
+
+    // Transactions
+    public String beginTransaction() {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/tx/begin"))
+                .header("Authorization", getAuthHeader())
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        Map<String, String> res = sendRequest(request, new TypeReference<Map<String, String>>() {});
+        return res != null ? res.get("txID") : null;
+    }
+
+    public void commitTransaction(String txID) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/tx/commit?txID=" + txID))
+                .header("Authorization", getAuthHeader())
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        sendRequest(request, null);
+    }
+
+    public void rollbackTransaction(String txID) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/tx/rollback?txID=" + txID))
+                .header("Authorization", getAuthHeader())
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        sendRequest(request, null);
+    }
+
+    // Backup
+    public String backupDatabase(String db) {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/backup?db=" + db))
+                .header("Authorization", getAuthHeader())
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+        Map<String, String> res = sendRequest(request, new TypeReference<Map<String, String>>() {});
+        return res != null ? res.get("file") : null;
     }
 }

@@ -81,3 +81,20 @@ JettraDB supports looking up data from other collections.
 // Lookup 'role' from 'roles' collection where roles._id = users.roleId
 FIND IN users JOIN roles ON roleId = _id
 ```
+
+## Transactions
+Use `begin`, `commit`, and `rollback` to manage transactions.
+
+```bash
+jettra> begin
+Transaction started: 550e8400-e29b-41d4-a716-446655440000
+
+jettra> insert into users doc {"name": "Bob", "age": 40}
+(TX:550e) Inserted
+
+jettra> delete users <ID>
+(TX:550e) Deleted
+
+jettra> commit
+Transaction committed.
+```

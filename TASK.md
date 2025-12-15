@@ -3,11 +3,106 @@
 - [] puedes añadir seguridad a la base de datos mediante user, password y rol. y crear para cada base dde datos una coleccion llamada _system donde se almancen los usuarios y roles. El rol inicial es user: admin, password: adminadmin, role:admin que tiene privilegfios de superusuario, y modifica el codigo para que se valide las credenciales de los usuarios antes de realizar cualquier operacion. Los roles validos son admin (que es el super usuario),  reader(solo lectura) , writereader(lectura escritura), owner(propietario de la base de datos).
 - [ ] Option 2
 
+# Jettra Storage Engine
+
+-[] Crear un formato de serializacion Java optimizado para el almacenamiento y para la carga en memoria
+que sea eficiente y pequeño  comparado con JSON, apache Avro o ProtoBuf. Este formato debe permitir operaciones rapidas en Java
+ya el engine esta creado en Java, y pasar del storage a los objetos debe ser muy eficiente. Modificar la base de datos para que permitea
+almacenar en este formato y comprobar que es mas eficiente que el formato actual que se esta usando.
+Para implementar JettraStorageEngine el usuario debe indicar al inicio si usara el metodo tradicional que actualmente tiene o
+aplica Jettra Storage Engine para optimizacion.
+Modificar el shell, Driver , curl y la interface web para que soporten este nuevo formato optimizado.
+â
+
+
+
 curl -u admin:adminadmin "http://localhost:8080/..."
 
+- [] El el formulario crear coleccion no se cierra el crear la colleccion desde la interface web y no envia el mesnsaje que fue guardado.
+- [] Implementar la opcion de respaldos de la base de datos desde el shell,. curl, driver y desde la iinterface web donde se muestra una lista de las bases de datos y al seleccionarla se genera un nombre para el backup que usa la sintaxis nombrebasedeatos_yyyymmdddhhmmss-.zip y crea la opcion de respaldo y crea una guiia en la carpeta /guide/backup.md
+
+
+# Versionamiento
+- [] Crear un sistema de versionamiento que permitira la recuperacion de datos eliminados y cambiados y de auditoria.
 
 # jAVA 25
-- [] Usar compact Header
+- [ ] Usar compact Header
+- [ ] Usar Bellsoft Native Image
+
+# Inteface Web
+- [x] Añade el formulario para crear usuarios para administrar base de datos y el rol permitido para cada base de datos.
+
+# Versiones
+- [] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
+que pueden ser recuperadas desde una interface web , curl, shell o driver. Estas versiones no deben interferir en las operaciones
+normales que se realicen sobre la coleccion. Para su almacenamiento se usa un algoritmo de tipo LSM ya que solo se iran guardando y la ultima
+debe quedar como primera opcion para recuperacion y asi susecivamente.
+
+# JettraMemory
+- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
+
+
+# Shell
+
+- [] Añade la opcion de crear nuevos usuarios y su rol para cada base  de datos.
+- [] Implementar paginacion en los resultados es decir devolver 10 e implementar el desplazamiento usando (f) Primero
+(n) para siguiente (b) para anterior y (l) para el ultimo y mostrar el menu.
+
+# Rules (Integridad Referencial)
+- [ Cuando se intenta eliminar un documento de la llave primaria y tiene registros en la coleccion 
+     secundaria que dependen de el no se debe permitir la eliminacion..
+     Ejemplo no se debe permitir eliminar un documento de la coleccion pais que sea usado como referencia en la colección persona.
+- [x] Añadir una regla de no permitir valores nulos
+- [x] Añadir la regla de no permitir valores vacios
+- [x] Añadir la regla de no permitir numeros negativos
+- [x] Añadir la regla de no permitir valores menores de un valor indicado
+- [x] Añadir la regla de no permitir valores mayores de un valor indicado
+- [x] Añadir la regla de no permitir valores que no esten en un rango
+
+
+# Transacciones
+-[] Crea un formulario en la interface web para probar las transaccionesn el usuario selecciona de una lista la base de datosy puede insertar varias operaciones indicando roolback o commit.
+
+-[] Añadir soporte para transacciones con operaciones como rolback y commit tener presente que se va
+a implementar con Replicaset y Sharding entre varios nodos
+-[] Documentar las transacciones
+
+
+
+
+# JettraBackup
+
+- [] Crear un shell llamado jettraBackup que ejecuta un backup de la base de datos a un archivo .zip
+- [] Exportar una coleccion a JSON
+- [] Exportar una coleccion a CVS
+
+# JettraRestore
+- [] Crear un shell llamado  JettraRestore que realiza restauracion de un backup que se creo con JettraBackup
+
+
+# Structed
+- [] Permitir definir tipos de datos que seran aplicados a los datos de documentos de una coleccion
+por ejemplo: base de datos: ventasdb. Se debe generar una coleccion nueva para cada base de datos al 
+momento de crearla adicional a la coleccion _rules, esta nueva coleccion se llama _definition y permite
+definir los tipos de datos por ejemplo
+{
+   "colecction": "ventas",
+   "field":[
+            { "name":"codigo",
+              "type":"string"  
+            },
+            {
+              "name":"precio",
+              "type":"double"
+            },
+            {
+             "name":"fecha",
+             "type":"date"
+            }
+           ]
+}
+
+Esta definicion de estructura se usara para almacenar o recuperar informacion.
 
 
 
@@ -27,9 +122,9 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Distributed Databases
 
--[] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
--[] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
--[] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
+-[x] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
+-[x] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
+-[x] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
 
 
 

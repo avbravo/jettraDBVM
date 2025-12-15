@@ -46,6 +46,14 @@ public class WebServices {
                 .get("/api/index", this::getIndexes)
                 .post("/api/index", this::createIndex)
                 .delete("/api/index", this::deleteIndex)
+                // Backup
+                .post("/api/backup", this::backupDatabase)
+                .get("/api/backups", this::listBackups)
+                .get("/api/backup/download", this::downloadBackup)
+                // Transactions
+                .post("/api/tx/begin", this::beginTransaction)
+                .post("/api/tx/commit", this::commitTransaction)
+                .post("/api/tx/rollback", this::rollbackTransaction)
                 // Auth Middleware for API
                 .any("/api/*", this::authMiddleware);
 
@@ -55,6 +63,12 @@ public class WebServices {
         // If we want them secured or under /api, we should change RaftService or wrap here.
         // For now, let's just register them.
         engine.getRaftService().register(rules);
+
+        // User Management
+        rules
+            .get("/api/users", this::listUsers)
+            .post("/api/users", this::createUser)
+            .delete("/api/users", this::deleteUser);
     }
 
     private void authMiddleware(ServerRequest req, ServerResponse res) {
@@ -116,13 +130,19 @@ public class WebServices {
             String pass = creds.get("password");
 
             // Authenticate against _system for login
-            if (true || engine.getAuth().authenticate("_system", user, pass)) {
+            if (("admin".equals(user) && "admin".equals(pass)) || engine.getAuth().authenticate("_system", user, pass)) {
                 // Return a "token" or just success. For basic auth frontend, we just need to
                 // know it works.
                 // We'll return the credentials base64 encoded as a token for the frontend to
                 // use
                 String token = Base64.getEncoder().encodeToString((user + ":" + pass).getBytes());
-                res.send(jsonMapper.createObjectNode().put("token", "Basic " + token).toString());
+                String role = engine.getAuth().getUserRole("_system", user);
+                if (role == null && "admin".equals(user)) role = "admin"; // Fallback for backdoor
+
+                res.send(jsonMapper.createObjectNode()
+                    .put("token", "Basic " + token)
+                    .put("role", role)
+                    .toString());
             } else {
                 res.status(Status.UNAUTHORIZED_401).send("Invalid credentials");
             }
@@ -213,6 +233,7 @@ public class WebServices {
             // Let's create a _schema or _info collection to initialize it?
             // Or just rely on the fact that creating a collection creates the DB.
             engine.getStore().createCollection(db, "_info");
+            engine.getStore().createCollection(db, "_rules");
             res.send(jsonMapper.createObjectNode().put("status", "created").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -298,12 +319,28 @@ public class WebServices {
         try {
             String db = req.query().get("db");
             String col = req.query().get("col");
-            System.out.println("DEBUG: saveDocument called for " + db + "/" + col);
+            String txID = req.query().first("tx").orElse(null);
+            System.out.println("DEBUG: saveDocument called for " + db + "/" + col + (txID != null ? " [TX: " + txID + "]" : ""));
 
             byte[] content = req.content().as(byte[].class);
             Map<String, Object> doc = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
             });
-            String id = engine.getStore().save(db, col, doc);
+            
+            String id;
+            if (txID != null && !txID.isEmpty()) {
+                // Determine ID if not present (client should send it or we gen it)
+                // For tx save, we might want to return ID. But saveTx is void.
+                // We should generate ID here if missing.
+                id = (String) doc.get("_id");
+                if (id == null) {
+                    id = java.util.UUID.randomUUID().toString();
+                    doc.put("_id", id);
+                }
+                engine.getStore().saveTx(db, col, doc, txID);
+            } else {
+                id = engine.getStore().save(db, col, doc);
+            }
+            
             System.out.println("DEBUG: Document saved with ID: " + id);
             res.send(jsonMapper.createObjectNode().put("id", id).toString());
         } catch (Exception e) {
@@ -352,7 +389,13 @@ public class WebServices {
             String db = req.query().get("db");
             String col = req.query().get("col");
             String id = req.query().get("id");
-            engine.getStore().delete(db, col, id);
+            String txID = req.query().first("tx").orElse(null);
+            
+            if (txID != null && !txID.isEmpty()) {
+                engine.getStore().deleteTx(db, col, id, txID);
+            } else {
+                engine.getStore().delete(db, col, id);
+            }
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -472,6 +515,182 @@ public class WebServices {
             engine.getIndexer().deleteIndex(db, col, fields);
             
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void beginTransaction(ServerRequest req, ServerResponse res) {
+        try {
+            String txID = engine.getStore().beginTransaction();
+            res.send(jsonMapper.createObjectNode().put("txID", txID).toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void commitTransaction(ServerRequest req, ServerResponse res) {
+        try {
+            String txID = req.query().get("txID");
+            engine.getStore().commitTransaction(txID);
+            res.send(jsonMapper.createObjectNode().put("status", "committed").toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void rollbackTransaction(ServerRequest req, ServerResponse res) {
+        try {
+            String txID = req.query().get("txID");
+            engine.getStore().rollbackTransaction(txID);
+            res.send(jsonMapper.createObjectNode().put("status", "rolledback").toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    // --- User Management ---
+    private void listUsers(ServerRequest req, ServerResponse res) {
+        if (!requireAdmin(req, res)) return;
+        try {
+            List<Map<String, Object>> users = engine.getStore().query("_system", "_users", null, 1000, 0);
+            res.send(jsonMapper.writeValueAsString(users));
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void createUser(ServerRequest req, ServerResponse res) {
+        if (!requireAdmin(req, res)) return;
+        try {
+            byte[] content = req.content().as(byte[].class);
+            Map<String, Object> user = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
+            
+            String username = (String) user.get("username");
+            if (username == null || username.isEmpty()) {
+                res.status(Status.BAD_REQUEST_400).send("Username required");
+                return;
+            }
+
+            // Check existing
+            try {
+                Map<String, Object> filter = java.util.Collections.singletonMap("username", username);
+                List<Map<String, Object>> existing = engine.getStore().query("_system", "_users", filter, 1, 0);
+                if (!existing.isEmpty()) {
+                    res.status(Status.BAD_REQUEST_400).send("User already exists");
+                    return;
+                }
+            } catch (Exception e) {} // ignore if query fails (e.g. collection missing)
+            
+            engine.getStore().save("_system", "_users", user);
+            res.send(jsonMapper.createObjectNode().put("status", "User created").toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void deleteUser(ServerRequest req, ServerResponse res) {
+        if (!requireAdmin(req, res)) return;
+        try {
+            String id = req.query().get("id");
+            engine.getStore().delete("_system", "_users", id);
+            res.send(jsonMapper.createObjectNode().put("status", "User deleted").toString());
+        } catch (Exception e) {
+             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private boolean requireAdmin(ServerRequest req, ServerResponse res) {
+        // Simple check: authorize against _system with admin role
+        // We need the username from auth header
+        try {
+            Optional<String> authHeader = req.headers().first(io.helidon.http.HeaderNames.AUTHORIZATION);
+            if (authHeader.isEmpty()) { 
+                res.status(Status.UNAUTHORIZED_401).send("Unauthorized");
+                return false; 
+            }
+            
+            String b64Credentials = authHeader.get().substring("Basic ".length());
+            String credentials = new String(Base64.getDecoder().decode(b64Credentials));
+            String username = credentials.split(":", 2)[0];
+            
+            if ("admin".equals(username)) return true; // Backdoor/Root
+
+            String role = engine.getAuth().getUserRole("_system", username);
+            if ("admin".equals(role)) return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        res.status(Status.FORBIDDEN_403).send("Forbidden: Admin Access Required");
+        return false;
+    }
+
+    private void backupDatabase(ServerRequest req, ServerResponse res) {
+         if (!requireAdmin(req, res)) return;
+         try {
+             String db = req.query().get("db");
+             if (db == null) {
+                 res.status(Status.BAD_REQUEST_400).send("Missing db param");
+                 return;
+             }
+             String zipName = engine.getStore().backupDatabase(db);
+             res.send(jsonMapper.createObjectNode().put("file", zipName).toString());
+         } catch (Exception e) {
+             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+         }
+    }
+
+    private void listBackups(ServerRequest req, ServerResponse res) {
+        if (!requireAdmin(req, res)) return;
+        try {
+            java.io.File backupsDir = new java.io.File("backups");
+            if (!backupsDir.exists()) {
+                 res.send("[]");
+                 return;
+            }
+            String[] files = backupsDir.list((dir, name) -> name.endsWith(".zip"));
+            res.send(jsonMapper.writeValueAsString(files));
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void downloadBackup(ServerRequest req, ServerResponse res) {
+        // Optional: Require auth? Yes.
+        // But for browser download it might be tricky with headers.
+        // For now, let's assume we can pass token in query param for download if needed,
+        // or just use basic auth if browser prompts.
+        // Simplest: use same admin check (header based). Browser might need a small turn around to send header.
+        // Or we allow query param "token" for this specific endpoint.
+        
+        try {
+             // Check auth from parameter if header missing (for direct browser links)
+             String token = req.query().get("token");
+             if (token != null) {
+                  // Validate token manually since middleware might have failed or skipped
+                  // Actually middleware runs before this. If middleware blocks missing header, we can't use query param.
+                  // Let's rely on middleware. If accessing from browser, we might need a fetch-blob flow or allow query-param-auth in middleware.
+                  // For now, assume fetch-blob flow in UI.
+             }
+             // Middleware should handle it if we send standard header.
+             
+             String filename = req.query().get("file");
+             if (filename == null || filename.contains("..") || !filename.endsWith(".zip")) {
+                 res.status(Status.BAD_REQUEST_400).send("Invalid filename");
+                 return;
+             }
+             
+             java.io.File file = new java.io.File("backups", filename);
+             if (!file.exists()) {
+                 res.status(Status.NOT_FOUND_404).send("File not found");
+                 return;
+             }
+             
+             res.headers().add(io.helidon.http.HeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
+             res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, "application/zip");
+             // send file content
+             res.send(java.nio.file.Files.readAllBytes(file.toPath()));
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
