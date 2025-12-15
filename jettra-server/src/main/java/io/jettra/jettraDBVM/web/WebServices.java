@@ -50,7 +50,13 @@ public class WebServices {
                 .post("/api/backup", this::backupDatabase)
                 .get("/api/backups", this::listBackups)
                 .get("/api/backup/download", this::downloadBackup)
+                .get("/api/backup/download", this::downloadBackup)
                 .post("/api/restore", this::restoreDatabase)
+                .post("/api/restore", this::restoreDatabase)
+                .post("/api/restore/upload", this::restoreDatabaseFromUpload)
+                // Export/Import
+                .get("/api/export", this::exportCollection)
+                .post("/api/import", this::importCollection)
                 // Transactions
                 .post("/api/tx/begin", this::beginTransaction)
                 .post("/api/tx/commit", this::commitTransaction)
@@ -717,5 +723,216 @@ public class WebServices {
          } catch (Exception e) {
              res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
          }
+    }
+
+    private void restoreDatabaseFromUpload(ServerRequest req, ServerResponse res) {
+        if (!requireAdmin(req, res)) return;
+        try {
+            String db = req.query().get("db");
+            if (db == null || db.isEmpty()) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db param");
+                return;
+            }
+
+            // Read raw bytes from body
+            // Note: For large files, streaming would be better, but for now loading into memory is acceptable for this scale
+            byte[] fileBytes = req.content().as(byte[].class);
+            if (fileBytes.length == 0) {
+                 res.status(Status.BAD_REQUEST_400).send("Empty file");
+                 return;
+            }
+
+            // Save to backups dir
+            java.nio.file.Path backupsDir = java.nio.file.Paths.get("backups");
+            java.nio.file.Files.createDirectories(backupsDir);
+            
+            String timestamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
+            String filename = "uploaded_" + timestamp + ".zip";
+            java.nio.file.Path tempZip = backupsDir.resolve(filename);
+            
+            java.nio.file.Files.write(tempZip, fileBytes);
+
+            // Restore
+            engine.getStore().restoreDatabase(filename, db);
+            
+            res.send(jsonMapper.createObjectNode()
+                .put("status", "restored")
+                .put("file", filename)
+                .toString());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void exportCollection(ServerRequest req, ServerResponse res) {
+        try {
+            String db = req.query().get("db");
+            String col = req.query().get("col");
+            String format = req.query().get("format"); // json or csv
+            
+            if (db == null || col == null || format == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db, col, or format");
+                return;
+            }
+
+            // Get all documents
+            List<Map<String, Object>> docs = engine.getStore().query(db, col, null, 1000000, 0); // Large limit
+            
+            String content = "";
+            String contentType = "text/plain";
+            String ext = "";
+
+            if ("json".equalsIgnoreCase(format)) {
+                content = jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(docs);
+                contentType = "application/json";
+                ext = "json";
+            } else if ("csv".equalsIgnoreCase(format)) {
+                content = convertToCSV(docs);
+                contentType = "text/csv";
+                ext = "csv";
+            } else {
+                 res.status(Status.BAD_REQUEST_400).send("Invalid format. Use json or csv.");
+                 return;
+            }
+
+            res.headers().add(io.helidon.http.HeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + col + "." + ext + "\"");
+            res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, contentType);
+            res.send(content);
+
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void importCollection(ServerRequest req, ServerResponse res) {
+         try {
+            String db = req.query().get("db");
+            String col = req.query().get("col");
+            String format = req.query().get("format");
+            
+            if (db == null || col == null || format == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db, col, or format");
+                return;
+            }
+            
+            byte[] bytes = req.content().as(byte[].class);
+            String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+            
+            int count = 0;
+            if ("json".equalsIgnoreCase(format)) {
+                List<Map<String, Object>> docs = jsonMapper.readValue(content, new TypeReference<List<Map<String, Object>>>(){});
+                for (Map<String, Object> doc : docs) {
+                    engine.getStore().save(db, col, doc);
+                    count++;
+                }
+            } else if ("csv".equalsIgnoreCase(format)) {
+                List<Map<String, Object>> docs = parseCSV(content);
+                for (Map<String, Object> doc : docs) {
+                    engine.getStore().save(db, col, doc);
+                    count++;
+                }
+            } else {
+                 res.status(Status.BAD_REQUEST_400).send("Invalid format");
+                 return;
+            }
+
+            res.send(jsonMapper.createObjectNode().put("status", "imported").put("count", count).toString());
+
+        } catch (Exception e) {
+             e.printStackTrace();
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    // Simple CSV Utilities
+    private String convertToCSV(List<Map<String, Object>> docs) {
+        if (docs.isEmpty()) return "";
+        
+        // Collect all keys
+        java.util.Set<String> keys = new java.util.LinkedHashSet<>();
+        // ID first
+        keys.add("_id");
+        for (Map<String, Object> doc : docs) {
+            keys.addAll(doc.keySet());
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        // Header
+        sb.append(String.join(",", keys)).append("\n");
+        
+        // Rows
+        for (Map<String, Object> doc : docs) {
+            java.util.List<String> values = new java.util.ArrayList<>();
+            for (String key : keys) {
+                Object val = doc.get(key);
+                String sVal = val == null ? "" : String.valueOf(val);
+                // Escape quotes
+                if (sVal.contains(",") || sVal.contains("\"") || sVal.contains("\n")) {
+                    sVal = "\"" + sVal.replace("\"", "\"\"") + "\"";
+                }
+                values.add(sVal);
+            }
+            sb.append(String.join(",", values)).append("\n");
+        }
+        return sb.toString();
+    }
+
+    private List<Map<String, Object>> parseCSV(String content) {
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        String[] lines = content.split("\n");
+        if (lines.length == 0) return result;
+        
+        String[] headers = lines[0].trim().split(","); // Simplistic header split
+        // Trim headers
+        for(int i=0; i<headers.length; i++) headers[i] = headers[i].trim();
+
+        // Simple parsing not handling quoted commas correctly for now as per minimal requirement, 
+        // but strictly we should use a proper parser. 
+        // Let's at least handle quotes if possible strictly or warn.
+        // Implementing a quick robust splitter:
+        
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty()) continue;
+            
+            // Split by comma respecting quotes
+            List<String> tokens = splitCSVLine(line);
+            
+            Map<String, Object> doc = new java.util.HashMap<>();
+            for (int j = 0; j < headers.length && j < tokens.size(); j++) {
+                String val = tokens.get(j);
+                if (!val.isEmpty()) {
+                    // Try number
+                    try {
+                        if (val.contains(".")) doc.put(headers[j], Double.parseDouble(val));
+                        else doc.put(headers[j], Long.parseLong(val));
+                    } catch (NumberFormatException e) {
+                        doc.put(headers[j], val);
+                    }
+                }
+            }
+            result.add(doc);
+        }
+        return result;
+    }
+    
+    private List<String> splitCSVLine(String line) {
+        List<String> tokens = new java.util.ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+        boolean inQuotes = false;
+        for (char c : line.toCharArray()) {
+            if (c == '\"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                tokens.add(sb.toString().trim());
+                sb.setLength(0);
+            } else {
+                sb.append(c);
+            }
+        }
+        tokens.add(sb.toString().trim());
+        return tokens;
     }
 }

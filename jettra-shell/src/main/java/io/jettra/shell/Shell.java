@@ -103,6 +103,15 @@ public class Shell {
                     case "backup":
                         handleBackup(arg);
                         break;
+                    case "restore":
+                        handleRestore(arg);
+                        break;
+                    case "export":
+                        handleExport(arg);
+                        break;
+                    case "import":
+                        handleImport(arg);
+                        break;
                     case "cls":
                     case "clear":
                         System.out.print("\033[H\033[2J");
@@ -164,6 +173,10 @@ public class Shell {
         System.out.println("  create col <name>      Create collection in current db");
         System.out.println("  insert <col> <json>    Insert document");
         System.out.println("  find <col>             Find all documents");
+        System.out.println("  backup [db]            Create backup of current or specified db");
+        System.out.println("  restore <file> <db>    Restore database from zip file");
+        System.out.println("  export <col> <fmt> <file> Export collection to file (fmt: json/csv)");
+        System.out.println("  import <col> <fmt> <file> Import collection from file");
         System.out.println("  exit                   Exit shell");
     }
 
@@ -394,5 +407,112 @@ public class Shell {
         } else {
              System.out.println("Backup failed: " + res.body());
         }
+    }
+
+    private static void handleRestore(String arg) throws Exception {
+         if (token == null) { System.out.println("Not logged in."); return; }
+         
+         // Args: <file> <targetDb>
+         String[] parts = arg.trim().split("\\s+");
+         if (parts.length < 2) {
+             System.out.println("Usage: restore <file.zip> <targetDb>");
+             return;
+         }
+         
+         String filePath = parts[0];
+         String targetDb = parts[1];
+         
+         java.nio.file.Path path = java.nio.file.Paths.get(filePath);
+         if (!java.nio.file.Files.exists(path)) {
+             System.out.println("File not found: " + filePath);
+             return;
+         }
+         
+         System.out.println("Uploading and restoring " + filePath + " to " + targetDb + "...");
+         
+         HttpRequest req = HttpRequest.newBuilder()
+                 .uri(URI.create(baseUrl + "/api/restore/upload?db=" + targetDb))
+                 .header("Authorization", token)
+                 .header("Content-Type", "application/octet-stream")
+                 .POST(HttpRequest.BodyPublishers.ofFile(path))
+                 .build();
+         
+         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+         if (res.statusCode() == 200) {
+             System.out.println("Restore successful!");
+             // Optionally print details if returned JSON
+         } else {
+             System.out.println("Restore failed: " + res.body());
+         }
+    }
+    private static void handleExport(String arg) throws Exception {
+         if (token == null) { System.out.println("Not logged in."); return; }
+         if (currentDb == null) { System.out.println("No DB selected."); return; }
+         
+         // Usage: export <col> <json|csv> <filename>
+         String[] parts = arg.trim().split("\\s+");
+         if (parts.length < 3) {
+             System.out.println("Usage: export <collection> <format> <filename>");
+             return;
+         }
+         
+         String col = parts[0];
+         String format = parts[1];
+         String filename = parts[2];
+         
+         System.out.println("Exporting " + col + " to " + filename + " as " + format + "...");
+         
+         HttpRequest req = HttpRequest.newBuilder()
+                 .uri(URI.create(baseUrl + "/api/export?db=" + currentDb + "&col=" + col + "&format=" + format))
+                 .header("Authorization", token)
+                 .GET()
+                 .build();
+         
+         HttpResponse<java.nio.file.Path> res = client.send(req, HttpResponse.BodyHandlers.ofFile(java.nio.file.Paths.get(filename)));
+         
+         if (res.statusCode() == 200) {
+             System.out.println("Export successful: " + filename);
+         } else {
+             System.out.println("Export failed: " + res.statusCode());
+             // Clean up empty file?
+         }
+    }
+    
+    private static void handleImport(String arg) throws Exception {
+        if (token == null) { System.out.println("Not logged in."); return; }
+         if (currentDb == null) { System.out.println("No DB selected."); return; }
+         
+         // Usage: import <col> <json|csv> <filename>
+         String[] parts = arg.trim().split("\\s+");
+         if (parts.length < 3) {
+             System.out.println("Usage: import <collection> <format> <filename>");
+             return;
+         }
+         
+         String col = parts[0];
+         String format = parts[1];
+         String filename = parts[2];
+         
+         java.nio.file.Path path = java.nio.file.Paths.get(filename);
+         if (!java.nio.file.Files.exists(path)) {
+             System.out.println("File not found: " + filename);
+             return;
+         }
+         
+         System.out.println("Importing " + filename + " to " + col + "...");
+         
+         HttpRequest req = HttpRequest.newBuilder()
+                 .uri(URI.create(baseUrl + "/api/import?db=" + currentDb + "&col=" + col + "&format=" + format))
+                 .header("Authorization", token)
+                 .header("Content-Type", "application/octet-stream")
+                 .POST(HttpRequest.BodyPublishers.ofFile(path))
+                 .build();
+         
+         HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+         if (res.statusCode() == 200) {
+             System.out.println("Import successful: " + res.body());
+         } else {
+             System.out.println("Import failed: " + res.body());
+         }
     }
 }

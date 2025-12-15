@@ -325,6 +325,77 @@ const App = {
         }
     },
 
+    promptGeneralRestore() {
+        this.renderCustomModal('Restore from File', `
+            <div class="alert alert-warning" style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 1em;">
+                <strong>⚠️ Warning:</strong> Restoring will overwrite the target database if it exists using the uploaded backup!
+            </div>
+            <div class="form-group">
+                <label>Select Backup File (.zip)</label>
+                <input type="file" id="restore-file-input" accept=".zip" class="form-control" style="width: 100%; padding: 0.5rem;">
+            </div>
+            <div class="form-group">
+                <label>Target Database Name</label>
+                <input type="text" id="restore-target-db-upload" placeholder="e.g. restored_db" class="form-control" style="width: 100%; padding: 0.5rem;">
+            </div>
+        `, `
+            <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+            <button class="btn danger" id="modal-upload-restore-btn">Upload & Restore</button>
+        `);
+
+        document.getElementById('modal-upload-restore-btn').addEventListener('click', () => {
+            const fileInput = document.getElementById('restore-file-input');
+            const targetDb = document.getElementById('restore-target-db-upload').value;
+
+            if (fileInput.files.length === 0) {
+                alert("Please select a file");
+                return;
+            }
+            if (!targetDb) {
+                alert("Please enter a target database name");
+                return;
+            }
+
+            if (confirm(`Are you sure you want to restore to "${targetDb}"? Data will be overwritten.`)) {
+                this.uploadAndRestore(fileInput.files[0], targetDb);
+            }
+        });
+    },
+
+    uploadAndRestore(file, targetDb) {
+        this.showNotification('Uploading and Restoring...', 'info');
+        // Need to send raw bytes or implement multipart. Backend expects raw bytes body for simplicity in current impl.
+        // Reading file as ArrayBuffer
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const arrayBuffer = e.target.result;
+            try {
+                const res = await fetch(`/api/restore/upload?db=${targetDb}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': this.state.token,
+                        'Content-Type': 'application/octet-stream' // Or zip
+                    },
+                    body: arrayBuffer
+                });
+
+                if (res.ok) {
+                    this.showNotification('Restore successful!', 'success');
+                    this.closeInputModal();
+                    this.loadBackups(); // Refresh list to maybe show new file if we listed it (we do save it to backups dir)
+                    // Also refresh DB list if we are in dashboard?
+                    // We might not be in dashboard view but backups view.
+                } else {
+                    const t = await res.text();
+                    this.showNotification('Restore failed: ' + t, 'error');
+                }
+            } catch (err) {
+                this.showNotification('Upload failed: ' + err.message, 'error');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    },
+
     downloadBackup(file) {
         // Direct link download with auth is tricky. 
         // For now, assume admin logged in browser context works or we use a temporary token param logic if implemented.
@@ -1038,6 +1109,15 @@ const App = {
             }
             if (sectionId === 'transactions') {
                 this.initTxView();
+            }
+            if (sectionId === 'transactions') {
+                this.initTxView();
+            }
+            if (sectionId === 'backups') {
+                this.loadBackups();
+            }
+            if (sectionId === 'import-export') {
+                this.initImportExport();
             }
             return;
         }
@@ -1872,6 +1952,132 @@ const App = {
         line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
         log.appendChild(line);
         log.scrollTop = log.scrollHeight;
+    },
+
+    async initImportExport() {
+        try {
+            const res = await this.authenticatedFetch('/api/dbs');
+            if (res.ok) {
+                const dbs = await res.json();
+                const populate = (id) => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    el.innerHTML = dbs.map(d => `<option value="${d}">${d}</option>`).join('');
+                };
+                populate('export-db-select');
+                populate('import-db-select');
+
+                // Trigger initial load of collections
+                if (dbs.length > 0) {
+                    this.loadExportCollections();
+                    this.loadImportCollections();
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            this.showNotification('Failed to load databases', 'error');
+        }
+    },
+
+    async loadExportCollections() {
+        const db = document.getElementById('export-db-select').value;
+        if (!db) return;
+        try {
+            const res = await this.authenticatedFetch(`/api/dbs/${db}/cols`);
+            const cols = await res.json();
+            const select = document.getElementById('export-col-select');
+            select.innerHTML = cols.map(c => `<option value="${c}">${c}</option>`).join('');
+        } catch (e) { console.error(e); }
+    },
+
+    async loadImportCollections() {
+        const db = document.getElementById('import-db-select').value;
+        if (!db) return;
+        try {
+            const res = await this.authenticatedFetch(`/api/dbs/${db}/cols`);
+            const cols = await res.json();
+            const select = document.getElementById('import-col-select');
+            select.innerHTML = cols.map(c => `<option value="${c}">${c}</option>`).join('');
+        } catch (e) { console.error(e); }
+    },
+
+    performExport() {
+        const db = document.getElementById('export-db-select').value;
+        const col = document.getElementById('export-col-select').value;
+        const format = document.getElementById('export-format').value;
+
+        if (!db || !col) {
+            this.showNotification("Select database and collection", "error");
+            return;
+        }
+
+        this.showNotification("Exporting...", "info");
+
+        this.authenticatedFetch(`/api/export?db=${db}&col=${col}&format=${format}`)
+            .then(res => {
+                if (res.ok) return res.blob();
+                throw new Error("Export failed");
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${col}.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                this.showNotification("Export complete", "success");
+            })
+            .catch(e => {
+                this.showNotification("Export failed: " + e.message, "error");
+            });
+    },
+
+    async performImport() {
+        const db = document.getElementById('import-db-select').value;
+        const colSelect = document.getElementById('import-col-select').value;
+        const colNew = document.getElementById('import-new-col').value;
+        const format = document.getElementById('import-format').value;
+        const fileInput = document.getElementById('import-file');
+
+        const col = colNew ? colNew : colSelect;
+
+        if (!db || !col) {
+            this.showNotification("Select or enter a target collection", "error");
+            return;
+        }
+
+        if (fileInput.files.length === 0) {
+            this.showNotification("Select a file", "error");
+            return;
+        }
+
+        const file = fileInput.files[0];
+        this.showNotification("Importing...", "info");
+        try {
+            const res = await fetch(`${this.baseUrl}/api/import?db=${db}&col=${col}&format=${format}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': localStorage.getItem('jettra_token')
+                },
+                body: file
+            });
+
+            if (res.ok) {
+                const json = await res.json();
+                this.showNotification(`Imported ${json.count} documents`, "success");
+                if (colNew) {
+                    this.loadImportCollections();
+                    document.getElementById('import-new-col').value = '';
+                }
+            } else {
+                const text = await res.text();
+                this.showNotification("Import failed: " + text, "error");
+            }
+        } catch (e) {
+            this.showNotification("Import error: " + e.message, "error");
+        }
     }
 };
 

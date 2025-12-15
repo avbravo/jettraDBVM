@@ -110,6 +110,28 @@
                                     <span class="flex-1 ml-3 whitespace-nowrap">Query Console</span>
                                 </a>
                             </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('backups')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Backups</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('import-export')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Import / Export</span>
+                                </a>
+                            </li>
                             <li id="menu-users" class="hidden">
                                 <a href="#" class="sidebar-link group" onclick="app.showSection('users')">
                                     <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
@@ -487,6 +509,109 @@
                         </div>
                     </div>
 
+                    <!-- Backups Section -->
+                    <div id="backups-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Backup & Restore</h2>
+                                <div style="display: flex; gap: 1rem;">
+                                    <button class="btn btn-primary" onclick="app.promptCreateBackup()">+ Create
+                                        Backup</button>
+                                    <button class="btn btn-secondary" onclick="app.promptGeneralRestore()">Upload &
+                                        Restore</button>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Existing Backups</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Filename</th>
+                                                <th>Date</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="backups-list">
+                                            <!-- Populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Import/Export Section -->
+                    <div id="import-export-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Import / Export Data</h2>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"
+                                style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                                <!-- Export Card -->
+                                <div class="glass-panel">
+                                    <h3 class="text-xl font-semibold mb-4">Export Collection</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label>Database</label>
+                                            <select id="export-db-select" onchange="app.loadExportCollections()"
+                                                class="form-control"></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Collection</label>
+                                            <select id="export-col-select" class="form-control"></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Format</label>
+                                            <select id="export-format" class="form-control">
+                                                <option value="json">JSON</option>
+                                                <option value="csv">CSV</option>
+                                            </select>
+                                        </div>
+                                        <button class="btn btn-primary" onclick="app.performExport()">Download Export
+                                            File</button>
+                                    </div>
+                                </div>
+
+                                <!-- Import Card -->
+                                <div class="glass-panel">
+                                    <h3 class="text-xl font-semibold mb-4">Import Data</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label>Database</label>
+                                            <select id="import-db-select" onchange="app.loadImportCollections()"
+                                                class="form-control"></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Target Collection</label>
+                                            <select id="import-col-select" class="form-control"></select>
+                                            <small class="text-muted" style="font-size: 0.8em; color: #888;">Or type new
+                                                name to create:</small>
+                                            <input type="text" id="import-new-col" placeholder="New Collection Name"
+                                                class="form-control" style="margin-top: 5px;">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Format</label>
+                                            <select id="import-format" class="form-control">
+                                                <option value="json">JSON</option>
+                                                <option value="csv">CSV</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>File</label>
+                                            <input type="file" id="import-file" class="form-control">
+                                        </div>
+                                        <button class="btn btn-success" onclick="app.performImport()">Import
+                                            Data</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Users Manage Section -->
                     <div id="users-section" class="section-content hidden">
                         <div class="p-4" style="padding: 2rem;">
@@ -494,29 +619,30 @@
                                 <h2 class="section-title">User Management</h2>
                                 <button class="btn btn-primary" onclick="app.showAddUserModal()">+ Add User</button>
                             </div>
-                            <div class="glass-panel">
-                                <div class="table-container">
-                                    <table class="w-full text-sm text-left custom-table">
-                                        <thead class="text-xs uppercase bg-gray-700 text-gray-400">
-                                            <tr>
-                                                <th class="px-6 py-3">Username</th>
-                                                <th class="px-6 py-3">Role</th>
-                                                <th class="px-6 py-3 text-right">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="users-table-body"></tbody>
-                                    </table>
-                                </div>
+                        </div>
+                        <div class="glass-panel">
+                            <div class="table-container">
+                                <table class="w-full text-sm text-left custom-table">
+                                    <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+                                        <tr>
+                                            <th class="px-6 py-3">Username</th>
+                                            <th class="px-6 py-3">Role</th>
+                                            <th class="px-6 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table-body"></tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
-
                 </div>
-                <footer class="app-footer">
-                    &copy; 2025 JettraDB. All Rights Reserved.
-                </footer>
-            </main>
+
         </div>
+        <footer class="app-footer">
+            &copy; 2025 JettraDB. All Rights Reserved.
+        </footer>
+        </main>
+    </div>
     </div>
 
     <!-- Deprecated Modals Removed: Using Center View Router -->

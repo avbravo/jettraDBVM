@@ -257,4 +257,36 @@ public class JettraClient {
         Map<String, String> res = sendRequest(request, new TypeReference<Map<String, String>>() {});
         return res != null ? res.get("file") : null;
     }
+    // Export / Import
+    public void exportCollection(String db, String col, String format, java.nio.file.Path outputFile) {
+        HttpRequest request = HttpRequest.newBuilder()
+                 .uri(URI.create(baseUrl + "/export?db=" + db + "&col=" + col + "&format=" + format))
+                 .header("Authorization", getAuthHeader())
+                 .GET()
+                 .build();
+        try {
+            HttpResponse<java.nio.file.Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(outputFile));
+            if (response.statusCode() != 200) {
+                 throw new DriverException("Export failed: " + response.statusCode());
+            }
+        } catch (Exception e) {
+             throw new DriverException("Export failed", e);
+        }
+    }
+
+    public void importCollection(String db, String col, String format, java.nio.file.Path inputFile) {
+         try {
+             HttpRequest request = HttpRequest.newBuilder()
+                 .uri(URI.create(baseUrl + "/import?db=" + db + "&col=" + col + "&format=" + format))
+                 .header("Authorization", getAuthHeader())
+                 .header("Content-Type", "application/octet-stream")
+                 .POST(HttpRequest.BodyPublishers.ofFile(inputFile))
+                 .build();
+             
+             sendRequest(request, null);
+         } catch (Exception e) {
+              throw new DriverException("Import failed", e);
+         }
+    }
 }
+
