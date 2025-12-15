@@ -6,19 +6,18 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Map;
 
-
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jline.reader.Completer;
+import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.completer.AggregateCompleter;
 import org.jline.reader.impl.completer.ArgumentCompleter;
 import org.jline.reader.impl.completer.StringsCompleter;
-import org.jline.reader.impl.history.DefaultHistory;
-import org.jline.reader.Completer;
-import org.jline.reader.UserInterruptException;
-import org.jline.reader.EndOfFileException;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class Shell {
 
@@ -443,14 +442,22 @@ public class Shell {
             System.out.println("Not logged in.");
             return;
         }
-        if (arg.equals("dbs")) {
+        if (arg.equals("dbs") || arg.equals("databases")) {
              HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/api/dbs"))
                 .header("Authorization", token)
                 .GET()
                 .build();
              HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-             System.out.println(res.body());
+             if (res.statusCode() == 200) {
+                java.util.List<java.util.Map<String, String>> dbs = mapper.readValue(res.body(), new com.fasterxml.jackson.core.type.TypeReference<java.util.List<java.util.Map<String, String>>>() {});
+                System.out.println("Databases:");
+                for (java.util.Map<String, String> db : dbs) {
+                    System.out.printf(" - %-20s [%s]%n", db.get("name"), db.get("engine"));
+                }
+            } else {
+                System.out.println("Error: " + res.body());
+            }
         } else if (arg.equals("collections")) {
             if (currentDb == null) {
                 System.out.println("No database selected. use <db>");
@@ -472,7 +479,24 @@ public class Shell {
         if (parts.length < 2) return;
 
         if (parts[0].equals("db") || parts[0].equals("database")) {
-             String json = mapper.writeValueAsString(Map.of("name", parts[1]));
+         Map<String, String> body = new java.util.HashMap<>();
+         body.put("name", parts[1]);
+         // Check for engine arg?
+         // Shell parsing "create db mydb engine JettraEngineStore" ?
+         // parts is only size 2 split by space limit 2.
+         // "create" "db mydb engine ..."
+         // The arg passed to handleCreate is "db name ..."
+         // parts[0] is "db", parts[1] is "name ..."
+         
+         String[] dbParts = parts[1].split("\\s+");
+         String dbName = dbParts[0];
+         body.put("name", dbName);
+         
+         if (dbParts.length > 2 && dbParts[1].equalsIgnoreCase("engine")) {
+             body.put("engine", dbParts[2]);
+         }
+         
+         String json = mapper.writeValueAsString(body);
              HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(baseUrl + "/api/dbs"))
                 .header("Authorization", token)

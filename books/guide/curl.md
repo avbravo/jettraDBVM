@@ -13,6 +13,13 @@ curl -u admin:adminadmin -X POST "http://localhost:8080/api/dbs" \
      -d '{"name": "testdb"}'
 ```
 
+### Create a Database with Specific Engine
+```bash
+curl -u admin:adminadmin -X POST "http://localhost:8080/api/dbs" \
+     -H "Content-Type: application/json" \
+     -d '{"name": "fast_db", "engine": "JettraEngineStore"}'
+```
+
 ### List Databases
 ```bash
 curl -u admin:adminadmin -X GET "http://localhost:8080/api/dbs"

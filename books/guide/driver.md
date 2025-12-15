@@ -35,7 +35,11 @@ System.out.println("Databases: " + dbs);
 
 ### Create Database
 ```java
+// Create with default engine (JettraBasicStore)
 client.createDatabase("my_app_db");
+
+// Create with specific storage engine
+client.createDatabase("analytics_db", "JettraEngineStore");
 ```
 
 ### Delete Database

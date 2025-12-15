@@ -1,0 +1,40 @@
+nohup: no se tendrá en cuenta la entrada
+       _      _   _            ____  ______      ____  __
+      | |    | | | |          |  _ \|  _ \ \    / /  \/  |
+      | | ___| |_| |_ _ __ __ | | | | |_) \ \  / /| \  / |
+  _   | |/ _ \ __| __| '__/ _` | | | |  _ < \ \/ / | |\/| |
+ | |__| |  __/ |_| |_| | | (_| | |_| | |_) | \  /  | |  | |
+  \____/ \___|\__|\__|_|  \__,_|____/|____/   \/   |_|  |_|
+
+JettraDBVM Server v1.0
+
+dic 15, 2025 2:31:06 P. M. io.jettra.core.Engine <init>
+INFO: JettraDB Engine initialized with dataDir: data
+dic 15, 2025 2:31:06 P. M. io.jettra.core.Engine start
+INFO: Starting JettraDB Engine...
+dic 15, 2025 2:31:06 P. M. io.jettra.core.raft.RaftNode start
+INFO: Starting Raft Node: node-1
+dic 15, 2025 2:31:06 P. M. io.jettra.core.raft.RaftNode loadPeers
+INFO: Loaded 0 peers from storage.
+dic 15, 2025 2:31:06 P. M. io.jettra.core.raft.RaftNode start
+INFO: Bootstrap mode detected. Becoming Leader.
+dic 15, 2025 2:31:06 P. M. io.jettra.core.raft.RaftNode becomeLeader
+INFO: Becoming LEADER for term 0
+dic 15, 2025 2:31:06 P. M. io.helidon.common.features.HelidonFeatures features
+INFO: Helidon SE 4.0.5 features: [WebServer]
+dic 15, 2025 2:31:06 P. M. io.helidon.webserver.ServerListener start
+INFO: [0x53e5332b] http://0.0.0.0:8080 bound for socket '@default'
+dic 15, 2025 2:31:06 P. M. io.helidon.webserver.LoomServer startIt
+INFO: Started all channels in 10 milliseconds. 596 milliseconds since JVM startup. Java 21.0.2+13-jvmci-23.1-b30
+dic 15, 2025 2:31:06 P. M. io.jettra.jettraDBVM.Main main
+INFO: Server started at http://0.0.0.0:8080
+DEBUG: saveDocument called for testdb_engine/users
+DEBUG: Document saved with ID: a8c2e535-9dbe-4fd6-ad95-622ea3ed03ff
+DEBUG: queryDocuments called for testdb_engine/users
+DEBUG: Found 2 documents
+dic 15, 2025 2:39:53 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFO: Shutdown requested by JVM shutting down
+dic 15, 2025 2:39:53 P. M. io.helidon.webserver.ServerListener listen
+INFO: [0x53e5332b] @default socket closed.
+dic 15, 2025 2:39:53 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFO: Shutdown finished

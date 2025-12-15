@@ -19,14 +19,14 @@ import java.util.stream.Stream;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import io.jettra.core.validation.Validator;
 
-public class FilePersistence implements DocumentStore {
+public class JettraBasicStore implements DocumentStore {
     private final String dataDirectory;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     // Use CBOR Factory for binary storage
     private final ObjectMapper mapper = new ObjectMapper(new CBORFactory());
     private Validator validator;
 
-    public FilePersistence(String dataDirectory) throws Exception {
+    public JettraBasicStore(String dataDirectory) throws Exception {
         this.dataDirectory = dataDirectory;
         Files.createDirectories(Paths.get(dataDirectory));
     }
@@ -226,6 +226,25 @@ public class FilePersistence implements DocumentStore {
     }
 
     // Implement dummy methods for the rest of the interface for now
+    @Override
+    public void createDatabase(String name, String engine) throws Exception {
+        lock.writeLock().lock();
+        try {
+            Path dbDir = Paths.get(dataDirectory, name);
+            Files.createDirectories(dbDir);
+            
+            // Create _engine collection and save config
+            createCollection(name, "_engine");
+            Map<String, Object> config = new HashMap<>();
+            config.put("_id", "config");
+            config.put("engine", engine != null ? engine : "JettraBasicStore");
+            save(name, "_engine", config);
+
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     @Override
     public void renameDatabase(String oldName, String newName) throws Exception {
         lock.writeLock().lock();
@@ -531,7 +550,6 @@ public class FilePersistence implements DocumentStore {
         }
     }
 
-
     @Override
     public Map<String, Object> getVersionContent(String database, String collection, String id, String version) throws Exception {
         lock.readLock().lock();
@@ -541,6 +559,20 @@ public class FilePersistence implements DocumentStore {
                 return null;
             }
             return mapper.readValue(versionFile.toFile(), new TypeReference<Map<String, Object>>() {});
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public String getDatabaseEngine(String database) throws Exception {
+        lock.readLock().lock();
+        try {
+            Map<String, Object> config = findByID(database, "_engine", "config");
+            if (config != null && config.containsKey("engine")) {
+                return (String) config.get("engine");
+            }
+            return "JettraBasicStore";
         } finally {
             lock.readLock().unlock();
         }

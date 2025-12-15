@@ -288,6 +288,33 @@ const App = {
         this.promptCreateBackup(db);
     },
 
+    async loadDatabases() {
+        try {
+            const response = await this.authenticatedFetch('/api/dbs'); // Use authenticatedFetch
+            const databases = await response.json(); // Expecting an array of { name: "db_name", engine: "JettraBasicStore" }
+            const dbList = document.getElementById('dbList');
+            dbList.innerHTML = '';
+            databases.forEach(db => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                li.onclick = () => this.selectDatabase(db.name); // Use this.selectDatabase
+
+                const span = document.createElement('span');
+                span.textContent = db.name;
+                li.appendChild(span);
+
+                const engineBadge = document.createElement('span');
+                engineBadge.className = 'badge bg-secondary rounded-pill';
+                engineBadge.textContent = db.engine === 'JettraEngineStore' ? 'Binary' : 'Basic';
+                li.appendChild(engineBadge);
+
+                dbList.appendChild(li);
+            });
+        } catch (error) {
+            this.showNotification('Failed to load databases', 'error'); // Use this.showNotification
+        }
+    },
+
     async loadBackups() {
         try {
             const res = await this.authenticatedFetch('/api/backups');
@@ -477,12 +504,37 @@ const App = {
 
     // --- DB/Col Operations ---
     promptCreateDatabase() {
-        this.renderSimpleForm('New Database Name', '', 'Create Database', (name) => {
-            if (!name) return;
+        this.renderCustomModal('Create Database', `
+            <div class="form-group">
+                <label>Database Name</label>
+                <input type="text" id="new-db-name" class="form-control" placeholder="my_database">
+            </div>
+            <div class="form-group">
+                <label>Storage Engine</label>
+                <select id="new-db-engine" class="form-control">
+                    <option value="JettraBasicStore">Basic Store (Default, Standard JSON/CBOR)</option>
+                    <option value="JettraEngineStore">Engine Store (Optimized Binary)</option>
+                </select>
+                <small class="text-muted">Choose 'Engine Store' for high performance with Java objects.</small>
+            </div>
+        `, `
+            <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+            <button class="btn btn-primary" id="modal-create-db-btn">Create</button>
+        `);
+
+        document.getElementById('modal-create-db-btn').addEventListener('click', () => {
+            const name = document.getElementById('new-db-name').value;
+            const engine = document.getElementById('new-db-engine').value;
+
+            if (!name) {
+                this.showNotification('Database name is required', 'error');
+                return;
+            }
+
             this.authenticatedFetch('/api/dbs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name })
+                body: JSON.stringify({ name: name, engine: engine })
             }).then(async res => {
                 if (res.ok) {
                     this.showNotification('Database created', 'success');
@@ -545,13 +597,18 @@ const App = {
     renderDbTree(dbs) {
         const list = document.getElementById('db-list');
         list.innerHTML = '';
-        dbs.forEach(db => {
+        dbs.forEach(dbData => {
+            const db = dbData.name;
+            const engine = dbData.engine; // Backend now returns this correctly
             const li = document.createElement('li');
 
             const itemDiv = document.createElement('div');
             itemDiv.className = 'tree-item';
+            // Added Info button
             itemDiv.innerHTML = `
                 <span class="label">📂 ${db}</span>
+                <div class="tree-actions">
+                    <button class="tree-btn" title="Info" onclick="App.showDatabaseInfo('${db}', '${engine}')">ℹ️</button>
                     <button class="tree-btn" title="Create Collection" onclick="App.promptCreateCollection('${db}')">+</button>
                     <button class="tree-btn" title="Rename" onclick="App.promptRenameDatabase('${db}')">✎</button>
                     <button class="tree-btn" title="Backup" onclick="App.promptBackupDatabase('${db}')">💾</button>
@@ -574,6 +631,70 @@ const App = {
             li.appendChild(itemDiv);
             li.appendChild(childrenUl);
             list.appendChild(li);
+        });
+    },
+
+    showDatabaseInfo(name, engine) {
+        this.renderCustomModal('Database Information', `
+            <div style="padding: 10px;">
+                <div class="form-group">
+                    <label style="font-weight:bold">Name:</label>
+                    <div style="font-size: 1.1em; padding: 5px 0;">${name}</div>
+                </div>
+                <div class="form-group" style="margin-top: 15px;">
+                    <label style="font-weight:bold">Storage Engine:</label>
+                    <div style="padding: 5px 0;">
+                        <span class="badge bg-primary" style="font-size: 1em; padding: 5px 10px;">${engine || 'Unknown'}</span>
+                    </div>
+                     <p style="margin-top:5px; color:#666; font-size:0.9em;">
+                        ${engine === 'JettraEngineStore' ? 'Binary format optimized for performance.' : 'Standard JSON/CBOR storage.'}
+                     </p>
+                </div>
+            </div>
+        `, `
+            <button class="btn btn-primary" onclick="app.closeInputModal()">Close</button>
+        `);
+    },
+
+    confirmDeleteDatabase(name) {
+        this.renderCustomModal('Delete Database', `
+            <div class="alert alert-danger" style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <strong>⚠️ DANGER ZONE</strong>
+                <p style="margin: 10px 0 0;">You are about to delete the database <strong>"${name}"</strong>.</p>
+                <p style="margin: 5px 0 0;">This action cannot be undone. All collections and data will be permanently lost.</p>
+            </div>
+            <div class="form-group">
+                <label>Type database name to confirm:</label>
+                <input type="text" id="confirm-delete-db-input" class="form-control" placeholder="${name}" style="width: 100%; padding: 8px; margin-top:5px;">
+            </div>
+        `, `
+            <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+            <button class="btn danger" id="modal-confirm-delete-btn" disabled>Delete Database</button>
+        `);
+
+        const input = document.getElementById('confirm-delete-db-input');
+        const btn = document.getElementById('modal-confirm-delete-btn');
+
+        input.addEventListener('input', (e) => {
+            if (e.target.value === name) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+                btn.style.cursor = 'not-allowed';
+            }
+        });
+
+        btn.addEventListener('click', () => {
+            this.authenticatedFetch(`/api/dbs?name=${name}`, { method: 'DELETE' })
+                .then(() => {
+                    this.showNotification(`Database ${name} deleted`, 'success');
+                    this.closeInputModal();
+                    this.loadDatabases();
+                })
+                .catch(e => this.showNotification('Failed to delete: ' + e, 'error'));
         });
     },
 

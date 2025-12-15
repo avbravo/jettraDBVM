@@ -22,6 +22,8 @@ public interface DocumentStore {
 
     void renameDatabase(String oldName, String newName) throws Exception;
 
+    void createDatabase(String name, String engine) throws Exception;
+
     void deleteDatabase(String name) throws Exception;
 
     String backupDatabase(String database) throws Exception;
@@ -32,6 +34,9 @@ public interface DocumentStore {
     List<String> getVersions(String database, String collection, String id) throws Exception;
     void restoreVersion(String database, String collection, String id, String version) throws Exception;
     Map<String, Object> getVersionContent(String database, String collection, String id, String version) throws Exception;
+    
+    // Metadata/Engine Info
+    String getDatabaseEngine(String database) throws Exception;
 
     long getNextSequence(String database, String collection, String field) throws Exception;
 

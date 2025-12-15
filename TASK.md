@@ -46,17 +46,45 @@ Para ambas bases de datos ejecute test para medir cual formato es mas optimo par
 
 curl -u admin:adminadmin "http://localhost:8080/..."
 
-# Jettra Storage Engine
+# Jettra Storage 
 
--[] Crear un formato de serializacion Java optimizado para el almacenamiento y para la carga en memoria
+- [] El dialogo de eliminar una base de datos en la interface grafica debe usar un mejor dialogo y no el estandar javascript que no se ve muy elegante.
+
+-[x] Crea en /books/guide un documento llamado storageengine.md que explique el concepto de los engine que se estan implementando
+JettraSimpleStore y JettraStoreEngine, con sus objetivos ventajas desventajas y como se implemnta en curl, shell, driver e interface grafica.
+
+
+- [x] Cuando se crea una base de datos y se usa Engine Store este no se almacena en la coleccion _engine de la base de datos. 
+- [x] Añadir un icono de informacion  en las opciones de la base  de datos que indique informacion de la base  de datos y el engiene que usa es decir un dialogo que muestre estos datos.
+
+
+
+- [x] en la interface web  cuando se inserta un nuevo documento con el formato Jetta engine Store. no se muestra en el formulario puedes corregirlo
+Mostrar la informacion de la base de datos y al seleccionar el tipo de engine almacenarlo en _engine para que se pueda usar por otros elementos, Por favor actualiza la documentoacion de curl, shell, driver que se indique como especificar el tipo de engiinge·
+
+
+- [x] Al crear la bae de datos seleccionar el engine se debe crear un documento men la coleccion _engine de la base de datos con la informacion del engine seleccionado. Cuando es un suuario que no tiene privilegio admin no mostrar las colecciones _engine ni _info. Ademas añadir una opcion que muestre el tipo de engine que usa la base de datos
+
+- [x] Cada vez que se crea la base de datos se crea la coleccion _engine que indicara el motor de almacenamiento
+     jettra usa JettraBasicStore y JettraEngineStore (optimizado para objetos Java lo que hace mas eficiente)
+
+-[x] Crear un formato de serializacion Java optimizado para el almacenamiento y para la carga en memoria
 que sea eficiente y pequeño  comparado con JSON, Apache Avro o ProtoBuf. Este formato debe permitir operaciones rapidas en Java
-ya el engine esta creado en Java, y pasar del storage a los objetos debe ser muy eficiente. Modificar la base de datos para que permitea
+ya el engine esta creado en Java, y pasar del storage a los objetos debe ser muy eficiente. 
+Modificar la base de datos para que permitea
 almacenar en este formato y comprobar que es mas eficiente que el formato actual que se esta usando.
 Para implementar JettraStorageEngine el usuario debe indicar al inicio si usara el metodo tradicional que actualmente tiene o
 aplica Jettra Storage Engine para optimizacion.
 Modificar el shell, Driver , curl y la interface web para que soporten este nuevo formato optimizado.
 
-- [] Cuando se crea una base de datos se debe indicar el motor storage a usar ya sea  Basic Compression o Jettra Store Engine
+- [x] Cuando se crea una base de datos se debe indicar el motor storage a usar ya sea  JettraSimpleStore o Jettra Store Engine.
+Por lo tanto desde la interface web, shell, driver o curl debe especificarse el motor de almacenamiento a usar y de la misma manera
+cuando se va  interactuar con la base de datos y las colecciones se debe leer la informacion sobre el tipo de _engine que utiliza.
+
+- [x] Recuerde que java 25 utiliza Compact Header para reducir el tamaño de los objetos esto puede ser util para JettraStoreEngine
+porque las operaciones Java son mas eficientes al ser objetos Java almancenados y de tamaño reducido. 
+
+- [x] Por favor crea la documentacion necesaria para aplicar estos cambios en el curl, shell, driver y la interface web
 
 
 # jAVA 25

@@ -25,6 +25,12 @@ Follow the interactive prompts to set:
 jettra> show dbs
 jettra> use my_db
 jettra> show collections
+
+## Database Management
+```bash
+jettra> create db my_db
+jettra> create db analytics_db engine JettraEngineStore
+```
 ```
 
 ## Data Manipulation

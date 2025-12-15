@@ -224,11 +224,24 @@ public class WebServices {
 
     private void listSingleDatabase(ServerRequest req, ServerResponse res) {
         // In file based system, listing DBs means listing directories in dataDir
-        // We can assume engine or storage has a method for this, or we implement it
-        // here
         try {
-            java.io.File root = new java.io.File("data"); // Hardcoded for now based on config
-            String[] dbs = root.list((dir, name) -> new java.io.File(dir, name).isDirectory());
+            java.io.File root = new java.io.File("data");
+            java.io.File[] files = root.listFiles(java.io.File::isDirectory);
+            
+            List<Map<String, String>> dbs = new java.util.ArrayList<>();
+            if (files != null) {
+                for (java.io.File dir : files) {
+                    Map<String, String> dbInfo = new java.util.HashMap<>();
+                    dbInfo.put("name", dir.getName());
+                    try {
+                        String engineName = engine.getStore().getDatabaseEngine(dir.getName());
+                        dbInfo.put("engine", engineName != null ? engineName : "JettraBasicStore");
+                    } catch (Exception ex) {
+                        dbInfo.put("engine", "Unknown");
+                    }
+                    dbs.add(dbInfo);
+                }
+            }
             res.send(jsonMapper.writeValueAsString(dbs));
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -241,10 +254,9 @@ public class WebServices {
             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
             });
             String db = body.get("name");
-            // To create a DB folder, we can create a dummy collection or just mkdir.
-            // DocumentStore interface has createCollection.
-            // Let's create a _schema or _info collection to initialize it?
-            // Or just rely on the fact that creating a collection creates the DB.
+            String engineName = body.get("engine"); 
+            engine.getStore().createDatabase(db, engineName);
+            
             engine.getStore().createCollection(db, "_info");
             engine.getStore().createCollection(db, "_rules");
             res.send(jsonMapper.createObjectNode().put("status", "created").toString());
@@ -319,12 +331,48 @@ public class WebServices {
 
     private void listCollections(ServerRequest req, ServerResponse res) {
         String db = req.path().pathParameters().get("db");
+        boolean isAdmin = false;
+        try {
+             isAdmin = requireAdminCheck(req);
+        } catch (Exception e) {}
+
         try {
             java.io.File dbDir = new java.io.File("data/" + db);
             String[] cols = dbDir.list((dir, name) -> new java.io.File(dir, name).isDirectory());
-            res.send(jsonMapper.writeValueAsString(cols));
+            
+            if (cols == null) {
+                res.send("[]");
+                return;
+            }
+
+            List<String> visibleCols = new java.util.ArrayList<>();
+            for (String col : cols) {
+                if (!isAdmin && (col.startsWith("_") || col.equals("_info") || col.equals("_engine"))) {
+                     continue;
+                }
+                visibleCols.add(col);
+            }
+            res.send(jsonMapper.writeValueAsString(visibleCols));
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+    
+    private boolean requireAdminCheck(ServerRequest req) {
+         try {
+            Optional<String> authHeader = req.headers().first(io.helidon.http.HeaderNames.AUTHORIZATION);
+            if (authHeader.isEmpty()) return false;
+            
+            String b64Credentials = authHeader.get().substring("Basic ".length());
+            String credentials = new String(Base64.getDecoder().decode(b64Credentials));
+            String username = credentials.split(":", 2)[0];
+            
+            if ("admin".equals(username)) return true;
+
+            String role = engine.getAuth().getUserRole("_system", username);
+            return "admin".equals(role);
+        } catch (Exception e) {
+            return false;
         }
     }
 
