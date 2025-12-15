@@ -445,7 +445,7 @@ public class FilePersistence implements DocumentStore {
     }
 
     @Override
-    public void saveTx(String database, String collection, Object document, String txID) throws Exception {
+    public void saveTx(String database, String collection, Map<String, Object> document, String txID) throws Exception {
         Path txDir = Paths.get(dataDirectory, "_system", "_transactions", txID);
         if (!Files.exists(txDir)) throw new Exception("Transaction " + txID + " not active");
         
@@ -484,16 +484,65 @@ public class FilePersistence implements DocumentStore {
             Path versionDir = Paths.get(dataDirectory, database, collection, "_versions", id);
             Files.createDirectories(versionDir);
             
-            String timestamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
-            // Add nanoseconds to avoid collision in tight loops
-            timestamp += "_" + System.nanoTime();
+            // Just use system time millis for simplicity and string sorting
+            String timestamp = String.valueOf(System.currentTimeMillis());
             
             Path versionPath = versionDir.resolve(timestamp + ".jdb");
             Files.copy(original, versionPath);
         } catch (Exception e) {
-            e.printStackTrace(); // Log error but don't fail operation? Or should we?
-            // "Recuperacion de datos" implies critical feature. But failing save due to backup might be annoying.
-            // Let's print stack trace.
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public List<String> getVersions(String database, String collection, String id) throws Exception {
+        lock.readLock().lock();
+        try {
+            Path versionDir = Paths.get(dataDirectory, database, collection, "_versions", id);
+            if (!Files.exists(versionDir)) {
+                return new ArrayList<>();
+            }
+            try (Stream<Path> files = Files.list(versionDir)) {
+                return files.map(p -> p.getFileName().toString().replace(".jdb", ""))
+                        .sorted(java.util.Comparator.reverseOrder())
+                        .toList();
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public void restoreVersion(String database, String collection, String id, String version) throws Exception {
+        lock.writeLock().lock();
+        try {
+            Path versionFile = Paths.get(dataDirectory, database, collection, "_versions", id, version + ".jdb");
+            if (!Files.exists(versionFile)) {
+                throw new Exception("Version " + version + " not found");
+            }
+            
+            // Backup current state before restore!
+            createVersion(database, collection, id);
+            
+            Path targetFile = Paths.get(dataDirectory, database, collection, id + ".jdb");
+            Files.copy(versionFile, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+
+    @Override
+    public Map<String, Object> getVersionContent(String database, String collection, String id, String version) throws Exception {
+        lock.readLock().lock();
+        try {
+            Path versionFile = Paths.get(dataDirectory, database, collection, "_versions", id, version + ".jdb");
+            if (!Files.exists(versionFile)) {
+                return null;
+            }
+            return mapper.readValue(versionFile.toFile(), new TypeReference<Map<String, Object>>() {});
+        } finally {
+            lock.readLock().unlock();
         }
     }
 }

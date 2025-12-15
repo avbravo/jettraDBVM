@@ -47,3 +47,18 @@ You will see 10 results. Use the menu to navigate:
 jettra> backup my_db
 jettra> restore my_backup.zip my_db_restored
 ```
+
+## Versioning
+Manage document history directly from the shell.
+
+### History
+List all available versions for a document.
+```bash
+jettra> history my_collection doc_id
+```
+
+### Revert
+Restore a document to a previous version.
+```bash
+jettra> revert my_collection doc_id 1798362512344
+```

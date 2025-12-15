@@ -57,6 +57,12 @@ public class WebServices {
                 // Export/Import
                 .get("/api/export", this::exportCollection)
                 .post("/api/import", this::importCollection)
+                .post("/api/import", this::importCollection)
+                // Versioning
+                .get("/api/versions", this::getVersions)
+                .get("/api/versions", this::getVersions)
+                .get("/api/version", this::getVersionContent)
+                .post("/api/restore-version", this::restoreVersion)
                 // Transactions
                 .post("/api/tx/begin", this::beginTransaction)
                 .post("/api/tx/commit", this::commitTransaction)
@@ -110,7 +116,7 @@ public class WebServices {
 
         // Context DB? For global ops use "admin" or "_system", for db ops use the db in
         // path or query
-        String db = req.query().get("db");
+        String db = req.query().first("db").orElse(null);
         if (db == null || db.equals("admin"))
             db = "_system";
 
@@ -806,6 +812,46 @@ public class WebServices {
     }
 
 
+    private void getVersions(ServerRequest req, ServerResponse res) {
+         try {
+             String db = req.query().get("db");
+             String col = req.query().get("col");
+             String id = req.query().get("id");
+             
+             if (db == null || col == null || id == null) {
+                 res.status(Status.BAD_REQUEST_400).send("Missing db, col, or id");
+                 return;
+             }
+             
+             List<String> versions = engine.getStore().getVersions(db, col, id);
+             res.send(jsonMapper.writeValueAsString(versions));
+         } catch (Exception e) {
+             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+         }
+    }
+
+    private void restoreVersion(ServerRequest req, ServerResponse res) {
+         try {
+             byte[] content = req.content().as(byte[].class);
+             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {});
+             
+             String db = body.get("db");
+             String col = body.get("col");
+             String id = body.get("id");
+             String version = body.get("version");
+             
+             if (db == null || col == null || id == null || version == null) {
+                 res.status(Status.BAD_REQUEST_400).send("Missing parameters");
+                 return;
+             }
+             
+             engine.getStore().restoreVersion(db, col, id, version);
+             res.send(jsonMapper.createObjectNode().put("status", "restored").toString());
+         } catch (Exception e) {
+             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+         }
+    }
+
 
     private String convertToCSV(List<Map<String, Object>> docs) {
         if (docs.isEmpty()) return "";
@@ -922,5 +968,21 @@ public class WebServices {
         }
         tokens.add(sb.toString().trim());
         return tokens;
+    }
+    private void getVersionContent(ServerRequest req, ServerResponse res) {
+        try {
+            String db = req.query().get("db");
+            String col = req.query().get("col");
+            String id = req.query().get("id");
+            String version = req.query().get("version");
+            Map<String, Object> content = engine.getStore().getVersionContent(db, col, id, version);
+            if (content != null) {
+                res.send(jsonMapper.writeValueAsString(content));
+            } else {
+                 res.status(Status.NOT_FOUND_404).send("Version not found");
+            }
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
     }
 }

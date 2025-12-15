@@ -767,6 +767,7 @@ const App = {
                 });
                 html += `<td>
                         <button class="btn btn-icon" onclick="App.openDocEditor('${id}')">✎</button>
+                        <button class="btn btn-icon" onclick="App.showVersions('${id}')" title="History">🕒</button>
                         <button class="btn btn-icon" onclick="App.deleteDocument('${id}')">🗑</button>
                     </td></tr>`;
             });
@@ -1076,6 +1077,155 @@ const App = {
                 this.closeInputModal();
             }
         };
+    },
+
+    // --- Versioning ---
+    async showVersions(id) {
+        this.renderCustomModal('Document History', 'Loading versions...', '');
+
+        try {
+            const res = await this.authenticatedFetch(`/api/versions?db=${this.state.currentDb}&col=${this.state.currentCol}&id=${id}`);
+            if (res.ok) {
+                const versions = await res.json();
+
+                let html = `
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Document ID:</strong> <span class="font-mono">${id}</span>
+                    </div>
+                `;
+
+                if (versions.length === 0) {
+                    html += '<div class="alert alert-info" style="background:var(--bg-secondary); padding:1rem;">No history found for this document.</div>';
+                } else {
+                    html += `
+                    <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+
+                    versions.forEach(ts => {
+                        const date = new Date(parseInt(ts)).toLocaleString();
+                        html += `
+                            <tr>
+                                <td class="font-mono">${ts}</td>
+                                <td>${date}</td>
+                                <td>
+                                    <div class="flex space-x-2" style="display:flex; gap: 0.5rem;">
+                                        <button class="btn btn-sm btn-info" onclick="App.viewVersionContent('${id}', '${ts}')">View</button>
+                                        <button class="btn btn-sm btn-secondary" onclick="App.restoreVersion('${id}', '${ts}')">Restore</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `</tbody></table></div>`;
+                }
+
+                this.renderCustomModal('Document History', html,
+                    '<button class="btn btn-secondary" onclick="app.closeInputModal()">Close</button>'
+                );
+            } else {
+                this.renderCustomModal('Document History', '<div class="text-red-500">Failed to load versions</div>',
+                    '<button class="btn btn-secondary" onclick="app.closeInputModal()">Close</button>'
+                );
+            }
+        } catch (e) {
+            console.error(e);
+            this.showNotification('Error loading versions', 'error');
+            this.closeInputModal();
+        }
+    },
+
+    async restoreVersion(id, version) {
+        if (!confirm(`Restore document to version from ${new Date(parseInt(version)).toLocaleString()}? Current state will be saved as a new version.`)) return;
+
+        try {
+            const res = await this.authenticatedFetch('/api/restore-version', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    db: this.state.currentDb,
+                    col: this.state.currentCol,
+                    id: id,
+                    version: version
+                })
+            });
+
+            if (res.ok) {
+                this.showNotification('Document restored successfully', 'success');
+                this.closeInputModal();
+                this.loadDocuments(this.state.currentDb, this.state.currentCol);
+            } else {
+                const text = await res.text();
+                this.showNotification('Restore failed: ' + text, 'error');
+            }
+        } catch (e) {
+            this.showNotification('Error restoring version: ' + e.message, 'error');
+        }
+    },
+
+    async viewVersionContent(id, version) {
+        this.renderCustomModal('Version Content', 'Loading content...', '<button class="btn btn-secondary" onclick="App.showVersions(\'' + id + '\')">Back</button>');
+
+        try {
+            const res = await this.authenticatedFetch(`/api/version?db=${this.state.currentDb}&col=${this.state.currentCol}&id=${id}&version=${version}`);
+            if (res.ok) {
+                const content = await res.json();
+                const html = `
+                    <div style="margin-bottom: 1rem;">
+                        <strong>Version:</strong> ${new Date(parseInt(version)).toLocaleString()}
+                    </div>
+                    <pre style="background: var(--bg-secondary); padding: 1rem; border-radius: 4px; overflow: auto; max-height: 400px;"><code>${JSON.stringify(content, null, 2)}</code></pre>
+                `;
+                this.renderCustomModal('Version Content', html,
+                    `<button class="btn btn-secondary" onclick="App.showVersions('${id}')">Back</button>`
+                );
+            } else {
+                this.renderCustomModal('Version Content', '<div class="text-red-500">Failed to load content</div>',
+                    `<button class="btn btn-secondary" onclick="App.showVersions('${id}')">Back</button>`
+                );
+            }
+        } catch (e) {
+            this.renderCustomModal('Version Content', '<div class="text-red-500">Error: ' + e.message + '</div>',
+                `<button class="btn btn-secondary" onclick="App.showVersions('${id}')">Back</button>`
+            );
+        }
+    },
+
+    async restoreVersion(id, version) {
+        if (!confirm(`Restore document to version from ${new Date(parseInt(version)).toLocaleString()}? Current state will be saved as a new version.`)) return;
+
+        try {
+            const res = await this.authenticatedFetch('/api/restore-version', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    db: this.state.currentDb,
+                    col: this.state.currentCol,
+                    id: id,
+                    version: version
+                })
+            });
+
+            if (res.ok) {
+                this.showNotification('Document restored successfully', 'success');
+                this.closeInputModal();
+                this.loadDocuments(this.state.currentDb, this.state.currentCol);
+            } else {
+                const text = await res.text();
+                this.showNotification('Restore failed: ' + text, 'error');
+            }
+        } catch (e) {
+            this.showNotification('Error restoring version: ' + e.message, 'error');
+        }
     },
 
     // --- Cluster Management ---

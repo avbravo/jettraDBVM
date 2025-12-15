@@ -16,11 +16,46 @@
     </modules>
 
     <properties>
-        <helidon.version>4.0.5</helidon.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <helidon.version>4.0.5</helidon.version>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>0.9.28</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>crac</id>
+            <dependencies>
+                <dependency>
+                    <groupId>io.github.crac</groupId>
+                    <artifactId>org-crac</artifactId>
+                    <version>0.1.3</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
 
     <dependencyManagement>
         <dependencies>

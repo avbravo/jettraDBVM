@@ -28,6 +28,11 @@ public interface DocumentStore {
 
     void restoreDatabase(String zipFilename, String targetDatabase) throws Exception;
 
+    // Versioning
+    List<String> getVersions(String database, String collection, String id) throws Exception;
+    void restoreVersion(String database, String collection, String id, String version) throws Exception;
+    Map<String, Object> getVersionContent(String database, String collection, String id, String version) throws Exception;
+
     long getNextSequence(String database, String collection, String field) throws Exception;
 
     void createCollection(String database, String collection) throws Exception;
@@ -43,7 +48,7 @@ public interface DocumentStore {
 
     void rollbackTransaction(String txID) throws Exception;
 
-    void saveTx(String database, String collection, Object document, String txID) throws Exception;
+    void saveTx(String database, String collection, Map<String, Object> document, String txID) throws Exception;
 
     void deleteTx(String database, String collection, String id, String txID) throws Exception;
 }

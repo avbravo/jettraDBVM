@@ -183,7 +183,72 @@ public class Shell {
         System.out.println("  restore <file> <db>    Restore database from zip file");
         System.out.println("  export <col> <fmt> <file> Export collection to file (fmt: json/csv)");
         System.out.println("  import <col> <fmt> <file> Import collection from file");
+
+        System.out.println("  history <col> <id>     Show version history of a document");
+        System.out.println("  revert <col> <id> <ver> Revert document to a specific version");
         System.out.println("  exit                   Exit shell");
+    }
+
+
+
+    private static void handleHistory(String arg) throws Exception {
+        if (currentDb == null && arg.split("\\s+").length < 3) { System.out.println("No db selected. Usage: history <col> <id>"); return; }
+        
+        String[] parts = arg.split("\\s+");
+        if (parts.length < 2) {
+            System.out.println("Usage: history <col> <id>");
+            return;
+        }
+        String col = parts[0];
+        String id = parts[1];
+        
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/api/versions?db=" + currentDb + "&col=" + col + "&id=" + id))
+            .header("Authorization", token != null ? token : "")
+            .GET()
+            .build();
+            
+        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+        if (res.statusCode() == 200) {
+             System.out.println("Versions:");
+             System.out.println(res.body());
+        } else {
+             System.out.println("Error: " + res.body());
+        }
+    }
+
+    private static void handleRevert(String arg) throws Exception {
+        if (currentDb == null) { System.out.println("No db selected."); return; }
+        String[] parts = arg.split("\\s+");
+        if (parts.length < 3) {
+            System.out.println("Usage: revert <col> <id> <version>");
+            return;
+        }
+        String col = parts[0];
+        String id = parts[1];
+        String version = parts[2];
+        
+        Map<String, String> body = new java.util.HashMap<>();
+        body.put("db", currentDb);
+        body.put("col", col);
+        body.put("id", id);
+        body.put("version", version);
+        
+        String json = mapper.writeValueAsString(body);
+        
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(baseUrl + "/api/restore-version"))
+            .header("Authorization", token != null ? token : "")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json))
+            .build();
+            
+        HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+         if (res.statusCode() == 200) {
+             System.out.println("Version restored.");
+        } else {
+             System.out.println("Error: " + res.body());
+        }
     }
 
     private static void handleCreateUser(String arg) throws Exception {

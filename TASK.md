@@ -1,15 +1,67 @@
 # TASK
 
+Recuperación ante fallos
+Consistencia de datos multicapa
+
+Procesamiento de consultas basado en caché:
 
 
-# Versionamiento
-- [] Crear un sistema de versionamiento que permitira la recuperacion de datos eliminados y cambiados y de auditoria.
+# Base de datos prueba JetrraBasic
+
+- [] Cree la base de datos llamada almacenbasicdb en la que continie las coleccciones siguientes
+  * clientes
+  * categoriasproductos
+  * productos (recuerde que los productos estan asociados a una categoria)
+  * facturas
+  * facturasdetalles
+
+Ingrese 50000 clientes, 100 categorias de productos 10000 productos. Y genere facturas para simular las ventas con un  total de 1 millon de facutras
+cree el formulario para crear las facturas y sus detalles y que permita consultarlos.
+
+Para este ejemplo use almacenamiento JettraBasic.
+
+# Base de datos prueba Jettra Storage Engine
+
+- [] Cree la base de datos llamada almacenstoreenginedb en la que continie las coleccciones siguientes
+  * clientes
+  * categoriasproductos
+  * productos (recuerde que los productos estan asociados a una categoria)
+  * facturas
+  * facturasdetalles
+
+Ingrese 50000 clientes, 100 categorias de productos 10000 productos. Y genere facturas para simular las ventas con un  total de 1 millon de facutras
+cree el formulario para crear las facturas y sus detalles y que permita consultarlos.
+
+Para este ejemplo use almacenamiento Jettra Storage Enginec.
+
+
+# Testing
+Para ambas bases de datos ejecute test para medir cual formato es mas optimo para almacenamiento, serializar, deserializar y las operaciones crud.
+
+
 
 # Versiones
-- [] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
+- [x] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
 que pueden ser recuperadas desde una interface web , curl, shell o driver. Estas versiones no deben interferir en las operaciones
 normales que se realicen sobre la coleccion. Para su almacenamiento se usa un algoritmo de tipo LSM ya que solo se iran guardando y la ultima
 debe quedar como primera opcion para recuperacion y asi susecivamente.
+
+- [x] En la inteface web por favor muetra el contenido de cada version del documento lo que permitira decidir la restauracion 
+- [] Incluir el soporte para ver las versiones desde shell, curl, driver java y crear la documentacion de uso.
+
+
+# Generacion
+
+Permita la creacion de imagenes para 
+
+- [] Docker
+
+- [] Postman
+
+- [] Imagen Nativa
+
+- [] Criu/Crac
+
 
 
 
@@ -72,17 +124,7 @@ gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionale
 
 # Referencias entre documentos
 
-# Generacion
 
-- [] UberJAr
-
-- [] Docker
-
-- [] Postman
-
-- [] Imagen Nativa
-
-- [] Criu/Crac
 
 
 
