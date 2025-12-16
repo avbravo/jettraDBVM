@@ -17,6 +17,7 @@ public class WebServices {
     private final Engine engine;
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final QueryExecutor queryExecutor;
+    private static final ThreadLocal<String> CURRENT_USER = new ThreadLocal<>();
 
     public WebServices(Engine engine) {
         this.engine = engine;
@@ -25,6 +26,7 @@ public class WebServices {
 
     public void register(HttpRules rules) {
         rules
+                .any("/api/*", this::authMiddleware)
                 .post("/api/login", this::login)
                 .post("/api/change-password", this::changePassword)
                 .get("/api/dbs", this::listSingleDatabase) // For now, we simulate list or just show current context
@@ -50,14 +52,12 @@ public class WebServices {
                 .post("/api/backup", this::backupDatabase)
                 .get("/api/backups", this::listBackups)
                 .get("/api/backup/download", this::downloadBackup)
-                .get("/api/backup/download", this::downloadBackup)
-                .post("/api/restore", this::restoreDatabase)
                 .post("/api/restore", this::restoreDatabase)
                 .post("/api/restore/upload", this::restoreDatabaseFromUpload)
                 // Export/Import
                 .get("/api/export", this::exportCollection)
                 .post("/api/import", this::importCollection)
-                .post("/api/import", this::importCollection)
+                .get("/api/count", this::countDocuments)
                 // Versioning
                 .get("/api/versions", this::getVersions)
                 .get("/api/versions", this::getVersions)
@@ -67,8 +67,7 @@ public class WebServices {
                 .post("/api/tx/begin", this::beginTransaction)
                 .post("/api/tx/commit", this::commitTransaction)
                 .post("/api/tx/rollback", this::rollbackTransaction)
-                // Auth Middleware for API
-                .any("/api/*", this::authMiddleware);
+                .post("/api/tx/rollback", this::rollbackTransaction);
 
         
         // Register Raft Services
@@ -126,6 +125,7 @@ public class WebServices {
             return;
         }
 
+        CURRENT_USER.set(user);
         res.next();
     }
 
@@ -225,16 +225,54 @@ public class WebServices {
     private void listSingleDatabase(ServerRequest req, ServerResponse res) {
         // In file based system, listing DBs means listing directories in dataDir
         try {
+            String user = CURRENT_USER.get();
+            boolean isAdmin = "admin".equals(user); 
+            List<String> allowedDbs = new java.util.ArrayList<>();
+            boolean canSeeAll = false;
+
+            if (user != null && !isAdmin) {
+                 try {
+                     Map<String, Object> filter = java.util.Collections.singletonMap("username", user);
+                     List<Map<String, Object>> users = engine.getStore().query("_system", "_users", filter, 1, 0);
+                     if (!users.isEmpty()) {
+                         Map<String, Object> u = users.get(0);
+                         String role = (String) u.get("role");
+                         if ("admin".equals(role)) {
+                             isAdmin = true;
+                         } else {
+                             Object ad = u.get("allowed_dbs");
+                             if (ad instanceof List) {
+                                 for (Object o : (List<?>) ad) {
+                                     String dbName = o.toString();
+                                     allowedDbs.add(dbName);
+                                     if ("*".equals(dbName)) {
+                                         canSeeAll = true;
+                                     }
+                                 }
+                             }
+                         }
+                     }
+                 } catch (Exception ex) {
+                     // Log error or ignore
+                     ex.printStackTrace();
+                 }
+            }
+            
             java.io.File root = new java.io.File("data");
             java.io.File[] files = root.listFiles(java.io.File::isDirectory);
             
             List<Map<String, String>> dbs = new java.util.ArrayList<>();
             if (files != null) {
                 for (java.io.File dir : files) {
+                    String dbName = dir.getName();
+                    if (!isAdmin && !canSeeAll && !allowedDbs.contains(dbName)) {
+                        continue;
+                    }
+
                     Map<String, String> dbInfo = new java.util.HashMap<>();
-                    dbInfo.put("name", dir.getName());
+                    dbInfo.put("name", dbName);
                     try {
-                        String engineName = engine.getStore().getDatabaseEngine(dir.getName());
+                        String engineName = engine.getStore().getDatabaseEngine(dbName);
                         dbInfo.put("engine", engineName != null ? engineName : "JettraBasicStore");
                     } catch (Exception ex) {
                         dbInfo.put("engine", "Unknown");
@@ -481,6 +519,21 @@ public class WebServices {
             res.send(jsonMapper.writeValueAsString(docs));
         } catch (Exception e) {
             e.printStackTrace();
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void countDocuments(ServerRequest req, ServerResponse res) {
+        try {
+            String db = req.query().get("db");
+            String col = req.query().get("col");
+            if (db == null || col == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db or col");
+                return;
+            }
+            int count = engine.getStore().count(db, col);
+            res.send(jsonMapper.createObjectNode().put("count", count).toString());
+        } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }

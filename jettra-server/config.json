@@ -1,0 +1,10 @@
+{
+  "Host" : "0.0.0.0",
+  "Port" : 8080,
+  "DataDir" : "data",
+  "Role" : "Obsolete",
+  "SessionTimeout" : 0,
+  "Bootstrap" : true,
+  "ClusterID" : "cluster-1",
+  "NodeID" : "node-1ec457c6-d836-4c99-92e3-e83be940c311"
+}

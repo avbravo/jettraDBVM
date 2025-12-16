@@ -1,0 +1,8 @@
+--- Data Inserted ---
+1. Verify Embedded (Alice in New York)
+Querying embedded field (address.city = 'New York')...
+[]
+2. Verify Aggregation (Pipeline)
+{"message":"Aggregation result: 3 documents (Pipeline processing not fully implemented)"}
+3. Verify Join (SQL)
+[{"id":"o2","user_id":"u1","total":200},{"id":"o1","user_id":"u1","total":100},{"id":"o3","user_id":"u2","total":50}]

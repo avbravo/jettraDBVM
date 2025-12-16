@@ -222,7 +222,7 @@ const App = {
                 <div class="form-group">
                     <label>Select Database</label>
                     <select id="backup-db-select" class="form-control" style="width: 100%; padding: 0.5rem;">
-                        ${dbs.map(d => `<option value="${d}" ${d === preselectedDb ? 'selected' : ''}>${d}</option>`).join('')}
+                        ${dbs.map(d => `<option value="${d.name}" ${d.name === preselectedDb ? 'selected' : ''}>${d.name}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group" style="margin-top: 1rem; color: #666; font-size: 0.9em;">
@@ -288,32 +288,8 @@ const App = {
         this.promptCreateBackup(db);
     },
 
-    async loadDatabases() {
-        try {
-            const response = await this.authenticatedFetch('/api/dbs'); // Use authenticatedFetch
-            const databases = await response.json(); // Expecting an array of { name: "db_name", engine: "JettraBasicStore" }
-            const dbList = document.getElementById('dbList');
-            dbList.innerHTML = '';
-            databases.forEach(db => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
-                li.onclick = () => this.selectDatabase(db.name); // Use this.selectDatabase
+    // Old loadDatabases removed
 
-                const span = document.createElement('span');
-                span.textContent = db.name;
-                li.appendChild(span);
-
-                const engineBadge = document.createElement('span');
-                engineBadge.className = 'badge bg-secondary rounded-pill';
-                engineBadge.textContent = db.engine === 'JettraEngineStore' ? 'Binary' : 'Basic';
-                li.appendChild(engineBadge);
-
-                dbList.appendChild(li);
-            });
-        } catch (error) {
-            this.showNotification('Failed to load databases', 'error'); // Use this.showNotification
-        }
-    },
 
     async loadBackups() {
         try {
@@ -758,12 +734,7 @@ const App = {
 
 
 
-    confirmDeleteDatabase(name) {
-        if (confirm(`Delete database '${name}'? This cannot be undone.`)) {
-            this.authenticatedFetch(`/api/dbs?name=${name}`, { method: 'DELETE' })
-                .then(() => this.loadDatabases());
-        }
-    },
+
 
     promptCreateCollection(db) {
         this.renderSimpleForm('New Collection Name', '', 'Create Collection', (name) => {
@@ -1369,37 +1340,16 @@ const App = {
             target.classList.remove('hidden');
             target.style.display = 'block'; // Force show
 
-            if (sectionId === 'cluster') {
-                this.refreshClusterStatus();
-            }
-            if (sectionId === 'indexes') {
-                this.initIndexesView();
-            }
-            if (sectionId === 'rules') {
-                this.initRulesView();
-            }
-            if (sectionId === 'transactions') {
-                this.initTxView();
-            }
-            if (sectionId === 'transactions') {
-                this.initTxView();
-            }
-            if (sectionId === 'backups') {
-                this.loadBackups();
-            }
-            if (sectionId === 'import-export') {
-                this.initImportExport();
-            }
-            return;
-        }
+            if (sectionId === 'cluster') this.refreshClusterStatus();
+            if (sectionId === 'indexes') this.initIndexesView();
+            if (sectionId === 'rules') this.initRulesView();
+            if (sectionId === 'transactions') this.initTxView();
+            if (sectionId === 'backups') this.loadBackups();
+            if (sectionId === 'import-export') this.initImportExport();
+            if (sectionId === 'invoices') this.initInvoicesView();
+            if (sectionId === 'query') this.initQueryView();
+            if (sectionId === 'users') this.initUsersView();
 
-        if (sectionId === 'query') {
-            this.initQueryView();
-            return;
-        }
-
-        if (sectionId === 'users') {
-            this.initUsersView();
             return;
         }
 
@@ -1418,15 +1368,21 @@ const App = {
         dbSelect.innerHTML = '<option value="">Select DB</option>';
         try {
             const res = await this.authenticatedFetch('/api/dbs');
-            const dbs = await res.json();
-            dbs.forEach(db => {
-                const opt = document.createElement('option');
-                opt.value = db;
-                opt.textContent = db;
-                dbSelect.appendChild(opt);
-            });
-            // Auto Select current if avail
-            if (this.state.currentDb) dbSelect.value = this.state.currentDb;
+            if (res.ok) {
+                const dbs = await res.json();
+                if (Array.isArray(dbs)) {
+                    dbs.forEach(db => {
+                        const opt = document.createElement('option');
+                        opt.value = db.name;
+                        opt.textContent = db.name;
+                        dbSelect.appendChild(opt);
+                    });
+                    // Auto Select current if avail
+                    if (this.state.currentDb) dbSelect.value = this.state.currentDb;
+                }
+            } else {
+                console.error("Failed to load DBs for Query Console");
+            }
         } catch (e) { console.error(e); }
     },
 
@@ -1516,8 +1472,8 @@ const App = {
                 dbs.forEach(db => {
                     dbOptions += `
                         <label style="display:flex; align-items:center; margin-bottom:0.4rem;">
-                            <input type="checkbox" name="allowed_dbs" value="${db}" style="margin-right:0.5rem;">
-                            <span>${db}</span>
+                            <input type="checkbox" name="allowed_dbs" value="${db.name}" style="margin-right:0.5rem;">
+                            <span>${db.name}</span>
                         </label>
                     `;
                 });
@@ -1598,15 +1554,306 @@ const App = {
     async deleteUser(id) {
         if (!confirm("Delete user?")) return;
         try {
-            const res = await this.authenticatedFetch('/api/users?id=' + id, { method: 'DELETE' });
-            if (res.ok) {
-                this.showNotification("User deleted", "success");
-                this.loadUsers();
-            } else {
-                this.showNotification("Failed to delete", "error");
-            }
+            await this.authenticatedFetch(`/api/users?id=${id}`, { method: 'DELETE' });
+            this.showNotification("User deleted", "success");
+            this.loadUsers();
         } catch (e) {
-            this.showNotification("Error: " + e.message, "error");
+            this.showNotification("Failed to delete user", "error");
+        }
+    },
+
+    // --- Invoice Management ---
+    async initInvoicesView() {
+        const select = document.getElementById('invoice-db-select');
+        select.innerHTML = '<option value="">Select Database</option>';
+        try {
+            const res = await this.authenticatedFetch('/api/dbs');
+            const dbs = await res.json();
+            dbs.forEach(db => {
+                const opt = document.createElement('option');
+                opt.value = db.name;
+                opt.textContent = db.name;
+                select.appendChild(opt);
+            });
+
+            // Try to select 'almacenbasicdb' by default if exists or first one
+            const defaultDb = dbs.find(d => d.name === 'almacenbasicdb') || dbs[0];
+            if (defaultDb) {
+                select.value = defaultDb.name;
+                this.loadInvoices();
+            }
+        } catch (e) { console.error(e); }
+    },
+
+    state_invoicePage: 1,
+
+    async loadInvoices() {
+        const db = document.getElementById('invoice-db-select').value;
+        if (!db) return;
+
+        const tbody = document.getElementById('invoices-table-body');
+        tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+
+        const limit = 20;
+        const offset = (this.state_invoicePage - 1) * limit;
+
+        try { // Use query API to fetch invoices
+            // Need 'facturas' collection
+            const res = await this.authenticatedFetch(`/api/query?db=${db}&col=facturas&limit=${limit}&offset=${offset}`);
+            if (!res.ok) throw new Error("Failed");
+            const invoices = await res.json();
+
+            tbody.innerHTML = '';
+            if (invoices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5">No invoices found.</td></tr>';
+                return;
+            }
+
+            // Enhance display - maybe we can fetch client names? 
+            // For benchmarking performance, maybe keep it simple first.
+
+            invoices.forEach(inv => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${inv.id}</td>
+                    <td>${inv.fecha}</td>
+                    <td>${inv.cliente_id}</td>
+                    <td>$${parseFloat(inv.total).toFixed(2)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="app.viewInvoice('${inv.id}')">View</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('invoice-page-num').textContent = `Page ${this.state_invoicePage}`;
+
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-error">Error loading data. Collection "facturas" might not exist.</td></tr>';
+        }
+    },
+
+    prevInvoicePage() {
+        if (this.state_invoicePage > 1) {
+            this.state_invoicePage--;
+            this.loadInvoices();
+        }
+    },
+
+    nextInvoicePage() {
+        this.state_invoicePage++;
+        this.loadInvoices();
+    },
+
+    async viewInvoice(id) {
+        const db = document.getElementById('invoice-db-select').value;
+        this.renderCustomModal('Invoice Details', 'Loading...', '<button class="btn btn-secondary" onclick="app.closeInputModal()">Close</button>');
+
+        try {
+            // Get Invoice Header
+            const invRes = await this.authenticatedFetch(`/api/doc?db=${db}&col=facturas&id=${id}`); // Assuming query by ID or just filter
+            // Actually getDocument by ID is usually via ID param if supported, strictly speaking Jettra ID logic is implicit for now?
+            // Let's us query filter for safety if ID not direct key in storage yet
+            // Assuming we use standard query:
+            const qRes = await this.authenticatedFetch(`/api/query?db=${db}&col=facturas&limit=1`, {
+                // We don't have WHERE yet in GET query param properly, usually filter client side for now or implement WHERE 
+                // Wait, Jettra has no WHERE in GET param yet implemented simpler? 
+                // Actually doc fetch via ID is supported: /api/doc?db=...&col=...&id=...
+            });
+
+            // Wait, I should use the correct endpoint I built.
+            const docRes = await this.authenticatedFetch(`/api/doc?db=${db}&col=facturas&id=${id}`);
+            const invoice = await docRes.json();
+
+            // Get Details
+            // Need to query details where factura_id = id.
+            // Jettra currently has limited query. I'll fetch valid details? 
+            // Implementing a client-side filter for now or we must implement `where` in server.
+            // With 1M rows, fetching all is impossible.
+            // I'll implement a specific query if needed, or rely on `DataSeeder` structure.
+            // But wait, the previous `QueryExecutor` does NOT support WHERE params in URL.
+            // It supports SQL-like or JQL via POST.
+
+            // Let's use the POST /api/command for querying details!
+            const cmdPayload = {
+                command: `FIND IN facturasdetalles WHERE factura_id = "${id}"`
+            };
+
+            const detailsRes = await this.authenticatedFetch(`/api/command?db=${db}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cmdPayload)
+            });
+            const details = await detailsRes.json();
+
+            let detailsHtml = '<table class="data-table"><thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead><tbody>';
+            details.forEach(d => {
+                detailsHtml += `<tr><td>${d.producto_id}</td><td>${d.cantidad}</td><td>${d.precio_unitario}</td><td>${d.subtotal}</td></tr>`;
+            });
+            detailsHtml += '</tbody></table>';
+
+            this.renderCustomModal(`Invoice #${invoice.id}`, `
+                <div style="padding: 1rem;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem;">
+                         <div><strong>Date:</strong> ${invoice.fecha}</div>
+                         <div><strong>Client:</strong> ${invoice.cliente_id}</div>
+                         <div><strong>Total:</strong> $${invoice.total}</div>
+                    </div>
+                    <h4>Items</h4>
+                    ${detailsHtml}
+                </div>
+             `, '<button class="btn btn-secondary" onclick="app.closeInputModal()">Close</button>');
+
+        } catch (e) {
+            this.renderCustomModal('Error', 'Failed to load details: ' + e.message, '<button class="btn btn-secondary" onclick="app.closeInputModal()">Close</button>');
+        }
+    },
+
+    showCreateInvoice() {
+        const db = document.getElementById('invoice-db-select').value;
+        if (!db) {
+            this.showNotification("Select a database first", "error");
+            return;
+        }
+
+        // We need a more complex form. 
+        // 1. Client Search
+        // 2. Product Search & Add to List
+        // 3. Save
+
+        this.renderCustomModal('New Invoice', `
+            <div id="invoice-form-container" style="min-height: 400px;">
+                <div class="form-group">
+                    <label>Client (ID)</label>
+                    <div style="display:flex; gap: 0.5rem;">
+                        <input type="text" id="inv-client-id" class="form-control" placeholder="C0...">
+                        <!-- In real app, search modal here -->
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: 4px;">
+                    <label>Add Product</label>
+                    <div style="display:flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                         <input type="text" id="inv-prod-id" class="form-control" placeholder="Product ID (P0...)" style="flex:2">
+                         <input type="number" id="inv-prod-qty" class="form-control" placeholder="Qty" value="1" style="flex:1">
+                         <input type="number" id="inv-prod-price" class="form-control" placeholder="Price" style="flex:1">
+                         <button class="btn btn-primary" onclick="app.addInvoiceLine()">Add</button>
+                    </div>
+                </div>
+                
+                <div class="table-container" style="max-height: 200px; overflow-y: auto;">
+                    <table class="data-table">
+                        <thead><tr><th>Prod</th><th>Qty</th><th>Price</th><th>Total</th><th></th></tr></thead>
+                        <tbody id="inv-lines-body"></tbody>
+                    </table>
+                </div>
+                
+                <div style="text-align: right; margin-top: 1rem; font-size: 1.2em;">
+                    <strong>Total: $<span id="inv-total-display">0.00</span></strong>
+                </div>
+            </div>
+        `, `
+            <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+            <button class="btn btn-success" onclick="app.saveInvoice()">Save Invoice</button>
+        `);
+
+        // Reset temp state for lines
+        this.tempInvoiceLines = [];
+    },
+
+    tempInvoiceLines: [],
+
+    addInvoiceLine() {
+        const pid = document.getElementById('inv-prod-id').value;
+        const qty = parseInt(document.getElementById('inv-prod-qty').value);
+        const price = parseFloat(document.getElementById('inv-prod-price').value);
+
+        if (!pid || isNaN(qty) || isNaN(price)) return;
+
+        this.tempInvoiceLines.push({ pid, qty, price, subtotal: qty * price });
+        this.renderInvoiceLines();
+
+        // Clear inputs
+        document.getElementById('inv-prod-id').value = '';
+        document.getElementById('inv-prod-qty').value = '1';
+        document.getElementById('inv-prod-price').value = '';
+    },
+
+    renderInvoiceLines() {
+        const tbody = document.getElementById('inv-lines-body');
+        tbody.innerHTML = '';
+        let total = 0;
+
+        this.tempInvoiceLines.forEach((line, idx) => {
+            total += line.subtotal;
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${line.pid}</td>
+                <td>${line.qty}</td>
+                <td>${line.price}</td>
+                <td>${line.subtotal}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="app.removeInvoiceLine(${idx})">x</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        document.getElementById('inv-total-display').textContent = total.toFixed(2);
+    },
+
+    removeInvoiceLine(idx) {
+        this.tempInvoiceLines.splice(idx, 1);
+        this.renderInvoiceLines();
+    },
+
+    async saveInvoice() {
+        const db = document.getElementById('invoice-db-select').value;
+        const clientId = document.getElementById('inv-client-id').value;
+
+        if (!clientId || this.tempInvoiceLines.length === 0) {
+            alert("Client and at least one item required");
+            return;
+        }
+
+        const invoiceId = 'F' + Date.now(); // Simple ID gen
+
+        const invoice = {
+            id: invoiceId,
+            fecha: new Date().toISOString(),
+            cliente_id: clientId,
+            total: this.tempInvoiceLines.reduce((acc, l) => acc + l.subtotal, 0)
+        };
+
+        try {
+            // Save Header
+            await this.authenticatedFetch(`/api/doc?db=${db}&col=facturas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(invoice)
+            });
+
+            // Save Lines
+            // Ideally transactional but we do best effort manually for this prototype
+            for (const line of this.tempInvoiceLines) {
+                const detail = {
+                    factura_id: invoiceId,
+                    producto_id: line.pid,
+                    cantidad: line.qty,
+                    precio_unitario: line.price,
+                    subtotal: line.subtotal
+                };
+                await this.authenticatedFetch(`/api/doc?db=${db}&col=facturasdetalles`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(detail)
+                });
+            }
+
+            this.showNotification("Invoice Saved", "success");
+            this.closeInputModal();
+            this.loadInvoices();
+
+        } catch (e) {
+            this.showNotification("Error saving invoice: " + e.message, "error");
         }
     },
 
@@ -1872,8 +2119,8 @@ const App = {
             const dbs = await res.json();
             dbs.forEach(db => {
                 const opt = document.createElement('option');
-                opt.value = db;
-                opt.textContent = db;
+                opt.value = db.name;
+                opt.textContent = db.name;
                 dbSelect.appendChild(opt);
             });
         } catch (e) { console.error(e); }
@@ -1892,8 +2139,8 @@ const App = {
                 sel.innerHTML = '<option value="">Select Database</option>';
                 dbs.forEach(db => {
                     const opt = document.createElement('option');
-                    opt.value = db;
-                    opt.textContent = db;
+                    opt.value = db.name;
+                    opt.textContent = db.name;
                     sel.appendChild(opt);
                 });
             });
@@ -2085,8 +2332,8 @@ const App = {
                 sel.innerHTML = '<option value="">Select Database</option>';
                 dbs.forEach(db => {
                     const opt = document.createElement('option');
-                    opt.value = db;
-                    opt.textContent = db;
+                    opt.value = db.name;
+                    opt.textContent = db.name;
                     sel.appendChild(opt);
                 });
 
@@ -2233,7 +2480,7 @@ const App = {
                 const populate = (id) => {
                     const el = document.getElementById(id);
                     if (!el) return;
-                    el.innerHTML = dbs.map(d => `<option value="${d}">${d}</option>`).join('');
+                    el.innerHTML = dbs.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
                 };
                 populate('export-db-select');
                 populate('import-db-select');

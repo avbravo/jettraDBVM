@@ -16,6 +16,8 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Stream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import io.jettra.core.validation.Validator;
 
@@ -37,13 +39,15 @@ public class JettraEngineStore implements DocumentStore {
     }
 
     private void writeMap(Path path, Map<String, Object> map) throws Exception {
-        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(path)))) {
+        // Use GZIP Compression and 32KB buffer
+        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(path)), 65536))) {
             JettraBinarySerialization.serialize(map, out);
         }
     }
 
     private Map<String, Object> readMap(Path path) throws Exception {
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(path)))) {
+        // Read with GZIP
+        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(path)), 65536))) {
             return JettraBinarySerialization.deserialize(in);
         }
     }

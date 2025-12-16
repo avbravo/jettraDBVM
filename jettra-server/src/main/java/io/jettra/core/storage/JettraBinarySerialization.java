@@ -49,7 +49,7 @@ public class JettraBinarySerialization {
             out.writeByte(((Boolean) obj) ? TYPE_BOOLEAN_TRUE : TYPE_BOOLEAN_FALSE);
         } else if (obj instanceof Integer) {
             out.writeByte(TYPE_INTEGER);
-            out.writeInt((Integer) obj);
+            writeVarInt((Integer) obj, out);
         } else if (obj instanceof Long) {
             out.writeByte(TYPE_LONG);
             out.writeLong((Long) obj);
@@ -83,7 +83,7 @@ public class JettraBinarySerialization {
             case TYPE_BOOLEAN_FALSE:
                 return false;
             case TYPE_INTEGER:
-                return in.readInt();
+                return readVarInt(in);
             case TYPE_LONG:
                 return in.readLong();
             case TYPE_DOUBLE:
@@ -101,26 +101,26 @@ public class JettraBinarySerialization {
 
     private static void writeString(String str, DataOutputStream out) throws IOException {
         byte[] bytes = str.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        out.writeInt(bytes.length);
+        writeVarInt(bytes.length, out);
         out.write(bytes);
     }
 
     private static String readString(DataInputStream in) throws IOException {
-        int len = in.readInt();
+        int len = readVarInt(in);
         byte[] bytes = new byte[len];
         in.readFully(bytes);
         return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
     }
 
     private static void writeList(List<?> list, DataOutputStream out) throws IOException {
-        out.writeInt(list.size());
+        writeVarInt(list.size(), out);
         for (Object item : list) {
             writeObject(item, out);
         }
     }
 
     private static List<Object> readList(DataInputStream in) throws IOException {
-        int size = in.readInt();
+        int size = readVarInt(in);
         List<Object> list = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             list.add(readObject(in));
@@ -129,7 +129,7 @@ public class JettraBinarySerialization {
     }
 
     private static void writeMap(Map<?, ?> map, DataOutputStream out) throws IOException {
-        out.writeInt(map.size());
+        writeVarInt(map.size(), out);
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             writeString(entry.getKey().toString(), out); // Keys are always strings in our docs
             writeObject(entry.getValue(), out);
@@ -137,7 +137,7 @@ public class JettraBinarySerialization {
     }
 
     private static Map<String, Object> readMap(DataInputStream in) throws IOException {
-        int size = in.readInt();
+        int size = readVarInt(in);
         // Use LinkedHashMap to preserve order if possible (though hashmap doesnt guarantee)
         Map<String, Object> map = new LinkedHashMap<>(size); 
         for (int i = 0; i < size; i++) {
@@ -147,4 +147,35 @@ public class JettraBinarySerialization {
         }
         return map;
     }
+
+    // --- VarInt Implementation ---
+
+    /**
+     * Writes an integer using variable-length encoding (VarInt).
+     * Similar to Protocol Buffers varint.
+     * Use 7 bits per byte, MSB indicates if more bytes follow.
+     */
+    private static void writeVarInt(int value, DataOutputStream out) throws IOException {
+        while ((value & 0xFFFFFF80) != 0) {
+            out.writeByte((value & 0x7F) | 0x80);
+            value >>>= 7;
+        }
+        out.writeByte(value & 0x7F);
+    }
+
+    private static int readVarInt(DataInputStream in) throws IOException {
+        int value = 0;
+        int shift = 0;
+        byte b;
+        do {
+            b = in.readByte();
+            value |= (b & 0x7F) << shift;
+            shift += 7;
+            if (shift > 35) {
+                throw new IOException("VarInt too long or malformed");
+            }
+        } while ((b & 0x80) != 0);
+        return value;
+    }
+
 }

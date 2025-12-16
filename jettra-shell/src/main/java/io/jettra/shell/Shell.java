@@ -53,7 +53,7 @@ public class Shell {
             // Completers
             Completer commandCompleter = new StringsCompleter(
                 "connect", "login", "use", "show", "create", "insert", 
-                "find", "delete", "backup", "restore", "export", "import", 
+                "find", "count", "delete", "backup", "restore", "export", "import", 
                 "history", "revert", "exit", "quit", "help", "clear", "cls", 
                 "begin", "commit", "rollback"
             );
@@ -144,6 +144,9 @@ public class Shell {
                         } else {
                             handleInsert(arg);
                         }
+                        break;
+                    case "count":
+                        handleCount(arg);
                         break;
                     case "find":
                         if (arg.trim().toLowerCase().startsWith("in ")) {
@@ -618,6 +621,33 @@ public class Shell {
          }
     }
 
+    private static void handleCount(String arg) throws Exception {
+         if (token == null) { System.out.println("Not logged in."); return; }
+         if (currentDb == null) { System.out.println("No DB selected"); return; }
+         
+         String col = arg.trim();
+         if (col.isEmpty()) { System.out.println("Usage: count <col>"); return; }
+         
+         int count = getCount(currentDb, col);
+         System.out.println("Count: " + count);
+    }
+    
+    private static int getCount(String db, String col) {
+        try {
+            HttpRequest req = HttpRequest.newBuilder()
+                 .uri(URI.create(baseUrl + "/api/count?db=" + db + "&col=" + col))
+                 .header("Authorization", token)
+                 .GET()
+                 .build();
+             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+             if (res.statusCode() == 200) {
+                 Map<String, Object> map = mapper.readValue(res.body(), Map.class);
+                 return (int) map.get("count");
+             }
+        } catch (Exception e) {}
+        return 0; 
+    }
+
     private static void handleFind(String arg) throws Exception {
          if (token == null) { System.out.println("Not logged in."); return; }
          if (currentDb == null) { System.out.println("No DB selected"); return; }
@@ -625,6 +655,8 @@ public class Shell {
          String col = arg;
          int limit = 10;
          int offset = 0;
+         
+         int total = getCount(currentDb, col);
 
          while (true) {
              HttpRequest req = HttpRequest.newBuilder()
@@ -643,22 +675,22 @@ public class Shell {
                 Object val = mapper.readValue(res.body(), Object.class);
                 System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(val));
                 
-                // If it is a list and empty/less than limit, maybe hints end?
-                boolean empty = "[]".equals(res.body()) || res.body().trim().equals("[]");
+                int totalPages = (int) Math.ceil((double)total / limit);
+                int currentPage = (offset / limit) + 1;
                 
-                System.out.println("\n--- Page " + ((offset/limit)+1) + " (Offset " + offset + ") ---");
+                System.out.println("\n--- Page " + currentPage + " of " + (totalPages > 0 ? totalPages : "?") + " (Offset " + offset + ", Total " + total + ") ---");
                 String action = reader.readLine("[N]ext [B]ack [F]irst [L]ast [Q]uit > ").trim().toLowerCase();
                 
                 if (action.startsWith("n")) {
-                    if (!empty) offset += limit;
+                    if (offset + limit < total) offset += limit;
                     else System.out.println("No more results.");
                 } else if (action.startsWith("b")) {
                     offset = Math.max(0, offset - limit);
                 } else if (action.startsWith("f")) {
                     offset = 0;
                 } else if (action.startsWith("l")) {
-                     // TODO: Need count API to do this properly. For now guessing a large offset or implementing later.
-                     System.out.println("Last page not fully implemented without count API.");
+                     offset = (totalPages - 1) * limit;
+                     if (offset < 0) offset = 0;
                 } else if (action.startsWith("q")) {
                     break;
                 }

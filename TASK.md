@@ -1,14 +1,101 @@
 # TASK
 
+java -XX:+UseCompactObjectHeaders MyApp
+
+
 Recuperación ante fallos
 Consistencia de datos multicapa
 
 Procesamiento de consultas basado en caché:
 
+-[] El shell no muestra la paginacion de resultados es decir debe mostrar 10 y luego indicar el menu para desplazarse, y añade la instruccion count para contar registros y añadelo a /books/guide/count.md
+
+
+- [ ] Usar compact Header de java 25 para optimizar el tamaño de los objetos almacenados con JettraStoreEngine y ejecuta el test nuevamente para verificar
+si mejora el rendimiento y el tamaño ocupado
+
+- [] Crear script para ejecutar los test para ambos engine 
+
+- [] Crear documentos embebidos y referenciados para verificar si se almacenan bien, desde interface web, shell, curl y driver java
+
+
+
+
+
+
+
+curl -u admin:adminadmin "http://localhost:8080/..."
+
+
+# jAVA 25
+
+- [ ] Usar Bellsoft Native Image
+
+[BellSoft](https://bell-sw.com/pages/downloads/#jdk-25-lts)
+
+
+# Distributed Databases
+
+
+- [] Implementar la distribucion de datos (base de datos, colecciones y documentos a otros nodos estilo replicaset pero mediante el concepto
+de bases de datos distribuida aplicando algoritmos Raft, ten presente que se pueden crear varios nodos desde codigo nativo es decir
+ejecuando instancias de la base de datos en diversos servidores o mediante imagenes de contenedores de docker o podman 
+o en entornos Kubernetes. Crea los archivos necesarios y crea la documentacion para implementar en cada caso
+en el archivo /books/guide/distributed.md
+Ademas permite que se configuren los nodos desde la interfaces web, y que tambien se configure cada archivo config.json para indicar los nodos
+y el lider que se usara. Ten en cuaenta que si falla el lider otro nodo debe convertirse en lider.
+- [] El proceso seria primero crear un cluster que se almacena en _cluster y luego al ejecutar cada instancia el que tiene marcado en el archivo
+config.json  "Bootstrap": true, sera usado como lider, y debe contarse con una opcion del menu en la interface web que indique Cluster
+donde se muestre el nodo actual, se muestren todos los nodos asignados el cluster se muestre el nodo lider y permita añadir, remover, ver el estado 
+de cada nodo. Ten presente que si el lider se detiene otro nodo debe tomar por consenso el rol de lider. Esto debe ser un proceso automatico
+en el caso que solo existan dos nodos y uno se detiene usar un rol de consenso especial ya que no hay mas nodos el que este activo tomara el rol de lider
+
+# Raft Algoritmo
+
+Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
+gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionales y una estructura de servicio bien definida (via .proto).
+
+
+-[x] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
+-[x] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
+-[x] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
+
+- [x] El el formulario crear coleccion no se cierra el crear la colleccion desde la interface web y no envia el mesnsaje que fue guardado.
+
+
+
+
+
+# JettraMemory
+- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
+
+# Referencias entre documentos
+
+
+# Jettra Storage 
+
+
 
 # Base de datos prueba JetrraBasic
 
-- [] Cree la base de datos llamada almacenbasicdb en la que continie las coleccciones siguientes
+
+# Testing
+
+-[x] corrige el error que en el formulario de la interface web Query Console, no muestra ninguna base de datos en la lista para seleccionar
+
+
+-[x] Para ambas bases de datos ejecute test para medir cual formato es mas optimo para almacenamiento, serializar, deserializar y las operaciones crud.
+Genera un reporte en /books/guide/result.md con el resultado del test mediante comandos curls.
+
+- [x] El dialogo de eliminar una base de datos en la interface grafica debe usar un mejor dialogo y no el estandar javascript que no se ve muy elegante.
+
+- [x] Verificar que se ejecuten y documenten las intrucciones como agregaciones, joins, count distinct entre otras.
+
+-[x] En la interface web las opciones Indexes, Clusters, Rules, TRansacctions,, Query, create backup, import export, users entodos estos fromularios al seleccionar la lista de la base de datos no se muestra correctamente el nomnre de la base de datos se muestra [object Objetc] en lugar del nombre correcto de la base de datos
+- [x]Existe la forma de optimizar JettraEngineStore comparado con JettraBasicStore y ejecuta nuevamente los test
+
+
+- [x] Cree la base de datos llamada almacenbasicdb en la que continie las coleccciones siguientes
   * clientes
   * categoriasproductos
   * productos (recuerde que los productos estan asociados a una categoria)
@@ -22,7 +109,7 @@ Para este ejemplo use almacenamiento JettraBasic.
 
 # Base de datos prueba Jettra Storage Engine
 
-- [] Cree la base de datos llamada almacenstoreenginedb en la que continie las coleccciones siguientes
+- [x] Cree la base de datos llamada almacenstoreenginedb en la que continie las coleccciones siguientes
   * clientes
   * categoriasproductos
   * productos (recuerde que los productos estan asociados a una categoria)
@@ -35,20 +122,7 @@ cree el formulario para crear las facturas y sus detalles y que permita consulta
 Para este ejemplo use almacenamiento Jettra Storage Enginec.
 
 
-# Testing
-Para ambas bases de datos ejecute test para medir cual formato es mas optimo para almacenamiento, serializar, deserializar y las operaciones crud.
 
-
-
-
-
-
-
-curl -u admin:adminadmin "http://localhost:8080/..."
-
-# Jettra Storage 
-
-- [] El dialogo de eliminar una base de datos en la interface grafica debe usar un mejor dialogo y no el estandar javascript que no se ve muy elegante.
 
 -[x] Crea en /books/guide un documento llamado storageengine.md que explique el concepto de los engine que se estan implementando
 JettraSimpleStore y JettraStoreEngine, con sus objetivos ventajas desventajas y como se implemnta en curl, shell, driver e interface grafica.
@@ -84,54 +158,7 @@ cuando se va  interactuar con la base de datos y las colecciones se debe leer la
 - [x] Recuerde que java 25 utiliza Compact Header para reducir el tamaño de los objetos esto puede ser util para JettraStoreEngine
 porque las operaciones Java son mas eficientes al ser objetos Java almancenados y de tamaño reducido. 
 
-- [x] Por favor crea la documentacion necesaria para aplicar estos cambios en el curl, shell, driver y la interface web
-
-
-# jAVA 25
-- [ ] Usar compact Header
-- [ ] Usar Bellsoft Native Image
-
-
-
-# Distributed Databases
-
-
-- [] Implementar la distribucion de datos (base de datos, colecciones y documentos a otros nodos estilo replicaset pero mediante el concepto
-de bases de datos distribuida aplicando algoritmos Raft, ten presente que se pueden crear varios nodos desde codigo nativo es decir
-ejecuando instancias de la base de datos en diversos servidores o mediante imagenes de contenedores de docker o podman 
-o en entornos Kubernetes. Crea los archivos necesarios y crea la documentacion para implementar en cada caso
-en el archivo /books/guide/distributed.md
-Ademas permite que se configuren los nodos desde la interfaces web, y que tambien se configure cada archivo config.json para indicar los nodos
-y el lider que se usara. Ten en cuaenta que si falla el lider otro nodo debe convertirse en lider.
-- [] El proceso seria primero crear un cluster que se almacena en _cluster y luego al ejecutar cada instancia el que tiene marcado en el archivo
-config.json  "Bootstrap": true, sera usado como lider, y debe contarse con una opcion del menu en la interface web que indique Cluster
-donde se muestre el nodo actual, se muestren todos los nodos asignados el cluster se muestre el nodo lider y permita añadir, remover, ver el estado 
-de cada nodo. Ten presente que si el lider se detiene otro nodo debe tomar por consenso el rol de lider. Esto debe ser un proceso automatico
-en el caso que solo existan dos nodos y uno se detiene usar un rol de consenso especial ya que no hay mas nodos el que este activo tomara el rol de lider
-
-# Raft Algoritmo
-
-Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
-gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionales y una estructura de servicio bien definida (via .proto).
-
-
--[x] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
--[x] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
--[x] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
-
-
-- [x] El el formulario crear coleccion no se cierra el crear la colleccion desde la interface web y no envia el mesnsaje que fue guardado.
-
-
-
-
-
-# JettraMemory
-- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
-
-# Referencias entre documentos
-
-
+- [x] Por favor crea
 
 # Versiones
 - [x] Incluir soporte para versiones de documentos de manera que los documentos eliminados o cambiados se almacenen como versiones
