@@ -19,6 +19,9 @@ import java.util.stream.Stream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
+
 import io.jettra.core.validation.Validator;
 
 /**
@@ -28,10 +31,24 @@ public class JettraEngineStore implements DocumentStore {
     private final String dataDirectory;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private Validator validator;
+    private final ObjectMapper cborMapper = new ObjectMapper(new CBORFactory());
 
     public JettraEngineStore(String dataDirectory) throws Exception {
         this.dataDirectory = dataDirectory;
         Files.createDirectories(Paths.get(dataDirectory));
+    }
+
+    // LRU Cache: capacity 5000 items
+    private final Map<String, Map<String, Object>> cache = java.util.Collections.synchronizedMap(
+        new java.util.LinkedHashMap<String, Map<String, Object>>(5000, 0.75f, true) {
+            @Override
+            protected boolean removeEldestEntry(Map.Entry<String, Map<String, Object>> eldest) {
+                return size() > 5000;
+            }
+        });
+        
+    private String getCacheKey(String db, String col, String id) {
+        return db + "/" + col + "/" + id;
     }
 
     public void setValidator(Validator validator) {
@@ -46,9 +63,33 @@ public class JettraEngineStore implements DocumentStore {
     }
 
     private Map<String, Object> readMap(Path path) throws Exception {
-        // Read with GZIP
-        try (DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(Files.newInputStream(path)), 65536))) {
-            return JettraBinarySerialization.deserialize(in);
+        try (java.io.InputStream fileIn = Files.newInputStream(path);
+             java.io.BufferedInputStream bufIn = new java.io.BufferedInputStream(fileIn, 65536)) {
+             
+             bufIn.mark(10);
+             int b1 = bufIn.read();
+             int b2 = bufIn.read();
+             bufIn.reset();
+             
+             if (b1 == 0x1f && b2 == 0x8b) {
+                 // GZIP -> JettraBinary
+                 try (DataInputStream in = new DataInputStream(new GZIPInputStream(bufIn))) {
+                     return JettraBinarySerialization.deserialize(in);
+                 }
+             } else {
+                 // Not GZIP
+                 // Check for CBOR Map (Major type 5 [0xa0..0xbf] or Indefinite [0xbf])
+                 // 0xa0=160, 0xbf=191.
+                 if (b1 != -1 && (b1 == 0xbf || (b1 >= 0xa0 && b1 <= 0xbf))) {
+                     // CBOR
+                     return cborMapper.readValue(bufIn, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>(){});
+                 } else {
+                     // Fallback to JettraBinary uncompressed
+                     try (DataInputStream in = new DataInputStream(bufIn)) {
+                         return JettraBinarySerialization.deserialize(in);
+                     }
+                 }
+             }
         }
     }
 
@@ -88,6 +129,9 @@ public class JettraEngineStore implements DocumentStore {
             
             writeMap(finalPath, document);
 
+            // Update Cache
+            cache.put(getCacheKey(database, collection, id), document);
+
             return id;
         } finally {
             lock.writeLock().unlock();
@@ -99,10 +143,19 @@ public class JettraEngineStore implements DocumentStore {
         lock.readLock().lock();
         try {
             Path filePath = Paths.get(dataDirectory, database, collection, id + ".jdb");
+            
+            // Check cache first
+            String cacheKey = getCacheKey(database, collection, id);
+            if (cache.containsKey(cacheKey)) {
+                return cache.get(cacheKey);
+            }
+
             if (!Files.exists(filePath)) {
                 return null;
             }
-            return readMap(filePath);
+            Map<String, Object> doc = readMap(filePath);
+            cache.put(cacheKey, doc);
+            return doc;
         } finally {
             lock.readLock().unlock();
         }
@@ -134,7 +187,14 @@ public class JettraEngineStore implements DocumentStore {
 
                     Map<String, Object> docMap;
                     try {
-                        docMap = readMap(file);
+                        String id = file.getFileName().toString().replace(".jdb", "");
+                        String cacheKey = getCacheKey(database, collection, id);
+                        if (cache.containsKey(cacheKey)) {
+                            docMap = cache.get(cacheKey);
+                        } else {
+                            docMap = readMap(file);
+                            cache.put(cacheKey, docMap);
+                        }
                     } catch (Exception e) {
                         System.err.println("Skipping corrupted file (Engine): " + file.getFileName() + " - " + e.getMessage());
                         continue;
@@ -187,6 +247,7 @@ public class JettraEngineStore implements DocumentStore {
             if (Files.exists(filePath)) {
                 createVersion(database, collection, id);
                 Files.delete(filePath);
+                cache.remove(getCacheKey(database, collection, id));
             }
         } finally {
             lock.writeLock().unlock();

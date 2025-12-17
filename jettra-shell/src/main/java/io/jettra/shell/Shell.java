@@ -262,7 +262,11 @@ public class Shell {
             // Pretty print JSON response if possible
             try {
                 Object val = mapper.readValue(res.body(), Object.class);
-                System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(val));
+                if (val instanceof java.util.List) {
+                    paginateList((java.util.List<?>) val);
+                } else {
+                    System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(val));
+                }
             } catch (Exception e) {
                 System.out.println(res.body());
             }
@@ -666,7 +670,7 @@ public class Shell {
                 .build();
              HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
              if (res.statusCode() != 200) {
-                 System.out.println("Error: " + res.body());
+                 System.out.println("Error (" + res.statusCode() + "): " + res.body());
                  return;
              }
              
@@ -830,5 +834,43 @@ public class Shell {
          } else {
              System.out.println("Import failed: " + res.body());
          }
+    }
+
+    private static void paginateList(java.util.List<?> list) throws Exception {
+        int total = list.size();
+        int limit = 10;
+        int offset = 0;
+        
+        if (total <= limit) {
+             System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(list));
+             return;
+        }
+
+        while (true) {
+             int end = Math.min(offset + limit, total);
+             java.util.List<?> page = list.subList(offset, end);
+             
+             System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(page));
+             
+             int totalPages = (int) Math.ceil((double)total / limit);
+             int currentPage = (offset / limit) + 1;
+             
+             System.out.println("\n--- Page " + currentPage + " of " + totalPages + " (Offset " + offset + ", Total " + total + ") ---");
+             String action = reader.readLine("[N]ext [B]ack [F]irst [L]ast [Q]uit > ").trim().toLowerCase();
+             
+             if (action.startsWith("n")) {
+                 if (offset + limit < total) offset += limit;
+                 else System.out.println("End of results.");
+             } else if (action.startsWith("b")) {
+                 offset = Math.max(0, offset - limit);
+             } else if (action.startsWith("f")) {
+                 offset = 0;
+             } else if (action.startsWith("l")) {
+                 offset = (totalPages - 1) * limit;
+                 if (offset < 0) offset = 0;
+             } else if (action.startsWith("q")) {
+                 break;
+             }
+        }
     }
 }

@@ -4,4 +4,4 @@ mvn package -DskipTests
 
 echo "ejecutando "
 
-java -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders -jar target/jettraDBVM-1.0-SNAPSHOT.jar 
+java -XX:+UseCompactObjectHeaders -jar target/jettraDBVM-1.0-SNAPSHOT.jar 
