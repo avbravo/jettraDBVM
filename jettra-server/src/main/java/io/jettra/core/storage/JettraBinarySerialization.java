@@ -23,7 +23,9 @@ public class JettraBinarySerialization {
     private static final byte TYPE_STRING = 6;
     private static final byte TYPE_LIST = 7;
     private static final byte TYPE_MAP = 8;
-    // Add more types as needed (ByteArray, Date etc)
+    private static final byte TYPE_INT_ARRAY = 9;
+    private static final byte TYPE_LONG_ARRAY = 10;
+    private static final byte TYPE_DOUBLE_ARRAY = 11;
 
     public static void serialize(Map<String, Object> document, DataOutputStream out) throws IOException {
         writeObject(document, out);
@@ -60,17 +62,36 @@ public class JettraBinarySerialization {
             out.writeByte(TYPE_STRING);
             writeString((String) obj, out);
         } else if (obj instanceof List) {
-            out.writeByte(TYPE_LIST);
-            writeList((List<?>) obj, out);
+            List<?> list = (List<?>) obj;
+            if (isHomogeneous(list, Integer.class)) {
+                out.writeByte(TYPE_INT_ARRAY);
+                writeIntArray((List<Integer>) list, out);
+            } else if (isHomogeneous(list, Long.class)) {
+                out.writeByte(TYPE_LONG_ARRAY);
+                writeLongArray((List<Long>) list, out);
+            } else if (isHomogeneous(list, Double.class)) {
+                out.writeByte(TYPE_DOUBLE_ARRAY);
+                writeDoubleArray((List<Double>) list, out);
+            } else {
+                out.writeByte(TYPE_LIST);
+                writeList(list, out);
+            }
         } else if (obj instanceof Map) {
             out.writeByte(TYPE_MAP);
             writeMap((Map<?, ?>) obj, out);
         } else {
-            // Fallback to String for unknown types? Or error?
-            // For now, toString and warn
+            // Fallback to String for unknown types
             out.writeByte(TYPE_STRING);
             writeString(obj.toString(), out);
         }
+    }
+
+    private static boolean isHomogeneous(List<?> list, Class<?> clazz) {
+        if (list.isEmpty()) return false; // Treat empty list as generic list
+        for (Object o : list) {
+            if (o == null || !clazz.isInstance(o)) return false;
+        }
+        return true;
     }
 
     private static Object readObject(DataInputStream in) throws IOException {
@@ -94,6 +115,12 @@ public class JettraBinarySerialization {
                 return readList(in);
             case TYPE_MAP:
                 return readMap(in);
+            case TYPE_INT_ARRAY:
+                return readIntArray(in);
+            case TYPE_LONG_ARRAY:
+                return readLongArray(in);
+            case TYPE_DOUBLE_ARRAY:
+                return readDoubleArray(in);
             default:
                 throw new IOException("Unknown type byte: " + type);
         }
@@ -124,6 +151,54 @@ public class JettraBinarySerialization {
         List<Object> list = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             list.add(readObject(in));
+        }
+        return list;
+    }
+
+    private static void writeIntArray(List<Integer> list, DataOutputStream out) throws IOException {
+        writeVarInt(list.size(), out);
+        for (Integer val : list) {
+            writeVarInt(val, out);
+        }
+    }
+
+    private static List<Object> readIntArray(DataInputStream in) throws IOException {
+        int size = readVarInt(in);
+        List<Object> list = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            list.add(readVarInt(in));
+        }
+        return list;
+    }
+
+    private static void writeLongArray(List<Long> list, DataOutputStream out) throws IOException {
+        writeVarInt(list.size(), out);
+        for (Long val : list) {
+            out.writeLong(val);
+        }
+    }
+
+    private static List<Object> readLongArray(DataInputStream in) throws IOException {
+        int size = readVarInt(in);
+        List<Object> list = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            list.add(in.readLong());
+        }
+        return list;
+    }
+    
+    private static void writeDoubleArray(List<Double> list, DataOutputStream out) throws IOException {
+        writeVarInt(list.size(), out);
+        for (Double val : list) {
+            out.writeDouble(val);
+        }
+    }
+
+    private static List<Object> readDoubleArray(DataInputStream in) throws IOException {
+        int size = readVarInt(in);
+        List<Object> list = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            list.add(in.readDouble());
         }
         return list;
     }

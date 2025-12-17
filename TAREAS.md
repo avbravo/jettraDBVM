@@ -4,7 +4,12 @@ java -XX:+UseCompactObjectHeaders -jar jettraDBVM.jar
 
 java -XX:+UseCompactObjectHeaders -jar jettraDBVMShell.jar
 
+# Benchmarking
 
+./run_benchmark_comparison.sh
+
+# Detener Jettra
+pkill -f "jettraDBVM.jar"
 
 
 Recuperación ante fallos
@@ -12,17 +17,8 @@ Consistencia de datos multicapa
 
 Procesamiento de consultas basado en caché:
 
-- [x] El shell no muestra la paginacion de resultados es decir debe mostrar 10 y luego indicar el menu para desplazarse, y añade la instruccion count para contar registros y añadelo a /books/guide/count.md
-Por ejemplo cuando realizo una consulta con un select o find y contiene muchos registros se muestran todos y solo deberia mostrar unos 10 0 5 y mostrar un menu de desplazamiento 
-para poder ir al inicio , final, siguiente o anterior. Es decir se usa paginacion.
 
 
-- [x ] Usar compact Header de java 25 para optimizar el tamaño de los objetos almacenados con JettraStoreEngine y ejecuta el test nuevamente para verificar
-si mejora el rendimiento y el tamaño ocupado.  java -XX:+UseCompactObjectHeaders. Ejecuta test con JettraEngineStore vs JettraBasic y determina cual es el mejor y
-si puedes optimizar JettraEngineStore seria ideal.
-
-
-- [] Crear script para ejecutar los test para ambos engine 
 
 - [] Crear documentos embebidos y referenciados para verificar si se almacenan bien, desde interface web, shell, curl y driver java
 
@@ -61,6 +57,10 @@ donde se muestre el nodo actual, se muestren todos los nodos asignados el cluste
 de cada nodo. Ten presente que si el lider se detiene otro nodo debe tomar por consenso el rol de lider. Esto debe ser un proceso automatico
 en el caso que solo existan dos nodos y uno se detiene usar un rol de consenso especial ya que no hay mas nodos el que este activo tomara el rol de lider
 
+-[] En el archivo config.json añadir una propiedad llamada distributed que contendra true para que se aplique en entornos distribuidos o false indicando 
+que sera una base  de datos local sin distribuir datos.
+
+
 # Raft Algoritmo
 
 Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
@@ -91,6 +91,16 @@ gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionale
 
 
 # Testing
+- [x] El shell no muestra la paginacion de resultados es decir debe mostrar 10 y luego indicar el menu para desplazarse, y añade la instruccion count para contar registros y añadelo a /books/guide/count.md
+Por ejemplo cuando realizo una consulta con un select o find y contiene muchos registros se muestran todos y solo deberia mostrar unos 10 0 5 y mostrar un menu de desplazamiento 
+para poder ir al inicio , final, siguiente o anterior. Es decir se usa paginacion.
+
+
+- [x ] Usar compact Header de java 25 para optimizar el tamaño de los objetos almacenados con JettraStoreEngine y ejecuta el test nuevamente para verificar
+si mejora el rendimiento y el tamaño ocupado.  java -XX:+UseCompactObjectHeaders. Ejecuta test con JettraEngineStore vs JettraBasic y determina cual es el mejor y
+si puedes optimizar JettraEngineStore seria ideal.
+
+
 
 -[x] corrige el error que en el formulario de la interface web Query Console, no muestra ninguna base de datos en la lista para seleccionar
 

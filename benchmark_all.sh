@@ -41,11 +41,35 @@ run_benchmark() {
     echo "Insertions took $DURATION ms"
 
     # Size
-    SIZE=$(du -sh jettra-server/data/$DB_NAME/$COL_NAME 2>/dev/null | cut -f1)
-    BYTES=$(du -sb jettra-server/data/$DB_NAME/$COL_NAME 2>/dev/null | cut -f1)
+    SIZE=$(du -sh data/$DB_NAME/$COL_NAME 2>/dev/null | cut -f1)
+    BYTES=$(du -sb data/$DB_NAME/$COL_NAME 2>/dev/null | cut -f1)
     
     echo "Total Size: $SIZE ($BYTES bytes)"
     echo "Average Size per Doc: $(( $BYTES / $COUNT )) bytes"
+
+    # Updates
+    echo "Updating $COUNT documents..."
+    START=$(date +%s%N)
+    
+    for i in $(seq 1 $COUNT); do
+        curl -s -X POST "http://localhost:8080/api/doc?db=$DB_NAME&col=$COL_NAME" -H "Authorization: $TOKEN" -H "Content-Type: application/json" -d "{\"id\":\"doc$i\", \"name\":\"User $i Updated\", \"bio\":\"Updated bio text for user $i.\", \"age\":$((i+100)), \"active\":false, \"data\": [9,8,7]}" > /dev/null
+    done
+    
+    END=$(date +%s%N)
+    DURATION=$(( ($END - $START) / 1000000 ))
+    echo "Updates took $DURATION ms"
+
+    # Deletes
+    echo "Deleting $COUNT documents..."
+    START=$(date +%s%N)
+    
+    for i in $(seq 1 $COUNT); do
+        curl -s -X DELETE "http://localhost:8080/api/doc?db=$DB_NAME&col=$COL_NAME&id=doc$i" -H "Authorization: $TOKEN" > /dev/null
+    done
+    
+    END=$(date +%s%N)
+    DURATION=$(( ($END - $START) / 1000000 ))
+    echo "Deletions took $DURATION ms"
 }
 
 # Run Basic

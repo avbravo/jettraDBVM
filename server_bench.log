@@ -1,0 +1,35 @@
+       _      _   _            ____  ______      ____  __
+      | |    | | | |          |  _ \|  _ \ \    / /  \/  |
+      | | ___| |_| |_ _ __ __ | | | | |_) \ \  / /| \  / |
+  _   | |/ _ \ __| __| '__/ _` | | | |  _ < \ \/ / | |\/| |
+ | |__| |  __/ |_| |_| | | (_| | |_| | |_) | \  /  | |  | |
+  \____/ \___|\__|\__|_|  \__,_|____/|____/   \/   |_|  |_|
+
+JettraDBVM Server v1.0
+
+dic 16, 2025 10:03:19 P. M. io.jettra.core.Engine <init>
+INFORMACIÓN: JettraDB Engine initialized with dataDir: data
+dic 16, 2025 10:03:19 P. M. io.jettra.core.Engine start
+INFORMACIÓN: Starting JettraDB Engine...
+dic 16, 2025 10:03:19 P. M. io.jettra.core.raft.RaftNode start
+INFORMACIÓN: Starting Raft Node: node-1
+dic 16, 2025 10:03:19 P. M. io.jettra.core.raft.RaftNode loadPeers
+INFORMACIÓN: Loaded 0 peers from storage.
+dic 16, 2025 10:03:19 P. M. io.jettra.core.raft.RaftNode start
+INFORMACIÓN: Bootstrap mode detected. Becoming Leader.
+dic 16, 2025 10:03:19 P. M. io.jettra.core.raft.RaftNode becomeLeader
+INFORMACIÓN: Becoming LEADER for term 0
+dic 16, 2025 10:03:19 P. M. io.helidon.common.features.HelidonFeatures features
+INFORMACIÓN: Helidon SE 4.0.5 features: [WebServer]
+dic 16, 2025 10:03:19 P. M. io.helidon.webserver.ServerListener start
+INFORMACIÓN: [0x3bd18b14] http://0.0.0.0:8080 bound for socket '@default'
+dic 16, 2025 10:03:19 P. M. io.helidon.webserver.LoomServer startIt
+INFORMACIÓN: Started all channels in 10 milliseconds. 719 milliseconds since JVM startup. Java 25.0.1+13-LTS
+dic 16, 2025 10:03:19 P. M. io.jettra.jettraDBVM.Main main
+INFORMACIÓN: Server started at http://0.0.0.0:8080
+dic 16, 2025 10:03:54 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown requested by JVM shutting down
+dic 16, 2025 10:03:54 P. M. io.helidon.webserver.ServerListener listen
+INFORMACIÓN: [0x3bd18b14] @default socket closed.
+dic 16, 2025 10:03:54 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown finished

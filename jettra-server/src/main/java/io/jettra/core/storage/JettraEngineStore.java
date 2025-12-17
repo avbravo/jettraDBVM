@@ -56,9 +56,34 @@ public class JettraEngineStore implements DocumentStore {
     }
 
     private void writeMap(Path path, Map<String, Object> map) throws Exception {
-        // Use GZIP Compression and 32KB buffer
-        try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(Files.newOutputStream(path)), 65536))) {
-            JettraBinarySerialization.serialize(map, out);
+        // Adaptive compression: Serialize to byte array first
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+        try (DataOutputStream dos = new DataOutputStream(baos)) {
+            JettraBinarySerialization.serialize(map, dos);
+        }
+        byte[] data = baos.toByteArray();
+        
+        // Threshold 512 bytes
+        try (java.io.OutputStream fileOut = new java.io.BufferedOutputStream(Files.newOutputStream(path), 65536);
+             DataOutputStream out = new DataOutputStream(fileOut)) {
+             
+             if (data.length > 512) {
+                 // GZIP Magic will be written by GZIPOutputStream (0x1f 0x8b)
+                 // NOTE: GZIPOutputStream writes header.
+                 // We just wrap it.
+                 try (GZIPOutputStream gzip = new GZIPOutputStream(out) {
+                     {
+                         def.setLevel(java.util.zip.Deflater.BEST_SPEED); // Optimize speed
+                     }
+                 }) {
+                    gzip.write(data);
+                 }
+             } else {
+                 // Write Uncompressed Magic: 0x00 0x00 (2 bytes to avoid confusion with GZIP 0x1f 0x8b or CBOR)
+                 out.writeByte(0x00);
+                 out.writeByte(0x00);
+                 out.write(data);
+             }
         }
     }
 
@@ -76,15 +101,26 @@ public class JettraEngineStore implements DocumentStore {
                  try (DataInputStream in = new DataInputStream(new GZIPInputStream(bufIn))) {
                      return JettraBinarySerialization.deserialize(in);
                  }
+             } else if (b1 == 0x00 && b2 == 0x00) {
+                 // Custom Uncompressed JettraBinary
+                 // Skip magic bytes
+                 bufIn.read(); // 0x00
+                 bufIn.read(); // 0x00
+                 try (DataInputStream in = new DataInputStream(bufIn)) {
+                     return JettraBinarySerialization.deserialize(in);
+                 }
              } else {
-                 // Not GZIP
-                 // Check for CBOR Map (Major type 5 [0xa0..0xbf] or Indefinite [0xbf])
-                 // 0xa0=160, 0xbf=191.
+                 // Fallback: Check for CBOR Map (Major type 5 [0xa0..0xbf] or Indefinite [0xbf])
                  if (b1 != -1 && (b1 == 0xbf || (b1 >= 0xa0 && b1 <= 0xbf))) {
                      // CBOR
                      return cborMapper.readValue(bufIn, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>(){});
                  } else {
-                     // Fallback to JettraBinary uncompressed
+                     // Fallback to JettraBinary uncompressed OLD format (no magic, just starts with type byte?)
+                     // Type byte for Map is 8.
+                     // But wait, old format had GZIP header 1f 8b OR just data?
+                     // Previous implementation: "Fallback to JettraBinary uncompressed"
+                     // This means it was possbile to have raw uncompressed data.
+                     // Assuming it starts with valid Type Byte (e.g. 8).
                      try (DataInputStream in = new DataInputStream(bufIn)) {
                          return JettraBinarySerialization.deserialize(in);
                      }
