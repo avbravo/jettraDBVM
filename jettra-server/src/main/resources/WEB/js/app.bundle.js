@@ -774,7 +774,7 @@ const App = {
                     if (this.state.currentCol === col && this.state.currentDb === db) {
                         this.state.currentCol = null;
                         document.getElementById('collection-actions').style.display = 'none';
-                        document.getElementById('content-area').innerHTML = '';
+                        document.getElementById('dashboard-section').innerHTML = '';
                     }
                     this.loadDatabases();
                 });
@@ -783,6 +783,7 @@ const App = {
 
     // --- Documents ---
     selectCollection(db, col) {
+        this.showSection('dashboard');
         this.state.currentDb = db;
         this.state.currentCol = col;
         this.state.currentPage = 1;
@@ -820,7 +821,7 @@ const App = {
     },
 
     renderDocuments() {
-        const container = document.getElementById('content-area');
+        const container = document.getElementById('dashboard-section');
         const docs = this.state.docs;
 
         if (docs.length === 0 && this.state.currentPage === 1) {
@@ -1861,19 +1862,19 @@ const App = {
         const content = document.getElementById('raft-status-content');
         content.innerHTML = 'Loading...';
         try {
-            // Raft endpoints are not authenticated in current implementation or require different handling?
-            // If they are under Engine/RaftService, they are just registered. 
-            // Depending on implementation, they might not need auth token or might need it. 
-            // Assuming they are public or cookie based, but let's try authenticatedFetch just in case they are wrapped?
-            // Wait, RaftService registered raw paths. They might not check auth.
-            // But let's use fetch directly for now if it fails use authenticatedFetch.
-
-            // Actually, better to use fetch, as Raft endpoints are for internal/inter-node but exposing them to UI...
-            // The user said "exposed endpoints".
-            const res = await fetch('/raft/status');
+            // Use authenticated endpoint
+            const res = await this.authenticatedFetch('/api/cluster');
             if (!res.ok) throw new Error('Failed to fetch status');
 
             const status = await res.json();
+            console.log("Cluster status received:", status);
+
+            // Status is { enabled: true, nodeId: "...", state: "...", leaderId: "...", term: ..., nodes: [...] }
+
+            if (!status.enabled) {
+                content.innerHTML = '<div class="alert alert-warning">Raft Cluster is not enabled on this node.</div>';
+                return;
+            }
 
             content.innerHTML = `
                 <div class="space-y-2">
@@ -1892,100 +1893,204 @@ const App = {
                 </div>
             `;
 
-            // Render Peers
-            const peersFunc = (peersMap) => {
+            // Normalize nodes loop
+            const nodeList = status.nodes || [];
+
+            // Render Cluster Map
+            const mapContainer = document.getElementById('cluster-visual-map');
+            if (mapContainer) {
+                mapContainer.innerHTML = '';
+                nodeList.forEach(n => {
+                    const nid = n.id || n._id || ('node-' + (n.url ? n.url.hashCode() : Math.random()));
+                    console.log("Visualizing node:", nid, n);
+                    const isLeader = (n.role === 'LEADER') || (nid === status.leaderId);
+                    const isSelf = (nid === status.nodeId);
+
+                    let roleClass = 'node-follower';
+                    if (isLeader) roleClass = 'node-leader';
+                    if (n.status === 'INACTIVE') roleClass = 'node-inactive';
+                    if (n.state === 'CANDIDATE') roleClass = 'node-candidate';
+
+                    const selfClass = isSelf ? 'node-self' : '';
+
+                    const el = document.createElement('div');
+                    el.className = `node-circle ${roleClass} ${selfClass}`;
+                    el.innerHTML = `
+                        <div>Nodes</div>
+                        <div class="node-label">${String(nid).substring(0, 6)}...</div>
+                    `;
+                    el.title = `ID: ${nid}\nURL: ${n.url}\nRole: ${n.role}\nStatus: ${n.status}`;
+                    mapContainer.appendChild(el);
+                });
+            }
+
+            // Render Nodes List
+            const renderNodes = (nodes) => {
+                console.log("RenderNodes called with:", nodes);
                 const tbody = document.getElementById('peers-table-body');
-                if (!peersMap || Object.keys(peersMap).length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="3" class="px-6 py-4 text-center">No peers connected</td></tr>';
+                if (!tbody) return;
+
+                if (!nodes || nodes.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center">No nodes found</td></tr>';
                     return;
                 }
 
                 let html = '';
-                for (const [id, url] of Object.entries(peersMap)) {
+                nodes.sort((a, b) => {
+                    const idA = a.id || a._id || '';
+                    const idB = b.id || b._id || '';
+                    return String(idA).localeCompare(String(idB));
+                });
+
+                nodes.forEach(node => {
+                    const nid = node.id || node._id || 'unknown';
+                    console.log("Processing node for table:", node, "ID:", nid);
+                    const isLeader = node.role === 'LEADER' || nid === status.leaderId;
+                    const isSelf = nid === status.nodeId;
+
+                    let roleLabel = node.role;
+                    if (isLeader) roleLabel = "👑 LEADER";
+
+                    let statusBadge = 'secondary';
+                    if (node.status === 'ACTIVE') statusBadge = 'success';
+                    if (node.status === 'INACTIVE') statusBadge = 'danger';
+
                     html += `
                         <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
                             <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
-                                ${id}
+                                <div class="flex flex-col">
+                                    <span class="font-mono text-sm">${nid}</span>
+                                    ${isSelf ? '<span class="text-xs text-muted">(This Node)</span>' : ''}
+                                </div>
                             </td>
                             <td class="px-6 py-4">
-                                ${url}
+                                ${node.url}
                             </td>
                             <td class="px-6 py-4">
-                                <button onclick="app.removePeer('${id}')" class="font-medium text-red-600 dark:text-red-500 hover:underline">Remove</button>
+                                ${node.description || '-'}
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="badge ${isLeader ? 'badge-primary' : 'badge-secondary'}">${roleLabel}</span>
+                            </td>
+                             <td class="px-6 py-4">
+                                <span class="badge badge-${statusBadge}">${node.status}</span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex space-x-2" style="display:flex; gap: 0.5rem;">
+                                    ${!isSelf && node.status !== 'INACTIVE' ? `<button onclick="app.stopNode('${node.url}')" class="btn btn-xs btn-warning" title="Stop Node">Stop</button>` : ''}
+                                    ${!isSelf ? `<button onclick="app.removePeer('${nid}', '${node.url}')" class="btn btn-xs btn-danger" title="Remove from Cluster">Remove</button>` : ''}
+                                </div>
                             </td>
                         </tr>
                      `;
-                }
+                });
                 tbody.innerHTML = html;
             };
 
-            peersFunc(status.peers);
+            renderNodes(nodeList);
 
         } catch (e) {
-            content.innerHTML = '<span class="text-red-500">Error loading status</span>';
+            content.innerHTML = '<span class="text-red-500">Error loading status: ' + e.message + '</span>';
             console.error(e);
         }
     },
 
     async addPeer() {
-        const id = document.getElementById('peer-id').value;
         const url = document.getElementById('peer-url').value;
-        if (!id || !url) return;
+        const desc = document.getElementById('peer-desc').value;
+
+        if (!url) {
+            alert("Please enter the Peer URL");
+            return;
+        }
+
+        // Auto-fix URL if missing http
+        let cleanUrl = url.trim();
+        if (!cleanUrl.startsWith('http')) {
+            cleanUrl = 'http://' + cleanUrl;
+        }
 
         try {
-            const res = await fetch('/raft/peers', {
+            const res = await this.authenticatedFetch('/api/cluster/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nodeId: id, url: url })
-            }); // Note: using query params or body? RaftService.addPeer expects request body?
-            // Wait, RaftService: rules.post("/raft/peers", this::addPeer)
-            // RaftService.addPeer(ServerRequest req, ServerResponse res)
-            // It parses body?
-            // Assuming implementation:
-            /*
-            public void addPeer(ServerRequest req, ServerResponse res) {
-                req.content().as(Map.class).then(map -> { ... });
-            }
-            */
-            // So JSON body is correct.
+                body: JSON.stringify({ url: cleanUrl, description: desc })
+            });
 
             if (res.ok) {
-                document.getElementById('peer-id').value = '';
                 document.getElementById('peer-url').value = '';
+                document.getElementById('peer-desc').value = '';
                 this.refreshClusterStatus();
+                this.showNotification('Node added to cluster', 'success');
             } else {
-                alert('Failed to add peer');
+                const text = await res.text();
+                this.showNotification('Failed to add peer: ' + text, 'error');
             }
         } catch (e) {
             console.error(e);
-            alert('Error adding peer');
+            this.showNotification('Error adding peer: ' + e.message, 'error');
         }
     },
 
-    async removePeer(id) {
-        if (!confirm('Remove peer ' + id + '?')) return;
+    async removePeer(id, url) {
+        if (!confirm('Remove Node ' + id + ' (' + url + ') from cluster configuration? This does not stop the node process, only removes it from Raft config.')) return;
         try {
-            const res = await fetch(`/raft/peers?id=${id}`, {
-                method: 'DELETE'
-            }); // DELETE often uses query params
+            const res = await this.authenticatedFetch('/api/cluster/deregister', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
 
             if (res.ok) {
                 this.refreshClusterStatus();
+                this.showNotification('Node removed from cluster', 'success');
             } else {
-                alert('Failed to remove peer');
+                const text = await res.text();
+                this.showNotification('Failed to remove peer: ' + text, 'error');
             }
         } catch (e) {
             console.error(e);
-            alert('Error removing peer');
+            this.showNotification('Error removing peer', 'error');
+        }
+    },
+
+    async stopNode(url) {
+        if (!confirm('Stop Node process at ' + url + '? This will shut down the remote server.')) return;
+        try {
+            const res = await this.authenticatedFetch('/api/cluster/stop', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node: url })
+            });
+
+            if (res.ok) {
+                this.showNotification('Stop command sent to node', 'success');
+                // Wait a bit then refresh
+                setTimeout(() => this.refreshClusterStatus(), 2000);
+            } else {
+                const text = await res.text();
+                this.showNotification('Failed to stop node: ' + text, 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showNotification('Error stopping node', 'error');
         }
     },
 
     async forceLeader() {
         if (!confirm('DANGEROUS: Forcing this node to be leader can cause split-brain if another leader exists. Continue?')) return;
         try {
+            // This endpoint might still be direct Raft, or we need to expose it in WebServices if we want it authenticated.
+            // Currently WebServices does NOT expose /api/cluster/force-leader
+            // Let's assume for now we keep the direct call if it exists or wrap it.
+            // Ideally we wrap it. But checking WebServices again... it does not have forceLeader.
+            // Engine's RaftService registers /raft/rpc... 
+            // We'll leave as is but warn it might fail if auth required on /raft path or if not exposed.
+            // Actually, let's try calling the raft service directly as before, assuming it's open.
             const res = await fetch('/raft/force-leader', { method: 'POST' });
             if (res.ok) {
                 this.refreshClusterStatus();
+                this.showNotification('Leader forced', 'success');
             } else {
                 alert('Failed to force leader');
             }
@@ -2597,6 +2702,117 @@ const App = {
             this.showNotification("Import error: " + e.message, "error");
         }
     }
+    ,
+
+    // --- Cluster ---
+    async refreshClusterStatus() {
+        const content = document.getElementById('raft-status-content');
+        const tbody = document.getElementById('peers-table-body');
+        if (!content) return;
+
+        content.innerHTML = 'Checking...';
+
+        try {
+            const res = await this.authenticatedFetch('/api/cluster');
+            if (res.ok) {
+                const status = await res.json();
+                if (!status.enabled) {
+                    content.innerHTML = '<div class="alert alert-warning" style="background:#fff3cd; color:#856404; padding:10px;">Cluster mode is disabled. Set "distributed": true in config.json</div>';
+                    if (tbody) tbody.innerHTML = '';
+                    return;
+                }
+
+                const isLeader = status.state === 'LEADER';
+
+                content.innerHTML = `
+                    <div style="display:grid; grid-template-columns: auto 1fr; gap: 10px; font-size: 1.1em;">
+                        <strong>Node ID:</strong> <span class="font-mono">${status.nodeId}</span>
+                        <strong>State:</strong> <span class="badge ${isLeader ? 'bg-success' : 'bg-primary'}" style="padding:2px 8px; border-radius:4px; background:${isLeader ? '#28a745' : '#007bff'}; color:white;">${status.state}</span>
+                        <strong>Leader:</strong> <span class="font-mono">${status.leaderId || 'Unknown'}</span>
+                    </div>
+                `;
+
+                // Control Add Peer form visibility
+                const addPeerForm = document.querySelector('.add-peer-form');
+                if (addPeerForm) {
+                    if (isLeader) {
+                        addPeerForm.style.display = 'grid'; // Restore grid layout
+                        // Remove any existing warning
+                        const warning = document.getElementById('cluster-leader-warning');
+                        if (warning) warning.remove();
+                    } else {
+                        addPeerForm.style.display = 'none';
+                        if (!document.getElementById('cluster-leader-warning')) {
+                            const warning = document.createElement('div');
+                            warning.id = 'cluster-leader-warning';
+                            warning.className = 'status-badge warning';
+                            warning.style.marginTop = '1rem';
+                            warning.style.width = '100%';
+                            warning.style.justifyContent = 'center';
+                            warning.textContent = 'Cluster management is only available on the Leader node.';
+                            addPeerForm.parentNode.appendChild(warning);
+                        }
+                    }
+                }
+
+                if (tbody) {
+                    tbody.innerHTML = '';
+                    const nodes = status.nodes || status.peers;
+                    if (nodes && nodes.length > 0) {
+                        nodes.forEach((p, idx) => {
+                            // Handle both Object and String (legacy) formats
+                            let id, url, desc, role, nodeStatus;
+
+                            if (typeof p === 'string') {
+                                url = p;
+                                id = `node-${idx + 1}`;
+                                desc = '';
+                                role = 'UNKNOWN';
+                                nodeStatus = 'UNKNOWN';
+                            } else {
+                                id = p.id || p._id || `node-${idx + 1}`;
+                                url = p.url || '';
+                                desc = p.description || '';
+                                role = p.role || 'FOLLOWER';
+                                nodeStatus = p.status || 'ACTIVE';
+                            }
+
+                            // Only show remove button if Leader and not self (implied by filtering or logic?
+                            // Actually we can remove any node. Backend handles "cannot remove self" usually.
+                            const removeBtn = isLeader
+                                ? `<button onclick="app.removePeer('${id}', '${url}')" class="font-medium text-red-600 dark:text-red-500 hover:underline">Remove</button>`
+                                : `<span class="text-gray-400" title="Only Leader can remove">read-only</span>`;
+
+                            tbody.innerHTML += `
+                                    <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                                        <td class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                                            ${id}
+                                            ${isLeader && (id === status.nodeId || url.includes(status.nodeId)) ? ' (Self)' : ''}
+                                        </td>
+                                        <td class="px-6 py-4">${url}</td>
+                                        <td class="px-6 py-4">
+                                            <span class="badge ${role === 'LEADER' ? 'bg-success' : 'bg-primary'}">${role}</span>
+                                        </td>
+                                        <td class="px-6 py-4">${nodeStatus}</td>
+                                        <td class="px-6 py-4">${desc}</td>
+                                        <td class="px-6 py-4">
+                                            ${removeBtn}
+                                        </td>
+                                    </tr>
+                                 `;
+                        });
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="3">No peers configured</td></tr>';
+                    }
+                }
+            } else {
+                content.textContent = 'Failed to fetch status';
+            }
+        } catch (e) {
+            content.textContent = 'Error: ' + e.message;
+        }
+    },
+
 };
 
 window.app = App;

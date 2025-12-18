@@ -216,6 +216,12 @@
                             <div class="glass-panel">
                                 <h3 class="text-xl font-semibold mb-2">Node Status</h3>
                                 <div id="raft-status-content">Loading...</div>
+                                <div class="mt-4" style="margin-top: 1rem; margin-bottom: 1rem;">
+                                    <div id="cluster-visual-map"
+                                        style="display: flex; gap: 2rem; align-items: center; justify-content: center; min-height: 150px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1rem;">
+                                        <!-- Nodes rendered here -->
+                                    </div>
+                                </div>
                                 <div class="mt-4" style="margin-top: 1rem; display: flex; gap: 0.5rem;">
                                     <button onclick="app.refreshClusterStatus()"
                                         class="btn btn-sm btn-secondary">Refresh Status</button>
@@ -244,8 +250,9 @@
 
                                 <div class="add-peer-form form-grid">
                                     <div class="form-group">
-                                        <label>Peer Node ID</label>
-                                        <input type="text" id="peer-id" placeholder="e.g. node-2" class="form-control">
+                                        <label>Description</label>
+                                        <input type="text" id="peer-desc" placeholder="e.g. Worker Node 1"
+                                            class="form-control">
                                     </div>
                                     <div class="form-group">
                                         <label>Peer URL</label>
@@ -637,6 +644,7 @@
                                     <thead class="text-xs uppercase bg-gray-700 text-gray-400">
                                         <tr>
                                             <th class="px-6 py-3">Username</th>
+                                            <th scope="col" class="px-6 py-3">Description</th>
                                             <th class="px-6 py-3">Role</th>
                                             <th class="px-6 py-3 text-right">Actions</th>
                                         </tr>
@@ -659,6 +667,65 @@
                                 <label>Select Database</label>
                                 <select id="invoice-db-select" class="form-control"
                                     onchange="app.loadInvoices()"></select>
+                            </div>
+
+                            <div class="glass-panel" style="margin-bottom: 2rem;">
+                                <h3 class="text-xl font-semibold mb-4">Cluster Map</h3>
+                                <style>
+                                    .node-circle {
+                                        width: 60px;
+                                        height: 60px;
+                                        border-radius: 50%;
+                                        display: flex;
+                                        flex-direction: column;
+                                        align-items: center;
+                                        justify-content: center;
+                                        font-weight: bold;
+                                        font-size: 0.8rem;
+                                        color: white;
+                                        position: relative;
+                                        border: 2px solid transparent;
+                                        transition: all 0.3s ease;
+                                        background: var(--bg-card);
+                                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                                    }
+
+                                    .node-leader {
+                                        background: linear-gradient(135deg, #10b981, #059669);
+                                        border-color: #34d399;
+                                        transform: scale(1.1);
+                                        box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+                                    }
+
+                                    .node-follower {
+                                        background: linear-gradient(135deg, #3b82f6, #2563eb);
+                                        border-color: #60a5fa;
+                                    }
+
+                                    .node-candidate {
+                                        background: linear-gradient(135deg, #f59e0b, #d97706);
+                                        border-color: #fbbf24;
+                                    }
+
+                                    .node-inactive {
+                                        background: linear-gradient(135deg, #ef4444, #dc2626);
+                                        border-color: #f77272;
+                                        opacity: 0.7;
+                                    }
+
+                                    .node-self::after {
+                                        content: "(You)";
+                                        position: absolute;
+                                        bottom: -20px;
+                                        font-size: 0.7rem;
+                                        color: var(--text-muted);
+                                    }
+
+                                    .node-label {
+                                        font-family: monospace;
+                                        margin-top: 2px;
+                                    }
+                                </style>
                             </div>
 
                             <div class="glass-panel">
@@ -716,7 +783,7 @@
         </div>
     </div>
 
-    <script src="js/app.js"></script>
+    <script src="js/app.bundle.js"></script>
 </body>
 
 </html>

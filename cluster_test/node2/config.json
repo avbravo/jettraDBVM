@@ -1,0 +1,8 @@
+{
+  "Port": 8082,
+  "DataDir": "data",
+  "distributed": true,
+  "NodeID": "node2",
+  "system_username": "admin",
+  "system_password": "admin"
+}

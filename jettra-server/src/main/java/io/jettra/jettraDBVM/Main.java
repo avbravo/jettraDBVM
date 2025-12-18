@@ -33,7 +33,12 @@ public class Main {
 
             // Load custom config.json
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            java.io.File configFile = new java.io.File("config.json");
+            String configPath = "config.json";
+            if (args.length > 0) {
+                configPath = args[0];
+            }
+            java.io.File configFile = new java.io.File(configPath);
+            LOGGER.info("Using config file: " + configFile.getAbsolutePath());
             Map<String, Object> jettraConfig;
 
             if (configFile.exists()) {
@@ -50,6 +55,8 @@ public class Main {
                 jettraConfig.put("Bootstrap", true);
                 jettraConfig.put("ClusterID", "cluster-1");
                 jettraConfig.put("NodeID", "node-" + java.util.UUID.randomUUID().toString());
+                jettraConfig.put("distributed", false);
+                jettraConfig.put("Peers", new java.util.ArrayList<String>());
                 
                 mapper.writerWithDefaultPrettyPrinter().writeValue(configFile, jettraConfig);
                 LOGGER.info("Created default config.json");

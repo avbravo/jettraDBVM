@@ -45,9 +45,11 @@ public class QueryExecutor {
             Map<String, Object> query = parseJsonArg(args);
             return engine.getStore().query(db, col, query, 100, 0);
         } else if (op.equals("insert")) {
+             checkLeader();
              Map<String, Object> doc = parseJsonArg(args);
              return engine.getStore().save(db, col, doc);
         } else if (op.equals("remove")) {
+             checkLeader();
              // In real impl, delete by query
              throw new UnsupportedOperationException("Remove by query not yet implemented full scan");
         }
@@ -80,6 +82,7 @@ public class QueryExecutor {
                 return engine.getStore().query(db, col, filter, 100, 0);
             }
         } else if (up.startsWith("INSERT INTO")) {
+             checkLeader();
              // INSERT INTO users (name, age) VALUES ('Alice', 30)
              // Regex to extract table, columns, values
              // Pattern: INSERT INTO <table> (<cols>) VALUES (<vals>)
@@ -141,6 +144,7 @@ public class QueryExecutor {
             }
             return engine.getStore().query(db, col, filter, 100, 0);
         } else if (op.equals("INSERT")) {
+            checkLeader();
             // INSERT INTO users DOC {...}
              // Flexibly find "INTO" and "DOC" keywords
              int intoIdx = -1;
@@ -162,6 +166,7 @@ public class QueryExecutor {
              Map<String, Object> doc = mapper.readValue(json, new TypeReference<Map<String, Object>>(){});
              return engine.getStore().save(db, col, doc);
         } else if (op.equals("CREATE") && tokens.length > 1 && tokens[1].equalsIgnoreCase("INDEX")) {
+            checkLeader();
             // CREATE INDEX ON users (email)
             // Expect: CREATE INDEX ON <col> (<field>)
             // tokens: 0=CREATE 1=INDEX 2=ON 3=<col> 4=(<field>)
@@ -198,6 +203,12 @@ public class QueryExecutor {
              return mapper.readValue(s, new TypeReference<Map<String, Object>>(){});
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private void checkLeader() {
+        if (engine.getRaftNode() != null && !engine.getRaftNode().isLeader()) {
+            throw new IllegalStateException("Not Leader");
         }
     }
 }

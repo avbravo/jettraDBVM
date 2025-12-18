@@ -1,0 +1,11 @@
+{
+  "nodes" : [ {
+    "id" : "node1",
+    "url" : "http://localhost:8081",
+    "role" : "LEADER"
+  }, {
+    "id" : "node-1860026891",
+    "url" : "http://localhost:8082",
+    "role" : "FOLLOWER"
+  } ]
+}

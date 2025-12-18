@@ -1,10 +1,8 @@
 {
-    "Host": "0.0.0.0",
-    "Port": 8080,
-    "DataDir": "data",
-    "Role": "Leader",
-    "SessionTimeout": 0,
-    "Bootstrap": true,
-    "cluster": "cluster-1",
-    "NodeID": "node-1"
+  "Host" : "0.0.0.0",
+  "Port" : 6585,
+  "DataDir" : "data",
+  "distributed" : true,
+  "Bootstrap" : true,
+  "NodeID" : "node-1"
 }

@@ -58,6 +58,12 @@ public class WebServices {
                 .get("/api/export", this::exportCollection)
                 .post("/api/import", this::importCollection)
                 .get("/api/count", this::countDocuments)
+                // Cluster
+                .get("/api/cluster", this::getClusterStatus)
+                .post("/api/cluster/register", this::registerNode)
+                .post("/api/cluster/deregister", this::deregisterNode)
+                .post("/api/cluster/stop", this::stopNode)
+
                 // Versioning
                 .get("/api/versions", this::getVersions)
                 .get("/api/versions", this::getVersions)
@@ -69,18 +75,21 @@ public class WebServices {
                 .post("/api/tx/rollback", this::rollbackTransaction)
                 .post("/api/tx/rollback", this::rollbackTransaction);
 
-        
         // Register Raft Services
-        // Note: RaftService registers its own paths (e.g. /raft/...) which are NOT under /api/
-        // If we want them secured or under /api, we should change RaftService or wrap here.
+        // Note: RaftService registers its own paths (e.g. /raft/...) which are NOT
+        // under /api/
+        // If we want them secured or under /api, we should change RaftService or wrap
+        // here.
         // For now, let's just register them.
-        engine.getRaftService().register(rules);
+        if (engine.getRaftService() != null) {
+            rules.register("/raft/rpc", engine.getRaftService());
+        }
 
         // User Management
         rules
-            .get("/api/users", this::listUsers)
-            .post("/api/users", this::createUser)
-            .delete("/api/users", this::deleteUser);
+                .get("/api/users", this::listUsers)
+                .post("/api/users", this::createUser)
+                .delete("/api/users", this::deleteUser);
     }
 
     private void authMiddleware(ServerRequest req, ServerResponse res) {
@@ -143,19 +152,21 @@ public class WebServices {
             String pass = creds.get("password");
 
             // Authenticate against _system for login
-            if (("admin".equals(user) && "admin".equals(pass)) || engine.getAuth().authenticate("_system", user, pass)) {
+            if (("admin".equals(user) && "admin".equals(pass))
+                    || engine.getAuth().authenticate("_system", user, pass)) {
                 // Return a "token" or just success. For basic auth frontend, we just need to
                 // know it works.
                 // We'll return the credentials base64 encoded as a token for the frontend to
                 // use
                 String token = Base64.getEncoder().encodeToString((user + ":" + pass).getBytes());
                 String role = engine.getAuth().getUserRole("_system", user);
-                if (role == null && "admin".equals(user)) role = "admin"; // Fallback for backdoor
+                if (role == null && "admin".equals(user))
+                    role = "admin"; // Fallback for backdoor
 
                 res.send(jsonMapper.createObjectNode()
-                    .put("token", "Basic " + token)
-                    .put("role", role)
-                    .toString());
+                        .put("token", "Basic " + token)
+                        .put("role", role)
+                        .toString());
             } else {
                 res.status(Status.UNAUTHORIZED_401).send("Invalid credentials");
             }
@@ -226,41 +237,41 @@ public class WebServices {
         // In file based system, listing DBs means listing directories in dataDir
         try {
             String user = CURRENT_USER.get();
-            boolean isAdmin = "admin".equals(user); 
+            boolean isAdmin = "admin".equals(user);
             List<String> allowedDbs = new java.util.ArrayList<>();
             boolean canSeeAll = false;
 
             if (user != null && !isAdmin) {
-                 try {
-                     Map<String, Object> filter = java.util.Collections.singletonMap("username", user);
-                     List<Map<String, Object>> users = engine.getStore().query("_system", "_users", filter, 1, 0);
-                     if (!users.isEmpty()) {
-                         Map<String, Object> u = users.get(0);
-                         String role = (String) u.get("role");
-                         if ("admin".equals(role)) {
-                             isAdmin = true;
-                         } else {
-                             Object ad = u.get("allowed_dbs");
-                             if (ad instanceof List) {
-                                 for (Object o : (List<?>) ad) {
-                                     String dbName = o.toString();
-                                     allowedDbs.add(dbName);
-                                     if ("*".equals(dbName)) {
-                                         canSeeAll = true;
-                                     }
-                                 }
-                             }
-                         }
-                     }
-                 } catch (Exception ex) {
-                     // Log error or ignore
-                     ex.printStackTrace();
-                 }
+                try {
+                    Map<String, Object> filter = java.util.Collections.singletonMap("username", user);
+                    List<Map<String, Object>> users = engine.getStore().query("_system", "_users", filter, 1, 0);
+                    if (!users.isEmpty()) {
+                        Map<String, Object> u = users.get(0);
+                        String role = (String) u.get("role");
+                        if ("admin".equals(role)) {
+                            isAdmin = true;
+                        } else {
+                            Object ad = u.get("allowed_dbs");
+                            if (ad instanceof List) {
+                                for (Object o : (List<?>) ad) {
+                                    String dbName = o.toString();
+                                    allowedDbs.add(dbName);
+                                    if ("*".equals(dbName)) {
+                                        canSeeAll = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    // Log error or ignore
+                    ex.printStackTrace();
+                }
             }
-            
+
             java.io.File root = new java.io.File("data");
             java.io.File[] files = root.listFiles(java.io.File::isDirectory);
-            
+
             List<Map<String, String>> dbs = new java.util.ArrayList<>();
             if (files != null) {
                 for (java.io.File dir : files) {
@@ -288,15 +299,26 @@ public class WebServices {
 
     private void createDatabase(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             byte[] content = req.content().as(byte[].class);
             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
             });
             String db = body.get("name");
-            String engineName = body.get("engine"); 
+            String engineName = body.get("engine");
             engine.getStore().createDatabase(db, engineName);
-            
+
             engine.getStore().createCollection(db, "_info");
             engine.getStore().createCollection(db, "_rules");
+
+            // Replicate if distributed
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "create_db");
+                command.put("db", db);
+                command.put("engine", engineName);
+                engine.getRaftNode().replicate(command);
+            }
+
             res.send(jsonMapper.createObjectNode().put("status", "created").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -305,6 +327,7 @@ public class WebServices {
 
     private void deleteDatabase(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             String db = req.query().get("name");
             engine.getStore().deleteDatabase(db);
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
@@ -315,6 +338,7 @@ public class WebServices {
 
     private void renameDatabase(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             byte[] content = req.content().as(byte[].class);
             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
             });
@@ -323,12 +347,15 @@ public class WebServices {
             engine.getStore().renameDatabase(oldName, newName);
             res.send(jsonMapper.createObjectNode().put("status", "renamed").toString());
         } catch (Exception e) {
-            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            if (!"Not Leader".equals(e.getMessage())) { // Added check for leader exception
+                res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            }
         }
     }
 
     private void createCollection(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res); // Added checkLeader
             byte[] content = req.content().as(byte[].class);
             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
             });
@@ -337,12 +364,15 @@ public class WebServices {
             engine.getStore().createCollection(db, col);
             res.send(jsonMapper.createObjectNode().put("status", "created").toString());
         } catch (Exception e) {
-            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            if (!"Not Leader".equals(e.getMessage())) { // Added check for leader exception
+                res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            }
         }
     }
 
     private void deleteCollection(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res); // Added checkLeader
             String db = req.query().get("database");
             String col = req.query().get("collection");
             engine.getStore().deleteCollection(db, col);
@@ -354,6 +384,7 @@ public class WebServices {
 
     private void renameCollection(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             byte[] content = req.content().as(byte[].class);
             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
             });
@@ -367,17 +398,48 @@ public class WebServices {
         }
     }
 
+    private void checkLeader(ServerResponse res) throws Exception {
+        if (engine.getRaftNode() != null && !engine.getRaftNode().isLeader()) {
+            res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader. Writes must be sent to the cluster leader.");
+            throw new RuntimeException("Not Leader"); 
+        }
+    }
+
+    private void registerNode(ServerRequest req, ServerResponse res) {
+        try {
+            byte[] content = req.content().as(byte[].class);
+            Map<String, Object> data = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
+            String url = (String) data.get("url");
+            String description = (String) data.getOrDefault("description", "");
+            
+            if (url == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing URL");
+                return;
+            }
+            // Enforce leader for registration too
+            checkLeader(res);
+
+            engine.getRaftNode().registerNode(url, description);
+            res.send("Node registered");
+        } catch (Exception e) {
+            if (!"Not Leader".equals(e.getMessage())) {
+                res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            }
+        }
+    }
+
     private void listCollections(ServerRequest req, ServerResponse res) {
         String db = req.path().pathParameters().get("db");
         boolean isAdmin = false;
         try {
-             isAdmin = requireAdminCheck(req);
-        } catch (Exception e) {}
+            isAdmin = requireAdminCheck(req);
+        } catch (Exception e) {
+        }
 
         try {
             java.io.File dbDir = new java.io.File("data/" + db);
             String[] cols = dbDir.list((dir, name) -> new java.io.File(dir, name).isDirectory());
-            
+
             if (cols == null) {
                 res.send("[]");
                 return;
@@ -386,7 +448,7 @@ public class WebServices {
             List<String> visibleCols = new java.util.ArrayList<>();
             for (String col : cols) {
                 if (!isAdmin && (col.startsWith("_") || col.equals("_info") || col.equals("_engine"))) {
-                     continue;
+                    continue;
                 }
                 visibleCols.add(col);
             }
@@ -395,17 +457,19 @@ public class WebServices {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
-    
+
     private boolean requireAdminCheck(ServerRequest req) {
-         try {
+        try {
             Optional<String> authHeader = req.headers().first(io.helidon.http.HeaderNames.AUTHORIZATION);
-            if (authHeader.isEmpty()) return false;
-            
+            if (authHeader.isEmpty())
+                return false;
+
             String b64Credentials = authHeader.get().substring("Basic ".length());
             String credentials = new String(Base64.getDecoder().decode(b64Credentials));
             String username = credentials.split(":", 2)[0];
-            
-            if ("admin".equals(username)) return true;
+
+            if ("admin".equals(username))
+                return true;
 
             String role = engine.getAuth().getUserRole("_system", username);
             return "admin".equals(role);
@@ -419,27 +483,63 @@ public class WebServices {
             String db = req.query().get("db");
             String col = req.query().get("col");
             String txID = req.query().first("tx").orElse(null);
-            System.out.println("DEBUG: saveDocument called for " + db + "/" + col + (txID != null ? " [TX: " + txID + "]" : ""));
+            System.out.println(
+                    "DEBUG: saveDocument called for " + db + "/" + col + (txID != null ? " [TX: " + txID + "]" : ""));
 
             byte[] content = req.content().as(byte[].class);
             Map<String, Object> doc = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
             });
-            
-            String id;
-            if (txID != null && !txID.isEmpty()) {
-                // Determine ID if not present (client should send it or we gen it)
-                // For tx save, we might want to return ID. But saveTx is void.
-                // We should generate ID here if missing.
-                id = (String) doc.get("_id");
-                if (id == null) {
-                    id = java.util.UUID.randomUUID().toString();
-                    doc.put("_id", id);
-                }
-                engine.getStore().saveTx(db, col, doc, txID);
-            } else {
-                id = engine.getStore().save(db, col, doc);
+
+            String id = (String) doc.get("_id");
+            if (id == null) {
+                id = java.util.UUID.randomUUID().toString();
+                doc.put("_id", id);
             }
-            
+
+            if (txID != null && !txID.isEmpty()) {
+                 engine.getStore().saveTx(db, col, doc, txID);
+            } else {
+                 // Distributed Write Logic
+                 if (engine.getRaftNode() != null) {
+                    if (!engine.getRaftNode().isLeader()) {
+                        res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader. Connect to: " + engine.getRaftNode().getLeaderId());
+                        return;
+                    } 
+                     Map<String, Object> cmd = new java.util.HashMap<>();
+                     cmd.put("op", "save");
+                     cmd.put("db", db);
+                     cmd.put("col", col);
+                     cmd.put("doc", doc);
+                     engine.getRaftNode().replicate(cmd);
+                     // Also apply locally? replicate() does NOT apply locally automatically in standard Raft usually,
+                     // but here RaftNode.appendEntry calls applyCommand if it's leader?
+                     // Let's check RaftNode.replicate...
+                     // RaftNode.replicate -> log.add -> sendAppendEntries.
+                     // It does NOT apply immediately. It waits for consensus?
+                     // The current RaftNode implementation is simplified. 
+                     // RaftNode.appendEntry says: if (command != null) applyCommand(command).
+                     // But replicate() adds to log but doesn't call applyCommand directly?
+                     // Wait, `replicate` calls `sendAppendEntries`.
+                     // `appendEntry` is called by FOLLOWERS when they receive AppendEntries.
+                     // The LEADER must also apply it to its state machine once committed.
+                     // The current RaftNode doesn't seem to have a background "commit applier".
+                     // It seems simplified to: Leader applies immediately? No, `replicate` just adds to log.
+                     // Let's look at `RaftNode.java` again.
+                     // It seems missing "apply on commit" loop. 
+                     // For this MVP, we might need to apply locally immediately OR have a mechanism.
+                     // Given the "improve algorithm" prompt, maybe the current one IS slow because it waits?
+                     // But I don't see any waiting code in `replicate`.
+                     // To ensure it works: I will apply locally immediately for the Leader so UI updates, 
+                     // and replicate for Followers. This is "Async replication" (weaker consistency) but faster.
+                     // Or I can just call store.save() here as before.
+                     engine.getStore().save(db, col, doc);
+                 } else {
+                     // If Follower, simplistic approach: allow local write (bad) or rely on client to hit leader.
+                     // For now, consistent with previous behavior + replication:
+                     engine.getStore().save(db, col, doc);
+                 }
+            }
+
             System.out.println("DEBUG: Document saved with ID: " + id);
             res.send(jsonMapper.createObjectNode().put("id", id).toString());
         } catch (Exception e) {
@@ -476,7 +576,22 @@ public class WebServices {
             // doc should have _id, if not use id param
             doc.put("_id", id);
 
+            if (engine.getRaftNode() != null) {
+                if (!engine.getRaftNode().isLeader()) {
+                    res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
+                    return;
+                }
+                 Map<String, Object> cmd = new java.util.HashMap<>();
+                 cmd.put("op", "update");
+                 cmd.put("db", db);
+                 cmd.put("col", col);
+                 cmd.put("id", id);
+                 cmd.put("doc", doc);
+                 engine.getRaftNode().replicate(cmd);
+            }
+            // Always apply locally for now (Leader or Standalone)
             engine.getStore().update(db, col, id, doc);
+            
             res.send(jsonMapper.createObjectNode().put("status", "ok").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -489,10 +604,22 @@ public class WebServices {
             String col = req.query().get("col");
             String id = req.query().get("id");
             String txID = req.query().first("tx").orElse(null);
-            
+
             if (txID != null && !txID.isEmpty()) {
                 engine.getStore().deleteTx(db, col, id, txID);
             } else {
+                if (engine.getRaftNode() != null) {
+                    if (!engine.getRaftNode().isLeader()) {
+                        res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
+                        return;
+                    }
+                     Map<String, Object> cmd = new java.util.HashMap<>();
+                     cmd.put("op", "delete");
+                     cmd.put("db", db);
+                     cmd.put("col", col);
+                     cmd.put("id", id);
+                     engine.getRaftNode().replicate(cmd);
+                }
                 engine.getStore().delete(db, col, id);
             }
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
@@ -541,18 +668,20 @@ public class WebServices {
     private void executeCommand(ServerRequest req, ServerResponse res) {
         try {
             String db = req.query().get("db"); // Context DB
-            if (db == null) db = "test"; // Default
-            
+            if (db == null)
+                db = "test"; // Default
+
             byte[] content = req.content().as(byte[].class);
-            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {});
+            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
+            });
             String cmd = body.get("command");
-            
+
             Object result = queryExecutor.execute(db, cmd);
-            
+
             if (result instanceof String) {
-                 res.send(jsonMapper.createObjectNode().put("message", (String)result).toString());
+                res.send(jsonMapper.createObjectNode().put("message", (String) result).toString());
             } else {
-                 res.send(jsonMapper.writeValueAsString(result));
+                res.send(jsonMapper.writeValueAsString(result));
             }
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -568,19 +697,19 @@ public class WebServices {
                 return;
             }
             List<io.jettra.core.storage.IndexEngine.IndexDefinition> indexes = engine.getIndexer().getIndexes(db, col);
-            
+
             // Map to simpler structure
-             List<Map<String, Object>> result = new java.util.ArrayList<>();
-             for (io.jettra.core.storage.IndexEngine.IndexDefinition def : indexes) {
-                 Map<String, Object> map = new java.util.HashMap<>();
-                 // Flatten "fields" list to single field for UI simplicity (or comma separated)
-                 String field = String.join(",", def.fields());
-                 
-                 map.put("field", field);
-                 map.put("unique", def.unique());
-                 map.put("sequential", def.sequential());
-                 result.add(map);
-             }
+            List<Map<String, Object>> result = new java.util.ArrayList<>();
+            for (io.jettra.core.storage.IndexEngine.IndexDefinition def : indexes) {
+                Map<String, Object> map = new java.util.HashMap<>();
+                // Flatten "fields" list to single field for UI simplicity (or comma separated)
+                String field = String.join(",", def.fields());
+
+                map.put("field", field);
+                map.put("unique", def.unique());
+                map.put("sequential", def.sequential());
+                result.add(map);
+            }
             res.send(jsonMapper.writeValueAsString(result));
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -590,24 +719,27 @@ public class WebServices {
     private void createIndex(ServerRequest req, ServerResponse res) {
         try {
             byte[] content = req.content().as(byte[].class);
-            Map<String, Object> body = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
-            
+            Map<String, Object> body = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
+            });
+
             String db = (String) body.get("database");
             String col = (String) body.get("collection");
             String field = (String) body.get("field");
             Boolean unique = (Boolean) body.get("unique");
             Boolean sequential = (Boolean) body.get("sequential");
-            if (unique == null) unique = false;
-            if (sequential == null) sequential = false;
-            
+            if (unique == null)
+                unique = false;
+            if (sequential == null)
+                sequential = false;
+
             if (db == null || col == null || field == null) {
                 res.status(Status.BAD_REQUEST_400).send("Missing field, database, or collection");
                 return;
             }
-            
+
             List<String> fields = java.util.Arrays.asList(field.split(","));
             engine.getIndexer().createIndex(db, col, fields, unique, sequential);
-            
+
             res.send(jsonMapper.createObjectNode().put("status", "created").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -619,15 +751,15 @@ public class WebServices {
             String db = req.query().get("db");
             String col = req.query().get("col");
             String field = req.query().get("field");
-            
+
             if (db == null || col == null || field == null) {
                 res.status(Status.BAD_REQUEST_400).send("Missing db, col, or field");
                 return;
             }
-            
+
             List<String> fields = java.util.Arrays.asList(field.split(","));
             engine.getIndexer().deleteIndex(db, col, fields);
-            
+
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -638,6 +770,116 @@ public class WebServices {
         try {
             String txID = engine.getStore().beginTransaction();
             res.send(jsonMapper.createObjectNode().put("txID", txID).toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getClusterStatus(ServerRequest req, ServerResponse res) {
+        try {
+            io.jettra.core.raft.RaftNode raft = engine.getRaftNode();
+            Map<String, Object> status = new java.util.HashMap<>();
+
+            if (raft != null) {
+                status.put("enabled", true);
+                status.put("nodeId", raft.getNodeId());
+                status.put("state", raft.getState().toString());
+                status.put("leaderId", raft.getLeaderId());
+                status.put("term", raft.getCurrentTerm());
+                
+                // Detailed node status - Transform _id to id for frontend
+                List<Map<String, Object>> nodes = raft.getClusterStatus();
+                if (nodes != null) {
+                    System.out.println("WebServices: getClusterStatus returning " + nodes.size() + " nodes.");
+                } else {
+                    System.out.println("WebServices: getClusterStatus returning 'null' nodes list.");
+                    nodes = new java.util.ArrayList<>();
+                }
+                
+                List<Map<String, Object>> publicNodes = new java.util.ArrayList<>();
+                for (Map<String, Object> node : nodes) {
+                    Map<String, Object> pNode = new java.util.HashMap<>(node);
+                    // Robust ID handling
+                    String id = (String) pNode.get("_id");
+                    if (id == null) id = (String) pNode.get("id");
+                    
+                    if (id != null) {
+                        pNode.put("id", id);
+                        // Ensure _id is also set for consistency
+                        pNode.put("_id", id);
+                    } else {
+                         // Fallback if absolutely no ID found
+                         String url = (String) pNode.get("url");
+                         if (url != null) {
+                             pNode.put("id", "node-" + url.hashCode());
+                             pNode.put("_id", "node-" + url.hashCode());
+                         }
+                    }
+                    publicNodes.add(pNode);
+                }
+                status.put("nodes", publicNodes);
+            } else {
+                status.put("enabled", false);
+            }
+            res.send(jsonMapper.writeValueAsString(status));
+        } catch (Exception e) {
+            e.printStackTrace();
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void stopNode(ServerRequest req, ServerResponse res) {
+        try {
+             if (engine.getRaftNode() == null) {
+                res.status(Status.BAD_REQUEST_400).send("Raft not enabled");
+                return;
+            }
+
+            byte[] content = req.content().as(byte[].class);
+            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
+            });
+            String nodeIdOrUrl = body.get("node");
+            
+            if (nodeIdOrUrl == null || nodeIdOrUrl.isEmpty()) {
+                 res.status(Status.BAD_REQUEST_400).send("Missing node ID or URL");
+                 return;
+            }
+
+            engine.getRaftNode().stopNode(nodeIdOrUrl);
+            res.send(jsonMapper.createObjectNode().put("status", "stop_sent").toString());
+        } catch (IllegalStateException e) {
+            res.status(Status.BAD_REQUEST_400).send(e.getMessage());
+        } catch (Exception e) {
+             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+
+    private void deregisterNode(ServerRequest req, ServerResponse res) {
+        try {
+            if (engine.getRaftNode() == null) {
+                res.status(Status.BAD_REQUEST_400).send("Raft not enabled");
+                return;
+            }
+
+            byte[] content = req.content().as(byte[].class);
+            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
+            });
+            String url = body.get("url");
+
+            if (url == null || url.isEmpty()) {
+                res.status(Status.BAD_REQUEST_400).send("Missing url");
+                return;
+            }
+
+            if (url.endsWith("/"))
+                url = url.substring(0, url.length() - 1);
+
+            engine.getRaftNode().deregisterNode(url);
+
+            res.send(jsonMapper.createObjectNode().put("status", "deregistered").toString());
+        } catch (IllegalStateException e) {
+            res.status(Status.BAD_REQUEST_400).send(e.getMessage()); // Not Leader
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
@@ -665,7 +907,8 @@ public class WebServices {
 
     // --- User Management ---
     private void listUsers(ServerRequest req, ServerResponse res) {
-        if (!requireAdmin(req, res)) return;
+        if (!requireAdmin(req, res))
+            return;
         try {
             List<Map<String, Object>> users = engine.getStore().query("_system", "_users", null, 1000, 0);
             res.send(jsonMapper.writeValueAsString(users));
@@ -675,11 +918,13 @@ public class WebServices {
     }
 
     private void createUser(ServerRequest req, ServerResponse res) {
-        if (!requireAdmin(req, res)) return;
+        if (!requireAdmin(req, res))
+            return;
         try {
             byte[] content = req.content().as(byte[].class);
-            Map<String, Object> user = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
-            
+            Map<String, Object> user = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
+            });
+
             String username = (String) user.get("username");
             if (username == null || username.isEmpty()) {
                 res.status(Status.BAD_REQUEST_400).send("Username required");
@@ -694,8 +939,9 @@ public class WebServices {
                     res.status(Status.BAD_REQUEST_400).send("User already exists");
                     return;
                 }
-            } catch (Exception e) {} // ignore if query fails (e.g. collection missing)
-            
+            } catch (Exception e) {
+            } // ignore if query fails (e.g. collection missing)
+
             engine.getStore().save("_system", "_users", user);
             res.send(jsonMapper.createObjectNode().put("status", "User created").toString());
         } catch (Exception e) {
@@ -704,13 +950,14 @@ public class WebServices {
     }
 
     private void deleteUser(ServerRequest req, ServerResponse res) {
-        if (!requireAdmin(req, res)) return;
+        if (!requireAdmin(req, res))
+            return;
         try {
             String id = req.query().get("id");
             engine.getStore().delete("_system", "_users", id);
             res.send(jsonMapper.createObjectNode().put("status", "User deleted").toString());
         } catch (Exception e) {
-             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
 
@@ -719,49 +966,53 @@ public class WebServices {
         // We need the username from auth header
         try {
             Optional<String> authHeader = req.headers().first(io.helidon.http.HeaderNames.AUTHORIZATION);
-            if (authHeader.isEmpty()) { 
+            if (authHeader.isEmpty()) {
                 res.status(Status.UNAUTHORIZED_401).send("Unauthorized");
-                return false; 
+                return false;
             }
-            
+
             String b64Credentials = authHeader.get().substring("Basic ".length());
             String credentials = new String(Base64.getDecoder().decode(b64Credentials));
             String username = credentials.split(":", 2)[0];
-            
-            if ("admin".equals(username)) return true; // Backdoor/Root
+
+            if ("admin".equals(username))
+                return true; // Backdoor/Root
 
             String role = engine.getAuth().getUserRole("_system", username);
-            if ("admin".equals(role)) return true;
+            if ("admin".equals(role))
+                return true;
         } catch (Exception e) {
             e.printStackTrace();
         }
-        
+
         res.status(Status.FORBIDDEN_403).send("Forbidden: Admin Access Required");
         return false;
     }
 
     private void backupDatabase(ServerRequest req, ServerResponse res) {
-         if (!requireAdmin(req, res)) return;
-         try {
-             String db = req.query().get("db");
-             if (db == null) {
-                 res.status(Status.BAD_REQUEST_400).send("Missing db param");
-                 return;
-             }
-             String zipName = engine.getStore().backupDatabase(db);
-             res.send(jsonMapper.createObjectNode().put("file", zipName).toString());
-         } catch (Exception e) {
-             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
-         }
+        if (!requireAdmin(req, res))
+            return;
+        try {
+            String db = req.query().get("db");
+            if (db == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db param");
+                return;
+            }
+            String zipName = engine.getStore().backupDatabase(db);
+            res.send(jsonMapper.createObjectNode().put("file", zipName).toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
     }
 
     private void listBackups(ServerRequest req, ServerResponse res) {
-        if (!requireAdmin(req, res)) return;
+        if (!requireAdmin(req, res))
+            return;
         try {
             java.io.File backupsDir = new java.io.File("backups");
             if (!backupsDir.exists()) {
-                 res.send("[]");
-                 return;
+                res.send("[]");
+                return;
             }
             String[] files = backupsDir.list((dir, name) -> name.endsWith(".zip"));
             res.send(jsonMapper.writeValueAsString(files));
@@ -773,67 +1024,75 @@ public class WebServices {
     private void downloadBackup(ServerRequest req, ServerResponse res) {
         // Optional: Require auth? Yes.
         // But for browser download it might be tricky with headers.
-        // For now, let's assume we can pass token in query param for download if needed,
+        // For now, let's assume we can pass token in query param for download if
+        // needed,
         // or just use basic auth if browser prompts.
-        // Simplest: use same admin check (header based). Browser might need a small turn around to send header.
+        // Simplest: use same admin check (header based). Browser might need a small
+        // turn around to send header.
         // Or we allow query param "token" for this specific endpoint.
-        
+
         try {
-             // Check auth from parameter if header missing (for direct browser links)
-             String token = req.query().get("token");
-             if (token != null) {
-                  // Validate token manually since middleware might have failed or skipped
-                  // Actually middleware runs before this. If middleware blocks missing header, we can't use query param.
-                  // Let's rely on middleware. If accessing from browser, we might need a fetch-blob flow or allow query-param-auth in middleware.
-                  // For now, assume fetch-blob flow in UI.
-             }
-             // Middleware should handle it if we send standard header.
-             
-             String filename = req.query().get("file");
-             if (filename == null || filename.contains("..") || !filename.endsWith(".zip")) {
-                 res.status(Status.BAD_REQUEST_400).send("Invalid filename");
-                 return;
-             }
-             
-             java.io.File file = new java.io.File("backups", filename);
-             if (!file.exists()) {
-                 res.status(Status.NOT_FOUND_404).send("File not found");
-                 return;
-             }
-             
-             res.headers().add(io.helidon.http.HeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"");
-             res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, "application/zip");
-             // send file content
-             res.send(java.nio.file.Files.readAllBytes(file.toPath()));
-             res.send(java.nio.file.Files.readAllBytes(file.toPath()));
+            // Check auth from parameter if header missing (for direct browser links)
+            String token = req.query().get("token");
+            if (token != null) {
+                // Validate token manually since middleware might have failed or skipped
+                // Actually middleware runs before this. If middleware blocks missing header, we
+                // can't use query param.
+                // Let's rely on middleware. If accessing from browser, we might need a
+                // fetch-blob flow or allow query-param-auth in middleware.
+                // For now, assume fetch-blob flow in UI.
+            }
+            // Middleware should handle it if we send standard header.
+
+            String filename = req.query().get("file");
+            if (filename == null || filename.contains("..") || !filename.endsWith(".zip")) {
+                res.status(Status.BAD_REQUEST_400).send("Invalid filename");
+                return;
+            }
+
+            java.io.File file = new java.io.File("backups", filename);
+            if (!file.exists()) {
+                res.status(Status.NOT_FOUND_404).send("File not found");
+                return;
+            }
+
+            res.headers().add(io.helidon.http.HeaderNames.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + filename + "\"");
+            res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, "application/zip");
+            // send file content
+            res.send(java.nio.file.Files.readAllBytes(file.toPath()));
+            res.send(java.nio.file.Files.readAllBytes(file.toPath()));
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
 
     private void restoreDatabase(ServerRequest req, ServerResponse res) {
-         if (!requireAdmin(req, res)) return;
-         try {
-             byte[] content = req.content().as(byte[].class);
-             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {});
-             
-             String file = body.get("file");
-             String db = body.get("db"); // Target DB
-             
-             if (file == null || db == null) {
-                 res.status(Status.BAD_REQUEST_400).send("Missing file or db");
-                 return;
-             }
-             
-             engine.getStore().restoreDatabase(file, db);
-             res.send(jsonMapper.createObjectNode().put("status", "restored").toString());
-         } catch (Exception e) {
-             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
-         }
+        if (!requireAdmin(req, res))
+            return;
+        try {
+            byte[] content = req.content().as(byte[].class);
+            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
+            });
+
+            String file = body.get("file");
+            String db = body.get("db"); // Target DB
+
+            if (file == null || db == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing file or db");
+                return;
+            }
+
+            engine.getStore().restoreDatabase(file, db);
+            res.send(jsonMapper.createObjectNode().put("status", "restored").toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
     }
 
     private void restoreDatabaseFromUpload(ServerRequest req, ServerResponse res) {
-        if (!requireAdmin(req, res)) return;
+        if (!requireAdmin(req, res))
+            return;
         try {
             String db = req.query().get("db");
             if (db == null || db.isEmpty()) {
@@ -842,30 +1101,31 @@ public class WebServices {
             }
 
             // Read raw bytes from body
-            // Note: For large files, streaming would be better, but for now loading into memory is acceptable for this scale
+            // Note: For large files, streaming would be better, but for now loading into
+            // memory is acceptable for this scale
             byte[] fileBytes = req.content().as(byte[].class);
             if (fileBytes.length == 0) {
-                 res.status(Status.BAD_REQUEST_400).send("Empty file");
-                 return;
+                res.status(Status.BAD_REQUEST_400).send("Empty file");
+                return;
             }
 
             // Save to backups dir
             java.nio.file.Path backupsDir = java.nio.file.Paths.get("backups");
             java.nio.file.Files.createDirectories(backupsDir);
-            
+
             String timestamp = new java.text.SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
             String filename = "uploaded_" + timestamp + ".zip";
             java.nio.file.Path tempZip = backupsDir.resolve(filename);
-            
+
             java.nio.file.Files.write(tempZip, fileBytes);
 
             // Restore
             engine.getStore().restoreDatabase(filename, db);
-            
+
             res.send(jsonMapper.createObjectNode()
-                .put("status", "restored")
-                .put("file", filename)
-                .toString());
+                    .put("status", "restored")
+                    .put("file", filename)
+                    .toString());
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -878,7 +1138,7 @@ public class WebServices {
             String db = req.query().get("db");
             String col = req.query().get("col");
             String format = req.query().get("format"); // json or csv
-            
+
             if (db == null || col == null || format == null) {
                 res.status(Status.BAD_REQUEST_400).send("Missing db, col, or format");
                 return;
@@ -886,7 +1146,7 @@ public class WebServices {
 
             // Get all documents
             List<Map<String, Object>> docs = engine.getStore().query(db, col, null, 1000000, 0); // Large limit
-            
+
             String content = "";
             String contentType = "text/plain";
             String ext = "";
@@ -900,11 +1160,12 @@ public class WebServices {
                 contentType = "text/csv";
                 ext = "csv";
             } else {
-                 res.status(Status.BAD_REQUEST_400).send("Invalid format. Use json or csv.");
-                 return;
+                res.status(Status.BAD_REQUEST_400).send("Invalid format. Use json or csv.");
+                return;
             }
 
-            res.headers().add(io.helidon.http.HeaderNames.CONTENT_DISPOSITION, "attachment; filename=\"" + col + "." + ext + "\"");
+            res.headers().add(io.helidon.http.HeaderNames.CONTENT_DISPOSITION,
+                    "attachment; filename=\"" + col + "." + ext + "\"");
             res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, contentType);
             res.send(content);
         } catch (Exception e) {
@@ -912,50 +1173,50 @@ public class WebServices {
         }
     }
 
-
     private void getVersions(ServerRequest req, ServerResponse res) {
-         try {
-             String db = req.query().get("db");
-             String col = req.query().get("col");
-             String id = req.query().get("id");
-             
-             if (db == null || col == null || id == null) {
-                 res.status(Status.BAD_REQUEST_400).send("Missing db, col, or id");
-                 return;
-             }
-             
-             List<String> versions = engine.getStore().getVersions(db, col, id);
-             res.send(jsonMapper.writeValueAsString(versions));
-         } catch (Exception e) {
-             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
-         }
+        try {
+            String db = req.query().get("db");
+            String col = req.query().get("col");
+            String id = req.query().get("id");
+
+            if (db == null || col == null || id == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing db, col, or id");
+                return;
+            }
+
+            List<String> versions = engine.getStore().getVersions(db, col, id);
+            res.send(jsonMapper.writeValueAsString(versions));
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
     }
 
     private void restoreVersion(ServerRequest req, ServerResponse res) {
-         try {
-             byte[] content = req.content().as(byte[].class);
-             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {});
-             
-             String db = body.get("db");
-             String col = body.get("col");
-             String id = body.get("id");
-             String version = body.get("version");
-             
-             if (db == null || col == null || id == null || version == null) {
-                 res.status(Status.BAD_REQUEST_400).send("Missing parameters");
-                 return;
-             }
-             
-             engine.getStore().restoreVersion(db, col, id, version);
-             res.send(jsonMapper.createObjectNode().put("status", "restored").toString());
-         } catch (Exception e) {
-             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
-         }
+        try {
+            byte[] content = req.content().as(byte[].class);
+            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
+            });
+
+            String db = body.get("db");
+            String col = body.get("col");
+            String id = body.get("id");
+            String version = body.get("version");
+
+            if (db == null || col == null || id == null || version == null) {
+                res.status(Status.BAD_REQUEST_400).send("Missing parameters");
+                return;
+            }
+
+            engine.getStore().restoreVersion(db, col, id, version);
+            res.send(jsonMapper.createObjectNode().put("status", "restored").toString());
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
     }
 
-
     private String convertToCSV(List<Map<String, Object>> docs) {
-        if (docs.isEmpty()) return "";
+        if (docs.isEmpty())
+            return "";
         StringBuilder sb = new StringBuilder();
         // Header
         java.util.Set<String> keys = docs.get(0).keySet();
@@ -971,24 +1232,25 @@ public class WebServices {
         return sb.toString();
     }
 
-
     private void importCollection(ServerRequest req, ServerResponse res) {
-         try {
+        try {
             String db = req.query().get("db");
             String col = req.query().get("col");
             String format = req.query().get("format");
-            
+
             if (db == null || col == null || format == null) {
                 res.status(Status.BAD_REQUEST_400).send("Missing db, col, or format");
                 return;
             }
-            
+
             byte[] bytes = req.content().as(byte[].class);
             String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
-            
+
             int count = 0;
             if ("json".equalsIgnoreCase(format)) {
-                List<Map<String, Object>> docs = jsonMapper.readValue(content, new TypeReference<List<Map<String, Object>>>(){});
+                List<Map<String, Object>> docs = jsonMapper.readValue(content,
+                        new TypeReference<List<Map<String, Object>>>() {
+                        });
                 for (Map<String, Object> doc : docs) {
                     engine.getStore().save(db, col, doc);
                     count++;
@@ -1000,49 +1262,53 @@ public class WebServices {
                     count++;
                 }
             } else {
-                 res.status(Status.BAD_REQUEST_400).send("Invalid format");
-                 return;
+                res.status(Status.BAD_REQUEST_400).send("Invalid format");
+                return;
             }
 
             res.send(jsonMapper.createObjectNode().put("status", "imported").put("count", count).toString());
 
         } catch (Exception e) {
-             e.printStackTrace();
+            e.printStackTrace();
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
 
-
-
     private List<Map<String, Object>> parseCSV(String content) {
         List<Map<String, Object>> result = new java.util.ArrayList<>();
         String[] lines = content.split("\n");
-        if (lines.length == 0) return result;
-        
+        if (lines.length == 0)
+            return result;
+
         String[] headers = lines[0].trim().split(","); // Simplistic header split
         // Trim headers
-        for(int i=0; i<headers.length; i++) headers[i] = headers[i].trim();
+        for (int i = 0; i < headers.length; i++)
+            headers[i] = headers[i].trim();
 
-        // Simple parsing not handling quoted commas correctly for now as per minimal requirement, 
-        // but strictly we should use a proper parser. 
+        // Simple parsing not handling quoted commas correctly for now as per minimal
+        // requirement,
+        // but strictly we should use a proper parser.
         // Let's at least handle quotes if possible strictly or warn.
         // Implementing a quick robust splitter:
-        
+
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i].trim();
-            if (line.isEmpty()) continue;
-            
+            if (line.isEmpty())
+                continue;
+
             // Split by comma respecting quotes
             List<String> tokens = splitCSVLine(line);
-            
+
             Map<String, Object> doc = new java.util.HashMap<>();
             for (int j = 0; j < headers.length && j < tokens.size(); j++) {
                 String val = tokens.get(j);
                 if (!val.isEmpty()) {
                     // Try number
                     try {
-                        if (val.contains(".")) doc.put(headers[j], Double.parseDouble(val));
-                        else doc.put(headers[j], Long.parseLong(val));
+                        if (val.contains("."))
+                            doc.put(headers[j], Double.parseDouble(val));
+                        else
+                            doc.put(headers[j], Long.parseLong(val));
                     } catch (NumberFormatException e) {
                         doc.put(headers[j], val);
                     }
@@ -1052,7 +1318,7 @@ public class WebServices {
         }
         return result;
     }
-    
+
     private List<String> splitCSVLine(String line) {
         List<String> tokens = new java.util.ArrayList<>();
         StringBuilder sb = new StringBuilder();
@@ -1070,6 +1336,7 @@ public class WebServices {
         tokens.add(sb.toString().trim());
         return tokens;
     }
+
     private void getVersionContent(ServerRequest req, ServerResponse res) {
         try {
             String db = req.query().get("db");
@@ -1080,7 +1347,7 @@ public class WebServices {
             if (content != null) {
                 res.send(jsonMapper.writeValueAsString(content));
             } else {
-                 res.status(Status.NOT_FOUND_404).send("Version not found");
+                res.status(Status.NOT_FOUND_404).send("Version not found");
             }
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());

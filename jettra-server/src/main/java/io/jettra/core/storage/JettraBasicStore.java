@@ -65,6 +65,7 @@ public class JettraBasicStore implements DocumentStore {
             
             // Write Map as CBOR
             mapper.writeValue(filePath.toFile(), document);
+            System.out.println("DEBUG: JettraBasicStore saved " + filePath + " ID: " + id);
 
             return id;
         } finally {
@@ -102,9 +103,11 @@ public class JettraBasicStore implements DocumentStore {
             List<Map<String, Object>> results = new ArrayList<>();
             try (Stream<Path> paths = Files.list(collectionDir)) {
                 List<Path> files = paths.filter(p -> p.toString().endsWith(".jdb") && !p.getFileName().toString().equals("_indexes.jdb")).toList();
+                System.out.println("DEBUG: JettraBasicStore query " + database + "/" + collection + " found " + files.size() + " files.");
 
                 int skipped = 0;
                 for (Path file : files) {
+                    System.out.println("DEBUG: Reading file: " + file);
                     // Optimization: if no filter, skip reading file content for offset
                     if (filter == null || filter.isEmpty()) {
                         if (skipped < offset) {
@@ -503,8 +506,8 @@ public class JettraBasicStore implements DocumentStore {
             Path versionDir = Paths.get(dataDirectory, database, collection, "_versions", id);
             Files.createDirectories(versionDir);
             
-            // Just use system time millis for simplicity and string sorting
-            String timestamp = String.valueOf(System.currentTimeMillis());
+            // Use nanoTime to prevent collisions during rapid updates
+            String timestamp = System.currentTimeMillis() + "_" + System.nanoTime();
             
             Path versionPath = versionDir.resolve(timestamp + ".jdb");
             Files.copy(original, versionPath);

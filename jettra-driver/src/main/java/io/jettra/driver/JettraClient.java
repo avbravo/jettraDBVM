@@ -322,5 +322,49 @@ public class JettraClient {
             throw new DriverException("Failed to restore version", e);
         }
     }
+
+    // Cluster Management
+    public Map<String, Object> getClusterStatus() {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/cluster"))
+                // Authorization might not be needed for status, but consistency is good.
+                // WebServices doesn't enforce auth on /api/cluster? Check logic.
+                // WebServices: .get("/api/cluster", this::getClusterStatus) -> no explicit authMiddleware guard in rules?
+                // Actually rules .any("/api/*", this::authMiddleware) protects it.
+                .header("Authorization", getAuthHeader()) 
+                .GET()
+                .build();
+        return sendRequest(request, new TypeReference<Map<String, Object>>() {});
+    }
+
+    public void registerNode(String url) {
+        try {
+            String body = mapper.writeValueAsString(Collections.singletonMap("url", url));
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/cluster/register"))
+                    .header("Authorization", getAuthHeader())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            sendRequest(request, null);
+        } catch (Exception e) {
+            throw new DriverException("Failed to register node", e);
+        }
+    }
+
+    public void deregisterNode(String url) {
+        try {
+            String body = mapper.writeValueAsString(Collections.singletonMap("url", url));
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/cluster/deregister"))
+                    .header("Authorization", getAuthHeader())
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+            sendRequest(request, null);
+        } catch (Exception e) {
+            throw new DriverException("Failed to deregister node", e);
+        }
+    }
 }
 

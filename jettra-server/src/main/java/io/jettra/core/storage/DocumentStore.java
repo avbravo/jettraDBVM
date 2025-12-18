@@ -32,11 +32,17 @@ public interface DocumentStore {
 
     // Versioning
     List<String> getVersions(String database, String collection, String id) throws Exception;
+
     void restoreVersion(String database, String collection, String id, String version) throws Exception;
-    Map<String, Object> getVersionContent(String database, String collection, String id, String version) throws Exception;
-    
+
+    Map<String, Object> getVersionContent(String database, String collection, String id, String version)
+            throws Exception;
+
     // Metadata/Engine Info
     String getDatabaseEngine(String database) throws Exception;
+
+    default void reload() throws Exception {
+    }
 
     long getNextSequence(String database, String collection, String field) throws Exception;
 

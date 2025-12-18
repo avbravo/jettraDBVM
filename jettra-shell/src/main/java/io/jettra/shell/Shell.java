@@ -54,7 +54,7 @@ public class Shell {
             Completer commandCompleter = new StringsCompleter(
                 "connect", "login", "use", "show", "create", "insert", 
                 "find", "count", "delete", "backup", "restore", "export", "import", 
-                "history", "revert", "exit", "quit", "help", "clear", "cls", 
+                "history", "revert", "cluster", "exit", "quit", "help", "clear", "cls", 
                 "begin", "commit", "rollback"
             );
             
@@ -191,6 +191,9 @@ public class Shell {
                     case "revert":
                         handleRevert(arg);
                         break;
+                    case "cluster":
+                        handleCluster(arg);
+                        break;
 
                     default:
                         // Treat as raw command (JQL/SQL/Mongo)
@@ -295,6 +298,9 @@ public class Shell {
         System.out.println("  history <col> <id>     Show version history of a document");
         System.out.println("  show version <col> <id> <ver> Show content of a specific version");
         System.out.println("  revert <col> <id> <ver> Revert document to a specific version");
+        System.out.println("  cluster status         Show cluster status");
+        System.out.println("  cluster add <url>      Add a new node to the cluster");
+        System.out.println("  cluster remove <url>   Remove a node from the cluster");
         System.out.println("  exit                   Exit shell");
     }
 
@@ -873,4 +879,53 @@ public class Shell {
              }
         }
     }
+        private static void handleCluster(String arg) throws Exception {
+         String[] parts = arg.trim().split("\\s+");
+         if (parts.length < 1) { System.out.println("Usage: cluster <status|add|remove> [url]"); return; }
+         
+         String subCmd = parts[0].toLowerCase();
+         
+         if (subCmd.equals("status")) {
+             HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/cluster"))
+                .header("Authorization", token != null ? token : "") // Status might allow public or require auth
+                .GET()
+                .build();
+             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+             if (res.statusCode() == 200) {
+                 System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mapper.readValue(res.body(), Object.class)));
+             } else {
+                 System.out.println("Error: " + res.body());
+             }
+         } else if (subCmd.equals("add")) {
+             if (parts.length < 2) { System.out.println("Usage: cluster add <url>"); return; }
+             String url = parts[1];
+             String json = mapper.writeValueAsString(Map.of("url", url));
+             
+             HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/cluster/register"))
+                .header("Authorization", token != null ? token : "")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+             System.out.println(res.statusCode() == 200 ? "Node added: " + res.body() : "Error: " + res.body());
+         } else if (subCmd.equals("remove")) {
+             if (parts.length < 2) { System.out.println("Usage: cluster remove <url>"); return; }
+             String url = parts[1];
+             String json = mapper.writeValueAsString(Map.of("url", url));
+             
+             HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/cluster/deregister"))
+                .header("Authorization", token != null ? token : "")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+             System.out.println(res.statusCode() == 200 ? "Node removed: " + res.body() : "Error: " + res.body());
+         } else {
+             System.out.println("Unknown cluster command: " + subCmd);
+         }
+    }
 }
+

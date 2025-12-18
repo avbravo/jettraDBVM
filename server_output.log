@@ -1,0 +1,44 @@
+       _      _   _            ____  ______      ____  __
+      | |    | | | |          |  _ \|  _ \ \    / /  \/  |
+      | | ___| |_| |_ _ __ __ | | | | |_) \ \  / /| \  / |
+  _   | |/ _ \ __| __| '__/ _` | | | |  _ < \ \/ / | |\/| |
+ | |__| |  __/ |_| |_| | | (_| | |_| | |_) | \  /  | |  | |
+  \____/ \___|\__|\__|_|  \__,_|____/|____/   \/   |_|  |_|
+
+JettraDBVM Server v1.0
+
+dic 17, 2025 5:38:24 P. M. io.jettra.core.Engine <init>
+INFORMACIÓN: JettraDB Engine initialized with dataDir: data
+dic 17, 2025 5:38:24 P. M. io.jettra.core.Engine start
+INFORMACIÓN: Starting JettraDB Engine...
+dic 17, 2025 5:38:24 P. M. io.helidon.common.features.HelidonFeatures features
+INFORMACIÓN: Helidon SE 4.0.5 features: [WebServer]
+dic 17, 2025 5:38:24 P. M. io.helidon.webserver.LoomServer parallel
+GRAVE: Failed to start listener: /0.0.0.0:8080
+java.util.concurrent.ExecutionException: java.io.UncheckedIOException: Failed to start server
+	at java.base/java.util.concurrent.FutureTask.report(FutureTask.java:124)
+	at java.base/java.util.concurrent.FutureTask.get(FutureTask.java:193)
+	at io.helidon.webserver.LoomServer.parallel(LoomServer.java:274)
+	at io.helidodic 17, 2025 5:59:54 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown requested by JVM shutting down
+dic 17, 2025 5:59:54 P. M. io.helidon.webserver.ServerListener listen
+INFORMACIÓN: [0x054ab5e9] @default socket closed.
+dic 17, 2025 5:59:54 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown finished
+java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:545)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:328)
+	at java.base/java.util.concurrent.ThreadPerTaskExecutor$ThreadBoundFuture.run(ThreadPerTaskExecutor.java:323)
+	at java.base/java.lang.VirtualThread.run(VirtualThread.java:456)
+Caused by: java.net.BindException: La dirección ya se está usando
+	at java.base/sun.nio.ch.Net.bind0(Native Method)
+	at java.base/sun.nio.ch.Net.bind(Net.java:522)
+	at java.base/sun.nio.ch.Net.bind(Net.java:511)
+	at java.base/sun.nio.ch.NioSocketImpl.bind(NioSocketImpl.java:641)
+	at java.base/java.net.ServerSocket.bind(ServerSocket.java:326)
+	at io.helidon.webserver.ServerListener.start(ServerListener.java:259)
+	... 5 more
+
+dic 17, 2025 5:38:24 P. M. io.helidon.webserver.LoomServer startIt
+GRAVE: Helidon WebServer failed to start, shutting down
+dic 17, 2025 5:38:24 P. M. io.jettra.jettraDBVM.Main main
+INFORMACIÓN: Server started at http://0.0.0.0:-1

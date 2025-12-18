@@ -18,7 +18,7 @@ Consistencia de datos multicapa
 Procesamiento de consultas basado en caché:
 
 
-
+http://0.0.0.0:6585/
 
 - [] Crear documentos embebidos y referenciados para verificar si se almacenan bien, desde interface web, shell, curl y driver java
 
@@ -27,6 +27,7 @@ Procesamiento de consultas basado en caché:
 # Quarkus
 
 - [] Migrar el proyecto de HelidonSE a Quarkus
+- [] Probar el ejemplo de NFL IA con Quarkus
 
 
 
@@ -43,35 +44,96 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Distributed Databases
 
+- [] Cuando un nodo deja de funcionar no actualiza el estado a inactivo en la interface Web
 
-- [] Implementar la distribucion de datos (base de datos, colecciones y documentos a otros nodos estilo replicaset pero mediante el concepto
+- [] Actualizar la administracion de nodos desde Shell, Driver, Curl y actualizar la documentacion correspondiente
+
+- [] Mostar de manera grafica los nodos y el lider 
+
+- [] Añadir la posibilidad de detener el envio de datos a un nodo y poder restaurarlo
+
+- [] Probar remover un nodo desde el lider.
+
+
+- [x] sigue el error no permite ingresar al sistema se queda en el formulario login
+
+- [x] añade el nodo la coleccion pero esta mo se muestra los registros que estan en la coleccion _clusternodes en la interface grafica para permitir administrar desde el lider o observarlos desde el cliente.
+
+- [x], hay nun error en la interface web no muestra en la lista Peers el nodo añadido, recuerda que cuanto añade un nodo debe ser almancenado en _clustersnodes
+
+- [x] El proceso de escritura es un poco lento al usar programacion distribuida puedes mejorar el algoritmo.
+
+- [x] En el formulario web Cluster no muestra los registros de la coleccion _clusternodes y se queda tratando de registrar un nuevo nodo.
+
+- [x] porque en la interface web cuando selecciono una bae de datos en el menu izquierdo y veo una coleccion y sus docmentos, congela las otras opciones del menu , tengo actualiar la pagina en el navegador para poder usar las opciones
+
+-[x] Debes corregir la situacion que si se incian los nodos y todos aparecen como lider, al añadirlo a un lider se convierte en nodo y deja de ser lider, ademas en el ainterace formulñario Cluster al añadirlo  no lo muestra en la lista de nodos y su estado.
+- [x] En el formulario Cluster de la interface web no muestra los nodos agregados  estos se pueden almacenar en la base de datos _:system  y la coleccion _clusternodes que se debe actualizar y distribuir a todos los nodos. En este caso elimine el uso de cluster.json y administre todo en la coleccion _clusternodes
+     de la misma manera ajuste shell, curl, driver para que los nodos del cluster se administren con esta nueva coleccion y la coleccion es la que se distribuye a los nodos.
+
+- [x] No permite añadir un nuevo nodo en el lider ni mostrar el estado de cada nodo
+- [x] Recuerda el lider puede añadir, remover, detener nodos y estos se debe replicar a los nodos con el nuevo estado.
+
+
+- [x] Al iniciar se verifica el estado de los nodos para ver cuales estan activos e inactivos.
+- [x] Una vez que el nodo este activo se envia el archivo cluster.json y se compara con el que tiene el nodo para actualizarlo
+- [x] Debe mostrar el estado de cada nodo del cluster
+- [x] Debe distribuir la  base de datos del lider a los nodos para que esten sincronizados incluyendo indices, rules y user.
+- [x] Recuerda que solo el lider puede añadir nodos o remover, detener un nodo y notificar a todos los nodos mediante el archivo cluster.json
+
+
+
+- [x] Puedes usar una estrategia diferente con "peers": en lugar de usar el archivo config.json, use el archivo cluster.json
+Este archivo contendra los nodos y su rol (lider, candidato, nodo) el unico nodo que puede hacer modificaciones en el es el lider
+y este archivo se replicada a cada nodo. Pero ellos no pueden hacer cambios en el archivo, y cuando se añade o remueve un nodo
+este es administrado por el lider y distribuido a cada nodo del cluster, de manera que cuando el lider deje de funcionar
+cualquier nodo toma el papel del lider y puede añadir o remover nodos del cluster y actualizar este archivo. 
+Tenga presente que ningun nodo que no sea lider podra añadir o remover nodos.
+Para añadir o remover nodos se hara desde la interface Web del lider o mediante Shell , curl, driver todos ellos desde el lider.
+Y actualiza la documentacion en /books/guide/distributed.md
+
+Por lo tanto el archivo cluster.json se crea la primera vez en el lider.
+
+
+
+
+
+
+ya que al añadir un nuevo nodo no sabria cuales son los demas. En este caso se debe actualizar con todos los nodos registrados.
+Es decir al crear uno nuevo o eliminar un nodo, el archivo cluster.json se actualiza automaticamente con los nodos que lo componen
+
+. Cuando se ejecuta una instanncia nueva no es necesario 
+registrar los peers, ya que la actualizacion se hace desde la interface grafica donde se registran los nodos.
+Esto se hace de esta manera para evitar que un usuario cree un nodo y se conecte sin la autorizacion correspondiente.
+
+- [] Recuerda cuando se asigna un nuevo lider este debe tener en el archivo config.json   "Bootstrap": true, y los demas   "Bootstrap": false.
+
+- [] Recuerda distribuir el indice y las versiones de los documentos
+
+
+
+- [x] Implementar la distribucion de datos (base de datos, colecciones y documentos a otros nodos estilo replicaset pero mediante el concepto
 de bases de datos distribuida aplicando algoritmos Raft, ten presente que se pueden crear varios nodos desde codigo nativo es decir
 ejecuando instancias de la base de datos en diversos servidores o mediante imagenes de contenedores de docker o podman 
 o en entornos Kubernetes. Crea los archivos necesarios y crea la documentacion para implementar en cada caso
 en el archivo /books/guide/distributed.md
 Ademas permite que se configuren los nodos desde la interfaces web, y que tambien se configure cada archivo config.json para indicar los nodos
 y el lider que se usara. Ten en cuaenta que si falla el lider otro nodo debe convertirse en lider.
-- [] El proceso seria primero crear un cluster que se almacena en _cluster y luego al ejecutar cada instancia el que tiene marcado en el archivo
+- [x] El proceso seria primero crear un cluster que se almacena en _cluster y luego al ejecutar cada instancia el que tiene marcado en el archivo
 config.json  "Bootstrap": true, sera usado como lider, y debe contarse con una opcion del menu en la interface web que indique Cluster
 donde se muestre el nodo actual, se muestren todos los nodos asignados el cluster se muestre el nodo lider y permita añadir, remover, ver el estado 
 de cada nodo. Ten presente que si el lider se detiene otro nodo debe tomar por consenso el rol de lider. Esto debe ser un proceso automatico
 en el caso que solo existan dos nodos y uno se detiene usar un rol de consenso especial ya que no hay mas nodos el que este activo tomara el rol de lider
 
--[] En el archivo config.json añadir una propiedad llamada distributed que contendra true para que se aplique en entornos distribuidos o false indicando 
+-[x] En el archivo config.json añadir una propiedad llamada distributed que contendra true para que se aplique en entornos distribuidos o false indicando 
 que sera una base  de datos local sin distribuir datos.
+
 
 
 # Raft Algoritmo
 
 Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
 gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionales y una estructura de servicio bien definida (via .proto).
-
-
--[x] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
--[x] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
--[x] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
-
-- [x] El el formulario crear coleccion no se cierra el crear la colleccion desde la interface web y no envia el mesnsaje que fue guardado.
 
 
 
@@ -91,6 +153,15 @@ gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionale
 
 
 # Testing
+
+-[x] La interface Web no permite agregar una nueva base de datos se queda en el boton Create Database y no realiza ninguna operacion
+-[x] La opcion Cluster no muestra ningun formulario para crear nuevos clusters.
+-[x] La opcion indices  no muestra el formulario para agregar nuevos indices a las colecciones
+
+- [x] El el formulario crear coleccion no se cierra el crear la colleccion desde la interface web y no envia el mesnsaje que fue guardado.
+
+
+
 - [x] El shell no muestra la paginacion de resultados es decir debe mostrar 10 y luego indicar el menu para desplazarse, y añade la instruccion count para contar registros y añadelo a /books/guide/count.md
 Por ejemplo cuando realizo una consulta con un select o find y contiene muchos registros se muestran todos y solo deberia mostrar unos 10 0 5 y mostrar un menu de desplazamiento 
 para poder ir al inicio , final, siguiente o anterior. Es decir se usa paginacion.

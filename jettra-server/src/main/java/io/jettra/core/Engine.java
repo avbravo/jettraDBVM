@@ -11,20 +11,29 @@ import io.jettra.core.validation.ValidationManager;
 public class Engine {
     private static final Logger LOGGER = Logger.getLogger(Engine.class.getName());
 
-    private final java.util.Map<String, Object> config;
+    private final io.jettra.core.config.ConfigManager configManager;
     private final DocumentStore store;
-    private final io.jettra.core.auth.AuthManager auth;
     private final IndexEngine indexer;
+    private final io.jettra.core.auth.AuthManager auth;
     private final io.jettra.core.raft.RaftNode raftNode;
     private final io.jettra.core.raft.RaftService raftService;
 
     public Engine(java.util.Map<String, Object> config) throws Exception {
-        this.config = config;
+        // Assume config.json is in current directory for now, or derive from args if we
+        // had them.
+        // For simple migration, we re-wrap the map.Ideally Main passed us ConfigManager
+        // or we create it.
+        this.configManager = new io.jettra.core.config.ConfigManager(new java.io.File("config.json"), config);
+
         String dataDir = (String) config.getOrDefault("DataDir", "data");
 
         this.store = new RouterDocumentStore(dataDir);
         ValidationManager validator = new ValidationManager(this.store);
         ((RouterDocumentStore) this.store).setValidator(validator);
+
+        // Run Bootstrap (Must run before Auth/Raft which rely on system collections)
+        io.jettra.core.bootstrap.BootstrapManager bootstrap = new io.jettra.core.bootstrap.BootstrapManager(store, config);
+        bootstrap.init();
 
         this.indexer = new BTreeIndexEngine(dataDir);
         ((BTreeIndexEngine) this.indexer).loadIndexes();
@@ -32,25 +41,31 @@ public class Engine {
         this.auth = new io.jettra.core.auth.AuthManager(store);
 
         // -- RAFT INIT --
-        String nodeId = (String) config.getOrDefault("NodeID", "node-" + java.util.UUID.randomUUID().toString());
+        boolean distributed = (Boolean) config.getOrDefault("distributed", false);
+        if (distributed) {
+            String nodeId = (String) config.getOrDefault("NodeID", "node-" + java.util.UUID.randomUUID().toString());
+            @SuppressWarnings("unchecked")
+            java.util.List<String> peers = (java.util.List<String>) config.getOrDefault("Peers",
+                    new java.util.ArrayList<>());
 
-        
-        io.jettra.core.raft.RaftLog raftLog = new io.jettra.core.raft.RaftLog(store);
-        boolean isBootstrap = (Boolean) config.getOrDefault("Bootstrap", false);
-        this.raftNode = new io.jettra.core.raft.RaftNode(nodeId, raftLog, store, isBootstrap);
-        this.raftService = new io.jettra.core.raft.RaftService(raftNode);
+            this.raftNode = new io.jettra.core.raft.RaftNode(nodeId, peers, configManager, this.store);
+            this.raftService = new io.jettra.core.raft.RaftService(raftNode);
+        } else {
+            this.raftNode = null;
+            this.raftService = null;
+        }
 
-        // Run Bootstrap
-        io.jettra.core.bootstrap.BootstrapManager bootstrap = new io.jettra.core.bootstrap.BootstrapManager(store,
-                config);
-        bootstrap.init();
+        // Bootstrap moved up
+
 
         LOGGER.info("JettraDB Engine initialized with dataDir: " + dataDir);
     }
 
     public void start() {
         LOGGER.info("Starting JettraDB Engine...");
-        this.raftNode.start();
+        if (this.raftNode != null) {
+            this.raftNode.start();
+        }
     }
 
     public DocumentStore getStore() {
@@ -64,12 +79,16 @@ public class Engine {
     public io.jettra.core.auth.AuthManager getAuth() {
         return auth;
     }
-    
+
     public io.jettra.core.raft.RaftNode getRaftNode() {
         return raftNode;
     }
-    
+
     public io.jettra.core.raft.RaftService getRaftService() {
         return raftService;
+    }
+
+    public io.jettra.core.config.ConfigManager getConfigManager() {
+        return configManager;
     }
 }

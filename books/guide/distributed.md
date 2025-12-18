@@ -1,58 +1,196 @@
-# JettraDB Distributed Deployment Guide
+# Distributed JettraDBVM with Raft
 
-This guide describes how to deploy JettraDB in a Raft-based distributed cluster.
+JettraDBVM supports distributed deployment using the Raft consensus algorithm for fault tolerance and high availability.
 
 ## Architecture
-JettraDB uses the Raft consensus algorithm for leader election and log replication.
-- **Leader**: Handles all write operations.
-- **Followers**: Replicate data from the leader.
-- **Quorum**: A majority (N/2 + 1) is required for improved availability and consistency.
+
+The system uses a Leader-Follower model:
+- **Leader**: Handles all write operations and replicates entries to followers.
+- **Followers**: Replicate state from the leader.
+- **Candidate**: A state assumed during leader election.
+
+Nodes communicate via HTTP JSON-RPC at `/raft/rpc/*`.
 
 ## Configuration
-Edit `config.json` for each node:
+
+To enable distributed mode, update `config.json` in your data directory:
+
 ```json
 {
   "Host": "0.0.0.0",
   "Port": 8080,
   "DataDir": "data",
-  "Bootstrap": true, 
-  "ClusterID": "cluster-1",
-  "NodeID": "node-1"
+  "distributed": true,
+  "NodeID": "node1",
+  "Bootstrap": true,
+  "Peers": []
 }
 ```
-- **Bootstrap**: Set to `true` ONLY for the first node (init leader).
-- **NodeID**: Must be unique per node.
-- **Peers**: No longer configured here. Managed dynamically via UI/API and duplicated to `_system/_cluster`.
 
-## Deployment Options
+### Parameters
+### Parameters
+- **distributed**: Set to `true` to enable Raft.
+- **NodeID**: Unique identifier for this node (string).
+- **Bootstrap**: Set to `true` on the **first** node to be started (the initial leader). Other nodes should have this set to `false`.
+- **Peers**: List of URLs of other nodes. This is only used for initial discovery. **The active cluster configuration is stored in the `_system._clusternodes` collection in the database.**
 
-### 1. Native
-Run multiple instances on different ports/servers.
-```bash
-# Node 1
-java -jar target/jettraDBVM-1.0-SNAPSHOT.jar
-# Node 2 (ensure config.json keys correspond to unique paths/ports)
-java -jar target/jettraDBVM-1.0-SNAPSHOT.jar
+## Cluster Configuration
+
+JettraDBVM stores cluster membership in the `_system._clusternodes` collection. This system collection is automatically replicated to all nodes.
+
+It contains documents with:
+- **_id**: Node Identifier (e.g. `node-12345`).
+- **url**: Node's HTTP address.
+- **role**: Current role (LEADER, CANDIDATE, FOLLOWER).
+- **status**: Node status (ACTIVE, INACTIVE).
+
+**Important Rules:**
+1. **Leader Control**: Only the Leader can process membership changes (Add/Remove/Stop).
+2. **Replication**: The Leader sends commands via Raft entries (`cluster_register`, `cluster_stop`, etc.) which are applied to the local database on all nodes.
+3. **Failover**: If the Leader fails, a new election occurs. Nodes use their local `_clusternodes` collection to know valid peers.
+4. **Followers**: Followers update their peer list based on changes to the `_clusternodes` collection.
+
+## Dynamic Peer Management
+
+Use the Leader's API or tools to manage peers.
+
+### Adding a New Node
+
+1. **Start the new node** (e.g., Node 2) with `distributed: true`.
+2. **Register the new node** by sending a request to the **Leader** (e.g., Node 1).
+
+**API Endpoint:** `POST /api/cluster/register` (must be sent to Leader)
+
+**Request Body:**
+```json
+{
+  "url": "http://node2_host:8081"
+}
 ```
 
-### 2. Docker
-Build the image:
-```bash
-docker build -t jettradb .
-```
-Run container:
-```bash
-docker run -d -p 8080:8080 -v $(pwd)/data:/app/data --name node1 jettradb
+**Behavior:**
+- The Leader adds a document for Node 2 in `_system._clusternodes`.
+- The 'cluster_register' command is replicated to all nodes.
+- Node 2 receives the snapshot/logs and updates its internal peer list.
+
+### Example: Setting up a 3-Node Cluster
+
+1. **Start Node 1** (Leader Candidate):
+   Config: `{ "Port": 8080, "Bootstrap": true, "distributed": true, "NodeID": "node1", "Peers": [] }`
+   *Result:* Node 1 initializes `_clusternodes` with itself as Leader.
+   
+2. **Start Node 2**:
+   Config: `{ "Port": 8081, "Bootstrap": false, "distributed": true, "NodeID": "node2", "Peers": [] }`
+
+3. **Register Node 2 on Node 1**:
+   ```bash
+   curl -X POST http://localhost:8080/api/cluster/register -d '{"url": "http://localhost:8081"}'
+   ```
+   *Result:* `_clusternodes` on Node 1 is updated and replicated to Node 2.
+
+4. **Start Node 3**:
+   Config: `{ "Port": 8082, "Bootstrap": false, "distributed": true, "NodeID": "node3", "Peers": [] }`
+
+5. **Register Node 3 on Node 1**:
+   ```bash
+   curl -X POST http://localhost:8080/api/cluster/register -d '{"url": "http://localhost:8082"}'
+   ```
+   *Result:* `_clusternodes` now contains 3 nodes.
+
+### Removing a Node
+
+To remove a node from the cluster:
+
+**API Endpoint:** `POST /api/cluster/deregister` (must be sent to Leader)
+
+**Request Body:**
+```json
+{
+  "url": "http://node2_host:8081"
+}
 ```
 
-### 3. Kubernetes
-Apply the StatefulSet:
-```bash
-kubectl apply -f kubernetes.yaml
-```
-The StatefulSet creates 3 replicas accessible via `jettradb-0.jettradb`, `jettradb-1.jettradb`, etc.
+**Behavior:**
+- The Leader removes the node's document from `_clusternodes`.
+- The 'cluster_deregister' command is replicated.
 
-## Cluster Management UI
-Access the dashboard at `http://localhost:8080` (or Node IP).
-- Go to **Cluster** tab.
-- You can view status, add nodes, and remove nodes dynamically.
+### Stopping a Node
+
+To stop a node gracefully:
+
+**API Endpoint:** `POST /api/cluster/stop`
+
+**Request Body:**
+```json
+{
+  "node": "http://node2_host:8081"
+}
+```
+*Can accept URL or Node ID.*
+
+**Behavior:**
+- Sends a stop signal to the target node.
+- Marks the node as `INACTIVE` in `_clusternodes`.
+
+
+## Client Tools Management
+
+You can manage the cluster using the JettraDB Shell and Java Driver.
+
+### JettraDB Shell
+
+Start the shell and connect to any node:
+
+```bash
+$ ./jettra-shell/target/jettraDBVMShell.jar
+jettra> connect http://localhost:8080
+Connected to http://localhost:8080
+```
+
+**Commands:**
+
+- **Check Status**:
+  ```bash
+  jettra> cluster status
+  {
+    "state" : "LEADER",
+    "term" : 5,
+    "peers" : [ "http://localhost:8081", "http://localhost:8082" ]
+  }
+  ```
+
+- **Add Node**:
+  ```bash
+  jettra> cluster add http://localhost:8081
+  Node added: ...
+  ```
+
+- **Remove Node**:
+  ```bash
+  jettra> cluster remove http://localhost:8081
+  Node removed: ...
+  ```
+
+### Java Driver
+
+The `JettraClient` provides methods for programmatic management:
+
+```java
+JettraClient client = new JettraClient("localhost", 8080, "admin", "password");
+
+// Get Status
+Map<String, Object> status = client.getClusterStatus();
+
+// Add Node
+client.registerNode("http://localhost:8081");
+
+// Remove Node
+client.deregisterNode("http://localhost:8081");
+```
+
+## Management UI
+
+Access the **Cluster** section in the Web UI (`http://localhost:8080`) to view:
+- Current Node State (Leader/Follower)
+- Current Term
+- Cluster Peers

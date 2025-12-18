@@ -1,0 +1,41 @@
+       _      _   _            ____  ______      ____  __
+      | |    | | | |          |  _ \|  _ \ \    / /  \/  |
+      | | ___| |_| |_ _ __ __ | | | | |_) \ \  / /| \  / |
+  _   | |/ _ \ __| __| '__/ _` | | | |  _ < \ \/ / | |\/| |
+ | |__| |  __/ |_| |_| | | (_| | |_| | |_) | \  /  | |  | |
+  \____/ \___|\__|\__|_|  \__,_|____/|____/   \/   |_|  |_|
+
+JettraDBVM Server v1.0
+
+Created default admin user in _system._users
+Created default cluster info in _system._cluster
+dic 17, 2025 5:21:29 P. M. io.jettra.core.Engine <init>
+INFORMACIÓN: JettraDB Engine initialized with dataDir: data
+dic 17, 2025 5:21:29 P. M. io.jettra.core.Engine start
+INFORMACIÓN: Starting JettraDB Engine...
+dic 17, 2025 5:21:29 P. M. io.jettra.core.raft.RaftNode start
+INFORMACIÓN: RaftNode started: node2 Peers: []
+dic 17, 2025 5:21:29 P. M. io.helidon.common.features.HelidonFeatures features
+INFORMACIÓN: Helidon SE 4.0.5 features: [WebServer]
+dic 17, 2025 5:21:29 P. M. io.helidon.webserver.ServerListener start
+INFORMACIÓN: [0x125cc955] http://0.0.0.0:8082 bound for socket '@default'
+dic 17, 2025 5:21:29 P. M. io.helidon.webserver.LoomServer startIt
+INFORMACIÓN: Started all channels in 8 milliseconds. 624 milliseconds since JVM startup. Java 25.0.1+13-LTS
+dic 17, 2025 5:21:29 P. M. io.jettra.jettraDBVM.Main main
+INFORMACIÓN: Server started at http://0.0.0.0:8082
+dic 17, 2025 5:21:34 P. M. io.jettra.core.raft.RaftNode installSnapshot
+INFORMACIÓN: Snapshot installed successfully.
+dic 17, 2025 5:21:34 P. M. io.jettra.core.raft.RaftNode saveClusterConfig
+INFORMACIÓN: Saved cluster config to /home/avbravo/NetBeansProjects/golang/jettraDBVM/cluster_test/node2/data/cluster.json
+dic 17, 2025 5:21:34 P. M. io.jettra.core.raft.RaftNode installConfig
+INFORMACIÓN: Installed new cluster config from Leader
+dic 17, 2025 5:21:39 P. M. io.jettra.core.raft.RaftNode appendEntry
+INFORMACIÓN: Applying replicated command: {op=create_db, engine=JettraBasicStore, db=db_post}
+dic 17, 2025 5:21:39 P. M. io.jettra.core.raft.RaftNode applyCommand
+INFORMACIÓN: Replicated Create DB: db_post
+dic 17, 2025 5:21:41 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown requested by JVM shutting down
+dic 17, 2025 5:21:41 P. M. io.helidon.webserver.ServerListener listen
+INFORMACIÓN: [0x125cc955] @default socket closed.
+dic 17, 2025 5:21:41 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown finished
