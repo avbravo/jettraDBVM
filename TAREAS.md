@@ -44,16 +44,54 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Distributed Databases
 
-- [] Cuando un nodo deja de funcionar no actualiza el estado a inactivo en la interface Web
+- [] Ocurre una falla cada cierto tiempo convierte el lider en nodo aunque este funcionando bien y a los pocos segundos lo vuelve a convertir en lider
+esto puede provocar inconsistencia ya que dejaria en ciertos momentos al cluster sin un lider aunque el lider nunca se ha detenido.
 
-- [] Actualizar la administracion de nodos desde Shell, Driver, Curl y actualizar la documentacion correspondiente
+- [] Hacer pruebas desde el shell
 
-- [] Mostar de manera grafica los nodos y el lider 
+- [] Hacer pruebas desde Curl
 
-- [] Añadir la posibilidad de detener el envio de datos a un nodo y poder restaurarlo
+- [] Hacer pruebas desde el driver
 
-- [] Probar remover un nodo desde el lider.
+- [] Crear un proyecto de ejemplo del driver en una carpetra al nivel de jettra-server llamado drivertest
 
+
+
+# Raft Algoritmo
+
+Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
+gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionales y una estructura de servicio bien definida (via .proto).
+
+
+
+
+
+# JettraMemory
+- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
+
+# Referencias entre documentos
+
+
+# Jettra Storage 
+
+
+
+# Base de datos prueba JetrraBasic
+
+
+
+# Distributed Databases
+
+
+- [x] Cuando un nodo deja de funcionar no actualiza el estado a inactivo en la interface Web
+
+- [x] Actualizar la administracion de nodos desde Shell, Driver, Curl y actualizar la documentacion correspondiente
+
+- [x] Mostar de manera grafica los nodos y el lider 
+
+- [x] Añadir la posibilidad de detener el envio de datos a un nodo y poder restaurarlo
+
+- [] Probar remover un nodo desde el lider
 
 - [x] sigue el error no permite ingresar al sistema se queda en el formulario login
 
@@ -106,9 +144,9 @@ Es decir al crear uno nuevo o eliminar un nodo, el archivo cluster.json se actua
 registrar los peers, ya que la actualizacion se hace desde la interface grafica donde se registran los nodos.
 Esto se hace de esta manera para evitar que un usuario cree un nodo y se conecte sin la autorizacion correspondiente.
 
-- [] Recuerda cuando se asigna un nuevo lider este debe tener en el archivo config.json   "Bootstrap": true, y los demas   "Bootstrap": false.
+- [x] Recuerda cuando se asigna un nuevo lider este debe tener en el archivo config.json   "Bootstrap": true, y los demas   "Bootstrap": false.
 
-- [] Recuerda distribuir el indice y las versiones de los documentos
+- [x] Recuerda distribuir el indice y las versiones de los documentos
 
 
 
@@ -130,26 +168,6 @@ que sera una base  de datos local sin distribuir datos.
 
 
 
-# Raft Algoritmo
-
-Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
-gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionales y una estructura de servicio bien definida (via .proto).
-
-
-
-
-
-# JettraMemory
-- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
-
-# Referencias entre documentos
-
-
-# Jettra Storage 
-
-
-
-# Base de datos prueba JetrraBasic
 
 
 # Testing

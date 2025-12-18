@@ -9,7 +9,8 @@ const App = {
         // Pagination
         currentPage: 1,
         pageSize: 10,
-        hasMore: false // Simple pagination as we don't have total count easily efficiently without separate call
+        hasMore: false,
+        clusterInterval: null
     },
 
     showNotification(message, type = 'info', title = null) {
@@ -136,6 +137,12 @@ const App = {
             this.loadDocuments(this.state.currentDb, this.state.currentCol);
         }
         this.loadDatabases();
+
+        // Refresh cluster status if in cluster section
+        const clusterSection = document.getElementById('cluster-section');
+        if (clusterSection && !clusterSection.classList.contains('hidden')) {
+            this.refreshClusterStatus();
+        }
     },
 
     toggleTheme() {
@@ -184,6 +191,10 @@ const App = {
     },
 
     logout() {
+        if (this.state.clusterInterval) {
+            clearInterval(this.state.clusterInterval);
+            this.state.clusterInterval = null;
+        }
         this.state.token = null;
         this.state.currentDb = null;
         this.state.currentCol = null;
@@ -1341,7 +1352,16 @@ const App = {
             target.classList.remove('hidden');
             target.style.display = 'block'; // Force show
 
-            if (sectionId === 'cluster') this.refreshClusterStatus();
+            // Manage Auto-Refresh for Cluster
+            if (this.state.clusterInterval) {
+                clearInterval(this.state.clusterInterval);
+                this.state.clusterInterval = null;
+            }
+
+            if (sectionId === 'cluster') {
+                this.refreshClusterStatus();
+                this.state.clusterInterval = setInterval(() => this.refreshClusterStatus(), 5000);
+            }
             if (sectionId === 'indexes') this.initIndexesView();
             if (sectionId === 'rules') this.initRulesView();
             if (sectionId === 'transactions') this.initTxView();
@@ -2065,7 +2085,6 @@ const App = {
 
             if (res.ok) {
                 this.showNotification('Stop command sent to node', 'success');
-                // Wait a bit then refresh
                 setTimeout(() => this.refreshClusterStatus(), 2000);
             } else {
                 const text = await res.text();
@@ -2074,6 +2093,48 @@ const App = {
         } catch (e) {
             console.error(e);
             this.showNotification('Error stopping node', 'error');
+        }
+    },
+
+    async pauseNode(url) {
+        try {
+            const res = await this.authenticatedFetch('/api/cluster/pause', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node: url })
+            });
+
+            if (res.ok) {
+                this.showNotification('Node Paused (Data flow stopped)', 'success');
+                this.refreshClusterStatus();
+            } else {
+                const text = await res.text();
+                this.showNotification('Failed to pause node: ' + text, 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showNotification('Error pausing node', 'error');
+        }
+    },
+
+    async resumeNode(url) {
+        try {
+            const res = await this.authenticatedFetch('/api/cluster/resume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ node: url })
+            });
+
+            if (res.ok) {
+                this.showNotification('Node Resumed', 'success');
+                this.refreshClusterStatus();
+            } else {
+                const text = await res.text();
+                this.showNotification('Failed to resume node: ' + text, 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            this.showNotification('Error resuming node', 'error');
         }
     },
 
@@ -2758,6 +2819,52 @@ const App = {
                 if (tbody) {
                     tbody.innerHTML = '';
                     const nodes = status.nodes || status.peers;
+
+                    // --- Visual Map Rendering ---
+                    const visualMap = document.getElementById('cluster-visual-map');
+                    if (visualMap) {
+                        visualMap.innerHTML = '';
+                        visualMap.className = 'cluster-map-container';
+
+                        if (nodes && nodes.length > 0) {
+                            nodes.forEach((p, idx) => {
+                                let id, url, role, nodeStatus;
+                                if (typeof p === 'string') {
+                                    url = p; id = `node-${idx + 1}`; role = 'UNKNOWN'; nodeStatus = 'UNKNOWN';
+                                } else {
+                                    id = p.id || p._id || `node-${idx + 1}`;
+                                    url = p.url || '';
+                                    role = p.role || 'FOLLOWER';
+                                    nodeStatus = p.status || 'ACTIVE';
+                                }
+
+                                let roleClass = 'node-follower';
+                                if (role === 'LEADER') roleClass = 'node-leader';
+
+                                let statusClass = '';
+                                if (nodeStatus === 'INACTIVE') statusClass = 'node-inactive';
+                                if (nodeStatus === 'PAUSED') statusClass = 'node-paused';
+
+                                const nodeEl = document.createElement('div');
+                                nodeEl.className = `node-circle ${roleClass} ${statusClass}`;
+                                nodeEl.title = `URL: ${url}\nStatus: ${nodeStatus}`;
+                                nodeEl.innerHTML = `
+                                    <div class="node-id">${id.substring(0, 6)}</div>
+                                    <div class="node-label">${role}</div>
+                                    <div class="node-status-indicator" title="${nodeStatus}"></div>
+                                `;
+                                visualMap.appendChild(nodeEl);
+                            });
+                        } else {
+                            // Show self at least
+                            const nodeEl = document.createElement('div');
+                            nodeEl.className = `node-circle ${isLeader ? 'node-leader' : 'node-follower'}`;
+                            nodeEl.innerHTML = `<div class="node-id">${status.nodeId}</div><div class="node-label">Self</div>`;
+                            visualMap.appendChild(nodeEl);
+                        }
+                    }
+                    // ----------------------------
+
                     if (nodes && nodes.length > 0) {
                         nodes.forEach((p, idx) => {
                             // Handle both Object and String (legacy) formats
@@ -2777,11 +2884,23 @@ const App = {
                                 nodeStatus = p.status || 'ACTIVE';
                             }
 
-                            // Only show remove button if Leader and not self (implied by filtering or logic?
-                            // Actually we can remove any node. Backend handles "cannot remove self" usually.
-                            const removeBtn = isLeader
-                                ? `<button onclick="app.removePeer('${id}', '${url}')" class="font-medium text-red-600 dark:text-red-500 hover:underline">Remove</button>`
-                                : `<span class="text-gray-400" title="Only Leader can remove">read-only</span>`;
+                            let actionBtns = '';
+                            if (isLeader) {
+                                if (id !== status.nodeId && !url.includes(status.nodeId)) { // Don't allow actions on self
+                                    if (nodeStatus === 'PAUSED') {
+                                        actionBtns += `<button onclick="app.resumeNode('${url}')" class="btn btn-sm" style="margin-right:5px; background: #10b981; color: white;">Resume</button>`;
+                                    } else {
+                                        // Add Pause button
+                                        actionBtns += `<button onclick="app.pauseNode('${url}')" class="btn btn-sm" style="margin-right:5px; background: #f59e0b; color: white;">Pause</button>`;
+                                    }
+                                    // Remove button
+                                    actionBtns += `<button onclick="app.removePeer('${id}', '${url}')" class="btn btn-sm btn-danger">Remove</button>`;
+                                } else {
+                                    actionBtns = '<span class="text-muted">Self</span>';
+                                }
+                            } else {
+                                actionBtns = `<span class="text-gray-400" title="Only Leader can manage">read-only</span>`;
+                            }
 
                             tbody.innerHTML += `
                                     <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
@@ -2796,7 +2915,7 @@ const App = {
                                         <td class="px-6 py-4">${nodeStatus}</td>
                                         <td class="px-6 py-4">${desc}</td>
                                         <td class="px-6 py-4">
-                                            ${removeBtn}
+                                            ${actionBtns}
                                         </td>
                                     </tr>
                                  `;

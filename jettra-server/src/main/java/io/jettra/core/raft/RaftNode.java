@@ -53,7 +53,9 @@ public class RaftNode {
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private long lastHeartbeatTime;
     private final ObjectMapper mapper = new ObjectMapper();
-    private final HttpClient httpClient = HttpClient.newHttpClient();
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofMillis(2000))
+            .build();
 
     // Simplified timeouts (in ms)
     private static final int ELECTION_TIMEOUT_MIN = 3000;
@@ -130,8 +132,11 @@ public class RaftNode {
         scheduler.scheduleAtFixedRate(this::checkElectionTimeout, 1000, 200, TimeUnit.MILLISECONDS);
     }
 
+    private final java.util.concurrent.ConcurrentHashMap<String, String> peerUrlToId = new java.util.concurrent.ConcurrentHashMap<>();
+
     private void loadPeersFromStore() {
         this.peers.clear();
+        this.peerUrlToId.clear();
         try {
             List<Map<String, Object>> nodes = store.query("_system", "_clusternodes", null, 1000, 0);
             Set<String> uniquePeers = new HashSet<>();
@@ -140,11 +145,13 @@ public class RaftNode {
                 String url = (String) node.get("url");
                 String status = (String) node.get("status");
                 
-                // Only add ACTIVE nodes to peers list for replication efficiency
-                if (id != null && !id.equals(this.nodeId) && url != null && "ACTIVE".equals(status)) {
-                    uniquePeers.add(url);
-                } else {
-                    LOGGER.info("Skipping node from peers list: " + url + " (ID: " + id + ", Status: " + status + ")");
+                if (id != null && url != null) {
+                    peerUrlToId.put(url, id);
+                    if (!id.equals(this.nodeId)) {
+                        // Include all nodes in peers list so we can manage them (heartbeat/resume)
+                        // We will filter based on status in sendHeartbeats/replicate
+                        uniquePeers.add(url);
+                    }
                 }
             }
             this.peers.addAll(uniquePeers);
@@ -221,14 +228,10 @@ public class RaftNode {
 
         if (peers.isEmpty()) {
             // Single node cluster case:
-            // Only become leader if we are actually the only one in the DB.
-            // If DB is empty, checkElectionTimeout should have caught it, 
-            // but double check to be safe.
-             try {
+            try {
                 if (store.count("_system", "_clusternodes") > 0) {
                      becomeLeader();
                 } else {
-                    // Should not happen if checkElectionTimeout works, but revert to Follower
                     state = State.FOLLOWER;
                 }
             } catch(Exception e) {
@@ -242,6 +245,11 @@ public class RaftNode {
 
         List<String> currentPeers = new ArrayList<>(peers); // Snapshot
         for (String peer : currentPeers) {
+            // Check status before asking for vote? 
+            // Usually we should try to contact everyone, but PAUSED nodes shouldn't vote?
+            // If they are PAUSED they might be up but we shouldn't care?
+            // Let's just try everyone.
+            
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(peer + "/raft/rpc/requestvote"))
                     .header("Content-Type", "application/json")
@@ -311,6 +319,20 @@ public class RaftNode {
         }
 
         for (String peer : peersSnapshot) {
+            // Check status
+            String peerId = peerUrlToId.get(peer);
+            boolean isPaused = false;
+            try {
+                if (peerId != null) {
+                    Map<String, Object> pNode = store.findByID("_system", "_clusternodes", peerId);
+                    if (pNode != null && "PAUSED".equals(pNode.get("status"))) {
+                        isPaused = true;
+                    }
+                }
+            } catch(Exception e) {}
+            
+            if (isPaused) continue;
+
             String body = String.format(
                     "{\"term\":%d, \"leaderId\":\"%s\", \"prevLogIndex\":%d, \"prevLogTerm\":%d, \"leaderCommit\":%d}",
                     termToSend, nodeId, 0, 0, commitToSend);
@@ -319,15 +341,65 @@ public class RaftNode {
                     .uri(URI.create(peer + "/raft/rpc/appendentries"))
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .timeout(java.time.Duration.ofMillis(1000))
                     .build();
 
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
-                         // We could track peer health here
+                         if (response.statusCode() == 200) {
+                             markNodeActive(peer);
+                         } else {
+                             markNodeInactive(peer);
+                         }
                     })
                     .exceptionally(e -> {
+                        markNodeInactive(peer);
                         return null;
                     });
+        }
+    }
+
+    private void markNodeActive(String url) {
+        updateNodeStatus(url, "ACTIVE", "INACTIVE"); // Only update if currently INACTIVE
+    }
+
+    private void markNodeInactive(String url) {
+        // Relaxed constraint: any status that is NOT already INACTIVE or PAUSED can go to INACTIVE
+        updateNodeStatus(url, "INACTIVE", null); 
+    }
+
+    private void updateNodeStatus(String url, String newStatus, String currentStatusConstraint) {
+        String id = peerUrlToId.get(url);
+        if (id == null) return;
+        
+        try {
+            Map<String, Object> node = store.findByID("_system", "_clusternodes", id);
+            if (node != null) {
+                String current = (String) node.get("status");
+                // Avoid flapping or overwriting PAUSED unless we are explicitly resuming/stopping
+                if (currentStatusConstraint != null && !currentStatusConstraint.equals(current)) {
+                    return; 
+                }
+                
+                // Special case: don't automatically mark INACTIVE -> ACTIVE unless it's a solid 200 heartbeat
+                // or if it was already INACTIVE and we want it to stay that way until it really comes back.
+                
+                if (newStatus.equals(current)) return;
+
+                LOGGER.info("Updating node status for " + url + " from " + current + " to " + newStatus);
+                node.put("status", newStatus);
+                store.update("_system", "_clusternodes", id, node);
+                
+                // Replicate updates so UI updates everywhere
+                // Note: Replicate will skip sending to this node if it's inactive/paused
+                Map<String, Object> cmd = new HashMap<>();
+                cmd.put("op", "cluster_update_node");
+                cmd.put("id", id);
+                cmd.put("data", node);
+                replicate(cmd);
+            }
+        } catch(Exception e) {
+            LOGGER.warning("Error updating node status for " + url + ": " + e.getMessage());
         }
     }
 
@@ -518,6 +590,19 @@ public class RaftNode {
             
             List<String> peersSnapshot = new ArrayList<>(peers);
             for (String peer : peersSnapshot) {
+                // Check status before sending data
+                String id = peerUrlToId.get(peer);
+                if (id != null) {
+                     try {
+                         Map<String, Object> node = store.findByID("_system", "_clusternodes", id);
+                         if (node != null) {
+                             String status = (String) node.get("status");
+                             // Skip sending commands to PAUSED or INACTIVE nodes
+                             if ("PAUSED".equals(status) || "INACTIVE".equals(status)) continue;
+                         }
+                     } catch(Exception e) {}
+                }
+
                 HttpRequest request = HttpRequest.newBuilder()
                         .uri(URI.create(peer + "/raft/rpc/appendentries"))
                         .header("Content-Type", "application/json")
@@ -618,21 +703,7 @@ public class RaftNode {
             throw new IllegalStateException("Only Leader can stop nodes");
         }
         
-        String targetUrl = null;
-        try {
-            List<Map<String, Object>> nodes = store.query("_system", "_clusternodes", null, 1000, 0);
-            for (Map<String, Object> n : nodes) {
-                String id = (String) (n.get("_id") != null ? n.get("_id") : n.get("id"));
-                String u = (String) n.get("url");
-                if ((id != null && id.equals(nodeIdOrUrl)) || (u != null && u.equals(nodeIdOrUrl))) {
-                    targetUrl = u;
-                    break;
-                }
-            }
-        } catch(Exception e) {
-            LOGGER.severe("Error searching for node to stop: " + e.getMessage());
-        }
-
+        String targetUrl = findPeerUrl(nodeIdOrUrl);
         if (targetUrl == null) {
             throw new IllegalArgumentException("Node not found: " + nodeIdOrUrl);
         }
@@ -647,11 +718,56 @@ public class RaftNode {
         httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenAccept(res -> LOGGER.info("Stop sent to " + nodeIdOrUrl + ": " + res.statusCode()));
         
-        Map<String, Object> cmd = new HashMap<>();
-        cmd.put("op", "cluster_stop");
-        cmd.put("url", targetUrl);
-        replicate(cmd);
-        applyCommand(cmd);
+        // Also mark as INACTIVE
+        updateNodeStatus(targetUrl, "INACTIVE", null);
+    }
+
+    public void pauseNode(String nodeIdOrUrl) {
+         if (state != State.LEADER) {
+            throw new IllegalStateException("Only Leader can pause nodes");
+        }
+        
+        String targetUrl = findPeerUrl(nodeIdOrUrl);
+        if (targetUrl == null) {
+            throw new IllegalArgumentException("Node not found: " + nodeIdOrUrl);
+        }
+
+        LOGGER.info("Pausing node (stopping data send): " + targetUrl);
+        updateNodeStatus(targetUrl, "PAUSED", null);
+    }
+
+    public void resumeNode(String nodeIdOrUrl) {
+         if (state != State.LEADER) {
+            throw new IllegalStateException("Only Leader can resume nodes");
+        }
+        
+        String targetUrl = findPeerUrl(nodeIdOrUrl);
+        if (targetUrl == null) {
+            throw new IllegalArgumentException("Node not found: " + nodeIdOrUrl);
+        }
+
+        LOGGER.info("Resuming node: " + targetUrl);
+        updateNodeStatus(targetUrl, "ACTIVE", null);
+        
+        // Immediately trigger a snapshot or replication?
+        // Heartbeats will resume and fix term/commit index.
+        replicateStateTo(targetUrl);
+    }
+    
+    private String findPeerUrl(String key) {
+         try {
+            List<Map<String, Object>> nodes = store.query("_system", "_clusternodes", null, 1000, 0);
+            for (Map<String, Object> n : nodes) {
+                String id = (String) (n.get("_id") != null ? n.get("_id") : n.get("id"));
+                String u = (String) n.get("url");
+                if ((id != null && id.equals(key)) || (u != null && u.equals(key))) {
+                    return u;
+                }
+            }
+        } catch(Exception e) {
+            LOGGER.severe("Error searching for node: " + e.getMessage());
+        }
+        return null;
     }
 
     public synchronized List<Map<String, Object>> getClusterStatus() {

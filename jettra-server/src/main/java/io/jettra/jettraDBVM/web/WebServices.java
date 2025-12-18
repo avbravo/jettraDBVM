@@ -63,6 +63,8 @@ public class WebServices {
                 .post("/api/cluster/register", this::registerNode)
                 .post("/api/cluster/deregister", this::deregisterNode)
                 .post("/api/cluster/stop", this::stopNode)
+                .post("/api/cluster/pause", this::pauseNode)
+                .post("/api/cluster/resume", this::resumeNode)
 
                 // Versioning
                 .get("/api/versions", this::getVersions)
@@ -425,6 +427,34 @@ public class WebServices {
             if (!"Not Leader".equals(e.getMessage())) {
                 res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
             }
+        }
+    }
+
+    private void pauseNode(ServerRequest req, ServerResponse res) {
+        try {
+            checkLeader(res);
+            byte[] content = req.content().as(byte[].class);
+            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
+            });
+            String node = body.get("node");
+            engine.getRaftNode().pauseNode(node);
+            res.send("Node paused");
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void resumeNode(ServerRequest req, ServerResponse res) {
+        try {
+            checkLeader(res);
+            byte[] content = req.content().as(byte[].class);
+            Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
+            });
+            String node = body.get("node");
+            engine.getRaftNode().resumeNode(node);
+            res.send("Node resumed");
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
 

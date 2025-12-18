@@ -1,0 +1,81 @@
+       _      _   _            ____  ______      ____  __
+      | |    | | | |          |  _ \|  _ \ \    / /  \/  |
+      | | ___| |_| |_ _ __ __ | | | | |_) \ \  / /| \  / |
+  _   | |/ _ \ __| __| '__/ _` | | | |  _ < \ \/ / | |\/| |
+ | |__| |  __/ |_| |_| | | (_| | |_| | |_) | \  /  | |  | |
+  \____/ \___|\__|\__|_|  \__,_|____/|____/   \/   |_|  |_|
+
+JettraDBVM Server v1.0
+
+dic 18, 2025 4:17:23 P. M. io.jettra.jettraDBVM.Main main
+INFORMACIÓN: Using config file: /home/avbravo/NetBeansProjects/golang/jettraDBVM/data1/config.json
+DEBUG: JettraBasicStore saved data1/_system/_users/f56103ff-c9a7-47f1-83a8-e69931e9412f.jdb ID: f56103ff-c9a7-47f1-83a8-e69931e9412f
+Created default admin user in _system._users
+DEBUG: JettraBasicStore saved data1/_system/_cluster/d0045788-e437-4504-939c-79dd935bb9b0.jdb ID: d0045788-e437-4504-939c-79dd935bb9b0
+Created default cluster info in _system._cluster
+DEBUG: JettraBasicStore query _system/_clusternodes found 0 files.
+dic 18, 2025 4:17:24 P. M. io.jettra.core.raft.RaftNode loadPeersFromStore
+INFORMACIÓN: Loaded peers from storage: []
+DEBUG: JettraBasicStore saved data1/_system/_clusternodes/node-0e4d1242-621c-485f-8ee8-9a357de3f3fb.jdb ID: node-0e4d1242-621c-485f-8ee8-9a357de3f3fb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data1/_system/_clusternodes/node-0e4d1242-621c-485f-8ee8-9a357de3f3fb.jdb
+dic 18, 2025 4:17:24 P. M. io.jettra.core.raft.RaftNode loadPeersFromStore
+INFORMACIÓN: Loaded peers from storage: []
+dic 18, 2025 4:17:24 P. M. io.jettra.core.raft.RaftNode <init>
+INFORMACIÓN: Bootstrap node initialized in _clusternodes. Becoming LEADER.
+dic 18, 2025 4:17:24 P. M. io.jettra.core.raft.RaftNode becomeLeader
+INFORMACIÓN: Becoming LEADER for term 0
+DEBUG: JettraBasicStore saved data1/_system/_clusternodes/node-0e4d1242-621c-485f-8ee8-9a357de3f3fb.jdb ID: node-0e4d1242-621c-485f-8ee8-9a357de3f3fb
+dic 18, 2025 4:17:24 P. M. io.jettra.core.raft.RaftNode <init>
+INFORMACIÓN: Bootstrap node with no peers (or single node). Forcing LEADER role.
+dic 18, 2025 4:17:24 P. M. io.jettra.core.Engine <init>
+INFORMACIÓN: JettraDB Engine initialized with dataDir: data1
+dic 18, 2025 4:17:24 P. M. io.jettra.core.Engine start
+INFORMACIÓN: Starting JettraDB Engine...
+dic 18, 2025 4:17:24 P. M. io.jettra.core.raft.RaftNode start
+INFORMACIÓN: RaftNode started: node-0e4d1242-621c-485f-8ee8-9a357de3f3fb Peers: []
+dic 18, 2025 4:17:24 P. M. io.helidon.common.features.HelidonFeatures features
+INFORMACIÓN: Helidon SE 4.0.5 features: [WebServer]
+dic 18, 2025 4:17:24 P. M. io.helidon.webserver.ServerListener start
+INFORMACIÓN: [0x6759f5eb] http://0.0.0.0:8080 bound for socket '@default'
+dic 18, 2025 4:17:24 P. M. io.helidon.webserver.LoomServer startIt
+INFORMACIÓN: Started all channels in 9 milliseconds. 619 milliseconds since JVM startup. Java 25.0.1+13-LTS
+dic 18, 2025 4:17:24 P. M. io.jettra.jettraDBVM.Main main
+INFORMACIÓN: Server started at http://0.0.0.0:8080
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data1/_system/_clusternodes/node-0e4d1242-621c-485f-8ee8-9a357de3f3fb.jdb
+dic 18, 2025 4:17:33 P. M. io.jettra.core.raft.RaftNode registerNode
+INFORMACIÓN: Registering node with doc: {role=FOLLOWER, _id=node-1860026890, url=http://localhost:8081, status=ACTIVE}
+dic 18, 2025 4:17:33 P. M. io.jettra.core.raft.RaftNode registerNode
+INFORMACIÓN: Replicated registration for http://localhost:8081
+DEBUG: JettraBasicStore saved data1/_system/_clusternodes/node-1860026890.jdb ID: node-1860026890
+dic 18, 2025 4:17:33 P. M. io.jettra.core.raft.RaftNode applyCommand
+INFORMACIÓN: Replicated Node Register: node-1860026890
+DEBUG: JettraBasicStore query _system/_clusternodes found 2 files.
+DEBUG: Reading file: data1/_system/_clusternodes/node-1860026890.jdb
+DEBUG: Reading file: data1/_system/_clusternodes/node-0e4d1242-621c-485f-8ee8-9a357de3f3fb.jdb
+dic 18, 2025 4:17:33 P. M. io.jettra.core.raft.RaftNode loadPeersFromStore
+INFORMACIÓN: Loaded peers from storage: [http://localhost:8081]
+dic 18, 2025 4:17:33 P. M. io.jettra.core.raft.RaftNode registerNode
+INFORMACIÓN: Applied registration command locally.
+dic 18, 2025 4:17:33 P. M. io.jettra.core.raft.RaftNode lambda$replicateStateTo$0
+INFORMACIÓN: Starting background state replication (snapshot) to http://localhost:8081
+dic 18, 2025 4:17:33 P. M. io.jettra.core.raft.RaftNode lambda$replicateStateTo$1
+INFORMACIÓN: Snapshot sent to http://localhost:8081 status: 200
+DEBUG: JettraBasicStore query _system/_clusternodes found 2 files.
+DEBUG: Reading file: data1/_system/_clusternodes/node-1860026890.jdb
+DEBUG: Reading file: data1/_system/_clusternodes/node-0e4d1242-621c-485f-8ee8-9a357de3f3fb.jdb
+WebServices: getClusterStatus returning 2 nodes.
+dic 18, 2025 4:17:36 P. M. io.jettra.core.raft.RaftNode updateNodeStatus
+INFORMACIÓN: Updating node status for http://localhost:8081 from ACTIVE to INACTIVE
+DEBUG: JettraBasicStore saved data1/_system/_clusternodes/node-1860026890.jdb ID: node-1860026890
+DEBUG: JettraBasicStore query _system/_clusternodes found 2 files.
+DEBUG: Reading file: data1/_system/_clusternodes/node-1860026890.jdb
+DEBUG: Reading file: data1/_system/_clusternodes/node-0e4d1242-621c-485f-8ee8-9a357de3f3fb.jdb
+WebServices: getClusterStatus returning 2 nodes.
+dic 18, 2025 4:17:45 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown requested by JVM shutting down
+dic 18, 2025 4:17:45 P. M. io.helidon.webserver.ServerListener listen
+INFORMACIÓN: [0x6759f5eb] @default socket closed.
+dic 18, 2025 4:17:45 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown finished

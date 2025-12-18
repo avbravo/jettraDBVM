@@ -923,6 +923,32 @@ public class Shell {
                 .build();
              HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
              System.out.println(res.statusCode() == 200 ? "Node removed: " + res.body() : "Error: " + res.body());
+         } else if (subCmd.equals("pause")) {
+             if (parts.length < 2) { System.out.println("Usage: cluster pause <nodeNameOrUrl>"); return; }
+             String node = parts[1];
+             String json = mapper.writeValueAsString(Map.of("node", node)); // API expects 'node'
+             
+             HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/cluster/pause"))
+                .header("Authorization", token != null ? token : "")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+             System.out.println(res.statusCode() == 200 ? "Node paused: " + res.body() : "Error: " + res.body());
+         } else if (subCmd.equals("resume")) {
+             if (parts.length < 2) { System.out.println("Usage: cluster resume <nodeNameOrUrl>"); return; }
+             String node = parts[1];
+             String json = mapper.writeValueAsString(Map.of("node", node));
+             
+             HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/api/cluster/resume"))
+                .header("Authorization", token != null ? token : "")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
+             System.out.println(res.statusCode() == 200 ? "Node resumed: " + res.body() : "Error: " + res.body());
          } else {
              System.out.println("Unknown cluster command: " + subCmd);
          }
