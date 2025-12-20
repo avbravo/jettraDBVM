@@ -568,6 +568,12 @@ public class JettraBasicStore implements DocumentStore {
     }
 
     @Override
+    public void reload() {
+        // Basic store currently doesn't cache documents in memory, it reads from disk on every findByID/query.
+        // No specific action needed for reload now, but implementing for interface consistency.
+    }
+
+    @Override
     public String getDatabaseEngine(String database) throws Exception {
         lock.readLock().lock();
         try {

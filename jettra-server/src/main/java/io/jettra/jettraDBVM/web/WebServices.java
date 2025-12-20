@@ -18,10 +18,54 @@ public class WebServices {
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final QueryExecutor queryExecutor;
     private static final ThreadLocal<String> CURRENT_USER = new ThreadLocal<>();
+    private static final Map<String, Map<String, Object>> PEER_METRICS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ScheduledExecutorService metricsScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+    private final java.net.http.HttpClient httpClientForMetrics = java.net.http.HttpClient.newBuilder()
+            .connectTimeout(java.time.Duration.ofMillis(2000))
+            .build();
 
     public WebServices(Engine engine) {
         this.engine = engine;
         this.queryExecutor = new QueryExecutor(engine);
+        metricsScheduler.scheduleAtFixedRate(this::pollPeerMetrics, 5, 10, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private void pollPeerMetrics() {
+        try {
+            io.jettra.core.raft.RaftNode raft = engine.getRaftNode();
+            if (raft == null) return;
+            
+            List<Map<String, Object>> nodes = raft.getClusterStatus();
+            if (nodes == null) return;
+            
+            String selfId = raft.getNodeId();
+            
+            for (Map<String, Object> node : nodes) {
+                final String idForLambda = (String) (node.get("_id") != null ? node.get("_id") : node.get("id"));
+                final String urlForLambda = (String) node.get("url");
+                
+                if (idForLambda != null && urlForLambda != null && !idForLambda.equals(selfId)) {
+                    // Poll metrics from peer
+                    try {
+                        java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                                .uri(java.net.URI.create(urlForLambda + "/api/metrics"))
+                                .GET()
+                                .timeout(java.time.Duration.ofMillis(1000))
+                                .build();
+                                
+                        httpClientForMetrics.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                                .thenAccept(response -> {
+                                    if (response.statusCode() == 200) {
+                                        try {
+                                            Map<String, Object> metrics = jsonMapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
+                                            PEER_METRICS_CACHE.put(idForLambda, metrics);
+                                        } catch (Exception e) {}
+                                    }
+                                });
+                    } catch (Exception e) {}
+                }
+            }
+        } catch (Exception e) {}
     }
 
     public void register(HttpRules rules) {
@@ -60,6 +104,7 @@ public class WebServices {
                 .get("/api/count", this::countDocuments)
                 // Cluster
                 .get("/api/cluster", this::getClusterStatus)
+                .get("/api/metrics", this::getMetrics)
                 .post("/api/cluster/register", this::registerNode)
                 .post("/api/cluster/deregister", this::deregisterNode)
                 .post("/api/cluster/stop", this::stopNode)
@@ -95,8 +140,9 @@ public class WebServices {
     }
 
     private void authMiddleware(ServerRequest req, ServerResponse res) {
-        // Skip login endpoint
-        if (req.path().path().equals("/api/login")) {
+        // Skip login and metrics endpoints
+        String path = req.path().path();
+        if (path.equals("/api/login") || path.equals("/api/metrics")) {
             res.next();
             return;
         }
@@ -834,18 +880,31 @@ public class WebServices {
                     if (id == null) id = (String) pNode.get("id");
                     
                     if (id != null) {
-                        pNode.put("id", id);
-                        // Ensure _id is also set for consistency
-                        pNode.put("_id", id);
-                    } else {
-                         // Fallback if absolutely no ID found
-                         String url = (String) pNode.get("url");
-                         if (url != null) {
-                             pNode.put("id", "node-" + url.hashCode());
-                             pNode.put("_id", "node-" + url.hashCode());
-                         }
+                    pNode.put("id", id);
+                    // Ensure _id is also set for consistency
+                    pNode.put("_id", id);
+                } else {
+                     // Fallback if absolutely no ID found
+                     String url = (String) pNode.get("url");
+                     if (url != null) {
+                         pNode.put("id", "node-" + url.hashCode());
+                         pNode.put("_id", "node-" + url.hashCode());
+                     }
+                }
+
+                // Add metrics if it's the current node
+                if (raft.getNodeId().equals(id)) {
+                    String dataDir = (String) engine.getConfigManager().getOrDefault("DataDir", "data");
+                    pNode.put("metrics", io.jettra.core.util.MetricsUtils.getSystemMetrics(dataDir));
+                } else if (id != null) {
+                    // Try to get from cache
+                    Map<String, Object> cached = PEER_METRICS_CACHE.get(id);
+                    if (cached != null) {
+                        pNode.put("metrics", cached);
                     }
-                    publicNodes.add(pNode);
+                }
+                
+                publicNodes.add(pNode);
                 }
                 status.put("nodes", publicNodes);
             } else {
@@ -1379,6 +1438,15 @@ public class WebServices {
             } else {
                 res.status(Status.NOT_FOUND_404).send("Version not found");
             }
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getMetrics(ServerRequest req, ServerResponse res) {
+        try {
+            String dataDir = (String) engine.getConfigManager().getOrDefault("DataDir", "data");
+            res.send(jsonMapper.writeValueAsString(io.jettra.core.util.MetricsUtils.getSystemMetrics(dataDir)));
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }

@@ -1914,32 +1914,68 @@ const App = {
             `;
 
             // Normalize nodes loop
-            const nodeList = status.nodes || [];
+            const nodeList = (status.nodes || []).sort((a, b) => {
+                const idA = a.id || a._id || '';
+                const idB = b.id || b._id || '';
+                return String(idA).localeCompare(String(idB));
+            });
 
             // Render Cluster Map
             const mapContainer = document.getElementById('cluster-visual-map');
             if (mapContainer) {
                 mapContainer.innerHTML = '';
-                nodeList.forEach(n => {
+                nodeList.forEach((n, index) => {
                     const nid = n.id || n._id || ('node-' + (n.url ? n.url.hashCode() : Math.random()));
                     console.log("Visualizing node:", nid, n);
-                    const isLeader = (n.role === 'LEADER') || (nid === status.leaderId);
+                    const isLeader = status.leaderId && (nid === status.leaderId);
                     const isSelf = (nid === status.nodeId);
+                    // Improve node naming: try to get number from ID, fallback to address
+                    let derivedName = `Node ?`;
+                    const idMatch = nid.match(/node-(\d+)/);
+                    if (idMatch && idMatch[1].length < 5) {
+                        derivedName = `Node ${idMatch[1]}`;
+                    } else if (n.url) {
+                        const portMatch = n.url.match(/:(\d+)/);
+                        derivedName = portMatch ? `Port ${portMatch[1]}` : n.url.replace('http://', '');
+                    }
 
                     let roleClass = 'node-follower';
                     if (isLeader) roleClass = 'node-leader';
+                    else if (n.role === 'LEADER') roleClass = 'node-leader'; // Fallback for UI if leaderId not yet broadcast but DB says so
+
                     if (n.status === 'INACTIVE') roleClass = 'node-inactive';
+                    if (n.status === 'PAUSED') roleClass = 'node-paused';
                     if (n.state === 'CANDIDATE') roleClass = 'node-candidate';
 
                     const selfClass = isSelf ? 'node-self' : '';
 
+                    const displayName = n.description || (n.url ? n.url.replace('http://', '') : nid.substring(0, 8));
+                    const metricsHtml = n.metrics ? `
+                        <div style="font-size: 0.45rem; color: #00ff9d; line-height: 1.1; margin-top: 4px; padding: 2px; background: rgba(0,0,0,0.3); border-radius: 4px; width: 90%;">
+                            CPU: ${n.metrics.cpuUsage}%<br/>
+                            RAM-F: ${n.metrics.ramFreeStr || 'N/A'}<br/>
+                            DSK-F: ${n.metrics.diskFreeStr || 'N/A'}
+                        </div>
+                    ` : '<div style="font-size: 0.45rem; opacity: 0.5; margin-top: 4px;">(Pending Metrics)</div>';
+
                     const el = document.createElement('div');
                     el.className = `node-circle ${roleClass} ${selfClass}`;
+                    el.style.display = 'flex';
+                    el.style.flexDirection = 'column';
+                    el.style.alignItems = 'center';
+                    el.style.justifyContent = 'center';
+                    el.style.textAlign = 'center';
+                    el.style.padding = '5px';
+
                     el.innerHTML = `
-                        <div>Nodes</div>
-                        <div class="node-label">${String(nid).substring(0, 6)}...</div>
+                        <div style="font-size: 0.7rem; font-weight: 900; color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">${derivedName}</div>
+                        <div style="font-size: 0.42rem; opacity: 0.8; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75px;">${displayName}</div>
+                        <div style="font-size: 0.5rem; font-weight: bold; margin-top: 2px; color: ${isLeader ? '#ffca28' : '#e0e0e0'}">
+                            ${isLeader ? '👑 LEADER' : 'FOLLOWER'}
+                        </div>
+                        ${metricsHtml}
                     `;
-                    el.title = `ID: ${nid}\nURL: ${n.url}\nRole: ${n.role}\nStatus: ${n.status}`;
+                    el.title = `ID: ${nid}\nURL: ${n.url}\nRole: ${n.role}\nStatus: ${n.status}\nState: ${n.state || 'N/A'}`;
                     mapContainer.appendChild(el);
                 });
             }
@@ -1965,15 +2001,15 @@ const App = {
                 nodes.forEach(node => {
                     const nid = node.id || node._id || 'unknown';
                     console.log("Processing node for table:", node, "ID:", nid);
-                    const isLeader = node.role === 'LEADER' || nid === status.leaderId;
+                    const isLeader = status.leaderId ? (nid === status.leaderId) : (node.role === 'LEADER');
                     const isSelf = nid === status.nodeId;
 
-                    let roleLabel = node.role;
+                    let roleLabel = node.role || 'FOLLOWER';
                     if (isLeader) roleLabel = "👑 LEADER";
 
                     let statusBadge = 'secondary';
                     if (node.status === 'ACTIVE') statusBadge = 'success';
-                    if (node.status === 'INACTIVE') statusBadge = 'danger';
+                    if (node.status === 'INACTIVE' || node.status === 'PAUSED') statusBadge = 'danger';
 
                     html += `
                         <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
@@ -1983,22 +2019,29 @@ const App = {
                                     ${isSelf ? '<span class="text-xs text-muted">(This Node)</span>' : ''}
                                 </div>
                             </td>
-                            <td class="px-6 py-4">
-                                ${node.url}
+                            <td class="px-3 py-2">
+                                <span class="px-2 py-0.5 rounded text-xs ${node.status === 'ACTIVE' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">
+                                    ${node.status}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 text-xs">
+                                ${node.metrics ? `
+                                    <div class="text-xs space-y-1">
+                                        <div class="flex justify-between"><span>CPU:</span> <b>${node.metrics.cpuUsage}%</b></div>
+                                        <div class="flex justify-between"><span>RAM:</span> <b>${node.metrics.ramUsedStr} / ${node.metrics.ramTotalStr}</b></div>
+                                        <div class="flex justify-between"><span>Disk:</span> <b>${node.metrics.diskUsedStr} / ${node.metrics.diskTotalStr}</b></div>
+                                    </div>
+                                ` : '<span class="text-muted text-xs">No metrics</span>'}
                             </td>
                             <td class="px-6 py-4">
-                                ${node.description || '-'}
-                            </td>
-                            <td class="px-6 py-4">
-                                <span class="badge ${isLeader ? 'badge-primary' : 'badge-secondary'}">${roleLabel}</span>
-                            </td>
-                             <td class="px-6 py-4">
-                                <span class="badge badge-${statusBadge}">${node.status}</span>
-                            </td>
-                            <td class="px-6 py-4">
-                                <div class="flex space-x-2" style="display:flex; gap: 0.5rem;">
-                                    ${!isSelf && node.status !== 'INACTIVE' ? `<button onclick="app.stopNode('${node.url}')" class="btn btn-xs btn-warning" title="Stop Node">Stop</button>` : ''}
-                                    ${!isSelf ? `<button onclick="app.removePeer('${nid}', '${node.url}')" class="btn btn-xs btn-danger" title="Remove from Cluster">Remove</button>` : ''}
+                                <div class="flex gap-2">
+                                    <button onclick="app.viewNodeMetrics('${nid}')" class="px-3 py-1 text-xs font-medium text-white bg-blue-600 rounded hover:bg-blue-700 transition-colors">
+                                        Metrics
+                                    </button>
+                                    ${!isSelf ? `
+                                        <button onclick="app.pauseNode('${nid}')" class="px-3 py-1 text-xs font-medium text-white bg-yellow-600 rounded hover:bg-yellow-700 transition-colors">Pause</button>
+                                        <button onclick="app.stopNode('${nid}')" class="px-3 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700 transition-colors">Stop</button>
+                                    ` : ''}
                                 </div>
                             </td>
                         </tr>
@@ -2931,6 +2974,52 @@ const App = {
             content.textContent = 'Error: ' + e.message;
         }
     },
+
+    viewNodeMetrics(nodeId) {
+        this.api('/cluster', 'GET').then(status => {
+            if (status && status.nodes) {
+                const node = status.nodes.find(n => (n.id === nodeId || n._id === nodeId));
+                if (node) {
+                    const metrics = node.metrics || { message: "No metrics available for this node at the moment." };
+                    const metricsStr = JSON.stringify(metrics, null, 4);
+
+                    const modal = document.createElement('div');
+                    modal.className = 'metrics-modal';
+                    modal.style.position = 'fixed';
+                    modal.style.top = '0';
+                    modal.style.left = '0';
+                    modal.style.width = '100vw';
+                    modal.style.height = '100vh';
+                    modal.style.backgroundColor = 'rgba(0,0,0,0.85)';
+                    modal.style.zIndex = '9999';
+                    modal.style.display = 'flex';
+                    modal.style.alignItems = 'center';
+                    modal.style.justifyContent = 'center';
+                    modal.style.padding = '20px';
+
+                    modal.innerHTML = `
+                        <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-2xl flex flex-col" style="max-height: 85vh;">
+                            <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800">
+                                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                    <span class="text-blue-400">📊</span> Metrics Detail: ${nodeId}
+                                </h3>
+                                <button onclick="this.closest('.metrics-modal').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                            </div>
+                            <div class="p-4 overflow-auto bg-black m-4 rounded font-mono text-sm text-green-400 flex-grow" style="box-shadow: inset 0 0 10px rgba(0,255,0,0.1);">
+                                <pre>${metricsStr}</pre>
+                            </div>
+                            <div class="p-4 border-t border-gray-700 text-right bg-gray-800">
+                                <button onclick="this.closest('.metrics-modal').remove()" class="px-6 py-2 bg-gray-600 text-white font-bold rounded hover:bg-gray-500 transition-colors">Close</button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                } else {
+                    this.showNotification('Node not found', 'error');
+                }
+            }
+        });
+    }
 
 };
 

@@ -58,12 +58,18 @@ public class RaftNode {
             .build();
 
     // Simplified timeouts (in ms)
-    private static final int ELECTION_TIMEOUT_MIN = 3000;
-    private static final int ELECTION_TIMEOUT_MAX = 6000;
-    private static final int HEARTBEAT_INTERVAL = 500;
+    // Higher timeouts to prevent accidental elections in stable clusters
+    private static final int ELECTION_TIMEOUT_MIN = 6000;
+    private static final int ELECTION_TIMEOUT_MAX = 12000;
+    private static final int HEARTBEAT_INTERVAL = 1500;
 
     private final io.jettra.core.config.ConfigManager configManager;
     private final io.jettra.core.storage.DocumentStore store;
+
+    // Cache for node statuses to avoid DB lookups in heartbeats
+    private final Map<String, String> nodeStatusCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, Integer> nodeFailureCount = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int MAX_FAILURE_COUNT = 5; 
 
     public RaftNode(String nodeId, List<String> peers, io.jettra.core.config.ConfigManager configManager,
             io.jettra.core.storage.DocumentStore store) {
@@ -115,9 +121,27 @@ public class RaftNode {
                 LOGGER.info("Bootstrap node with no peers (or single node). Forcing LEADER role.");
                 becomeLeader();
             } else {
-                LOGGER.info("Bootstrap node with peers. Starting election to assert leadership.");
-                // Schedule immediate election to assert leadership over the cluster
-                scheduler.schedule(this::startElection, 50, TimeUnit.MILLISECONDS);
+                long delay = 500; // Default delay
+                if (nodeId.equals("node-1")) {
+                    delay = 50; // Node 1 starts almost immediately
+                } else {
+                    int idNum = 0;
+                    try {
+                        String numericPart = nodeId.replaceAll("[^0-9]", "");
+                        if (!numericPart.isEmpty()) idNum = Integer.parseInt(numericPart);
+                    } catch(Exception e) {}
+                    delay = 300 + ((long)(idNum % 100) * 100); 
+                }
+                
+                LOGGER.log(Level.INFO, "Bootstrap node with peers. Cautiously checking for leader before election in {0}ms.", delay);
+                scheduler.schedule(() -> {
+                    if (this.leaderId == null && this.state != State.LEADER) {
+                        LOGGER.info("No leader detected after bootstrap delay. Starting election to assert priority.");
+                        startElection();
+                    } else {
+                        LOGGER.log(Level.INFO, "Leader already present ({0}), bootstrap node will stay as FOLLOWER.", this.leaderId);
+                    }
+                }, delay, TimeUnit.MILLISECONDS);
             }
         }
 
@@ -128,8 +152,8 @@ public class RaftNode {
 
         this.lastHeartbeatTime = System.currentTimeMillis();
 
-        // Start election timer loop
-        scheduler.scheduleAtFixedRate(this::checkElectionTimeout, 1000, 200, TimeUnit.MILLISECONDS);
+        // Start single tick loop for both heartbeats and election timeouts
+        scheduler.scheduleAtFixedRate(this::tick, 1000, 200, TimeUnit.MILLISECONDS);
     }
 
     private final java.util.concurrent.ConcurrentHashMap<String, String> peerUrlToId = new java.util.concurrent.ConcurrentHashMap<>();
@@ -139,30 +163,45 @@ public class RaftNode {
         this.peerUrlToId.clear();
         try {
             List<Map<String, Object>> nodes = store.query("_system", "_clusternodes", null, 1000, 0);
+            boolean foundSelf = false;
             Set<String> uniquePeers = new HashSet<>();
             for (Map<String, Object> node : nodes) {
                 String id = (String) (node.get("_id") != null ? node.get("_id") : node.get("id"));
                 String url = (String) node.get("url");
-                String status = (String) node.get("status");
                 
                 if (id != null && url != null) {
+                    if (id.equals(this.nodeId)) {
+                        foundSelf = true;
+                    }
                     peerUrlToId.put(url, id);
+                    String status = (String) node.getOrDefault("status", "ACTIVE");
+                    nodeStatusCache.put(id, status);
+
+                    // Filter out itself by ID
                     if (!id.equals(this.nodeId)) {
-                        // Include all nodes in peers list so we can manage them (heartbeat/resume)
-                        // We will filter based on status in sendHeartbeats/replicate
                         uniquePeers.add(url);
                     }
                 }
             }
             this.peers.addAll(uniquePeers);
-            LOGGER.info("Loaded peers from storage: " + peers);
+            
+            if (!foundSelf && !nodes.isEmpty()) {
+                LOGGER.log(Level.WARNING, "This node ({0}) is not present in _clusternodes! It has been removed. Disabling cluster activities.", nodeId);
+                this.state = State.FOLLOWER;
+                this.votedFor = null;
+                this.leaderId = null;
+                this.peers.clear();
+                this.peerUrlToId.clear();
+            }
+            
+            LOGGER.log(Level.FINE, "Loaded peers from storage: {0} with statuses: {1}", new Object[]{peers, nodeStatusCache});
         } catch (Exception e) {
-            LOGGER.severe("Failed to load peers from storage: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Failed to load peers from storage: {0}", e.getMessage());
         }
     }
 
     public synchronized void start() {
-        LOGGER.info("RaftNode started: " + nodeId + " Peers: " + peers);
+        LOGGER.log(Level.INFO, "RaftNode started: {0} Peers: {1}", new Object[]{nodeId, peers});
     }
 
     public synchronized String getNodeId() {
@@ -190,25 +229,27 @@ public class RaftNode {
     }
 
     private void checkElectionTimeout() {
-        if (state == State.LEADER)
-            return;
+        synchronized (this) {
+            if (state == State.LEADER)
+                return;
+        }
         
         // Fix: Do not start election if we are not initialized in the cluster storage
-        // i.e. we are a fresh node waiting to be joined.
         try {
             int count = store.count("_system", "_clusternodes");
             if (count == 0) {
-                 // We are empty, not bootstrapped. Wait for register/installSnapshot.
                  return;
             }
-        } catch(Exception e) {
-             // Store error?
+        } catch(Exception e) {}
+
+        long last;
+        synchronized (this) {
+            last = lastHeartbeatTime;
         }
 
         long now = System.currentTimeMillis();
-        // Randomized timeout
         long timeout = ELECTION_TIMEOUT_MIN + (long)(Math.random() * (ELECTION_TIMEOUT_MAX - ELECTION_TIMEOUT_MIN));
-        if (now - lastHeartbeatTime > timeout) {
+        if (now - last > timeout) {
             startElection();
         }
     }
@@ -227,7 +268,6 @@ public class RaftNode {
         final AtomicInteger votes = new AtomicInteger(1); // Vote for self
 
         if (peers.isEmpty()) {
-            // Single node cluster case:
             try {
                 if (store.count("_system", "_clusternodes") > 0) {
                      becomeLeader();
@@ -243,13 +283,8 @@ public class RaftNode {
         String body = String.format("{\"term\":%d, \"candidateId\":\"%s\", \"lastLogIndex\":%d, \"lastLogTerm\":%d}",
                 termForElection, nodeId, log.size(), 0);
 
-        List<String> currentPeers = new ArrayList<>(peers); // Snapshot
+        List<String> currentPeers = new ArrayList<>(peers); 
         for (String peer : currentPeers) {
-            // Check status before asking for vote? 
-            // Usually we should try to contact everyone, but PAUSED nodes shouldn't vote?
-            // If they are PAUSED they might be up but we shouldn't care?
-            // Let's just try everyone.
-            
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(peer + "/raft/rpc/requestvote"))
                     .header("Content-Type", "application/json")
@@ -267,42 +302,38 @@ public class RaftNode {
                                         becomeLeader();
                                     }
                                 }
-                            } catch (Exception e) {
-                                LOGGER.log(Level.WARNING, "Error parsing vote response", e);
-                            }
+                            } catch (Exception e) {}
                         }
                     });
         }
     }
 
-    private void becomeLeader() {
+    private synchronized void becomeLeader() {
         if (state == State.LEADER) return;
-        LOGGER.info("Becoming LEADER for term " + currentTerm);
+        LOGGER.log(Level.INFO, "{0} becoming FOLLOWER of {1} for term {2}", new Object[]{nodeId, leaderId, currentTerm});
         state = State.LEADER;
         leaderId = nodeId;
-        configManager.setBootstrap(true);
+        lastHeartbeatTime = System.currentTimeMillis();
+        updateSelfRoleInDB("LEADER");
+    }
 
-        // Update self status in DB to ACTIVE / LEADER
+    private void updateSelfRoleInDB(String role) {
         try {
             Map<String, Object> self = store.findByID("_system", "_clusternodes", nodeId);
             if (self != null) {
-                self.put("role", "LEADER");
-                self.put("status", "ACTIVE");
-                store.update("_system", "_clusternodes", nodeId, self);
-                
-                // Replicate this update
-                 Map<String, Object> cmd = new HashMap<>();
-                cmd.put("op", "cluster_update_node");
-                cmd.put("id", nodeId);
-                cmd.put("data", self);
-                replicate(cmd);
+                if (!role.equals(self.get("role"))) {
+                    self.put("role", role);
+                    self.put("status", "ACTIVE");
+                    store.update("_system", "_clusternodes", nodeId, self);
+                    
+                    Map<String, Object> cmd = new HashMap<>();
+                    cmd.put("op", "cluster_update_node");
+                    cmd.put("id", nodeId);
+                    cmd.put("data", self);
+                    replicate(cmd);
+                }
             }
-        } catch (Exception e) {
-            LOGGER.severe("Failed to update leader status in DB: " + e.getMessage());
-        }
-
-        // Start sending heartbeats
-        scheduler.scheduleAtFixedRate(this::sendHeartbeats, 0, HEARTBEAT_INTERVAL, TimeUnit.MILLISECONDS);
+        } catch (Exception e) {}
     }
 
     private void sendHeartbeats() {
@@ -319,17 +350,15 @@ public class RaftNode {
         }
 
         for (String peer : peersSnapshot) {
-            // Check status
             String peerId = peerUrlToId.get(peer);
             boolean isPaused = false;
-            try {
-                if (peerId != null) {
-                    Map<String, Object> pNode = store.findByID("_system", "_clusternodes", peerId);
-                    if (pNode != null && "PAUSED".equals(pNode.get("status"))) {
-                        isPaused = true;
-                    }
+            
+            if (peerId != null) {
+                String status = nodeStatusCache.get(peerId);
+                if ("PAUSED".equals(status)) {
+                    isPaused = true;
                 }
-            } catch(Exception e) {}
+            }
             
             if (isPaused) continue;
 
@@ -360,11 +389,20 @@ public class RaftNode {
     }
 
     private void markNodeActive(String url) {
-        updateNodeStatus(url, "ACTIVE", "INACTIVE"); // Only update if currently INACTIVE
+        String id = peerUrlToId.get(url);
+        if (id != null) nodeFailureCount.put(id, 0);
+        updateNodeStatus(url, "ACTIVE", "INACTIVE");
     }
 
     private void markNodeInactive(String url) {
-        // Relaxed constraint: any status that is NOT already INACTIVE or PAUSED can go to INACTIVE
+        String id = peerUrlToId.get(url);
+        if (id != null) {
+            int count = nodeFailureCount.getOrDefault(id, 0) + 1;
+            nodeFailureCount.put(id, count);
+            if (count < MAX_FAILURE_COUNT) {
+                return;
+            }
+        }
         updateNodeStatus(url, "INACTIVE", null); 
     }
 
@@ -376,38 +414,81 @@ public class RaftNode {
             Map<String, Object> node = store.findByID("_system", "_clusternodes", id);
             if (node != null) {
                 String current = (String) node.get("status");
-                // Avoid flapping or overwriting PAUSED unless we are explicitly resuming/stopping
                 if (currentStatusConstraint != null && !currentStatusConstraint.equals(current)) {
                     return; 
                 }
                 
-                // Special case: don't automatically mark INACTIVE -> ACTIVE unless it's a solid 200 heartbeat
-                // or if it was already INACTIVE and we want it to stay that way until it really comes back.
-                
-                if (newStatus.equals(current)) return;
+                if (newStatus.equals(current)) {
+                    nodeStatusCache.put(id, newStatus);
+                    return;
+                }
 
-                LOGGER.info("Updating node status for " + url + " from " + current + " to " + newStatus);
+                LOGGER.log(Level.INFO, "Updating node status for {0} from {1} to {2}", new Object[]{url, current, newStatus});
                 node.put("status", newStatus);
+                nodeStatusCache.put(id, newStatus);
+                
                 store.update("_system", "_clusternodes", id, node);
                 
-                // Replicate updates so UI updates everywhere
-                // Note: Replicate will skip sending to this node if it's inactive/paused
                 Map<String, Object> cmd = new HashMap<>();
                 cmd.put("op", "cluster_update_node");
                 cmd.put("id", id);
                 cmd.put("data", node);
                 replicate(cmd);
+
+                // If coming back from INACTIVE, trigger full state sync to catch up
+                if ("ACTIVE".equals(newStatus) && "INACTIVE".equals(current)) {
+                    LOGGER.info("Node " + url + " transitioned from INACTIVE to ACTIVE. Triggering catch-up snapshot.");
+                    replicateStateTo(url);
+                }
             }
         } catch(Exception e) {
-            LOGGER.warning("Error updating node status for " + url + ": " + e.getMessage());
+            LOGGER.severe("Error updating node status for " + url + ": " + e.getMessage());
+        }
+    }
+
+    private void tick() {
+        synchronized (this) {
+            if (peers.isEmpty() && !nodeId.equals("node-1") && !configManager.isBootstrap()) {
+                try {
+                    Map<String, Object> self = store.findByID("_system", "_clusternodes", nodeId);
+                    if (self == null) {
+                        return;
+                    }
+                } catch (Exception e) {}
+            }
+        }
+
+        State currentState;
+        synchronized (this) {
+            currentState = this.state;
+        }
+
+        if (currentState == State.LEADER) {
+            long now = System.currentTimeMillis();
+            if (now - lastHeartbeatTime >= HEARTBEAT_INTERVAL) {
+                lastHeartbeatTime = now;
+                sendHeartbeats();
+            }
+        } else {
+            checkElectionTimeout();
         }
     }
 
     public synchronized boolean requestVote(int term, String candidateId, int lastLogIndex, int lastLogTerm) {
+        if (!isClusterMember(candidateId)) {
+            LOGGER.log(Level.WARNING, "Ignoring RequestVote from non-member candidate: {0}", candidateId);
+            return false;
+        }
+
         if (term > currentTerm) {
             currentTerm = term;
-            state = State.FOLLOWER;
-            votedFor = null;
+            if (state != State.FOLLOWER) {
+                LOGGER.log(Level.INFO, "Term increased to {0}. Node {1} becoming FOLLOWER via RequestVote.", new Object[]{term, nodeId});
+                state = State.FOLLOWER;
+                votedFor = null;
+                updateSelfRoleInDB("FOLLOWER");
+            }
+            lastHeartbeatTime = System.currentTimeMillis();
         }
 
         if (term < currentTerm) {
@@ -425,10 +506,20 @@ public class RaftNode {
 
     public synchronized boolean appendEntries(int term, String leaderId, int prevLogIndex, int prevLogTerm,
             List<LogEntry> entries, int leaderCommit) {
+        if (!isClusterMember(leaderId)) {
+            LOGGER.log(Level.WARNING, "Ignoring AppendEntries from non-member leader: {0}", leaderId);
+            return false;
+        }
+
         if (term > currentTerm) {
             currentTerm = term;
-            state = State.FOLLOWER;
-            votedFor = null;
+            if (state != State.FOLLOWER) {
+                LOGGER.log(Level.INFO, "Term increased to {0}. Node {1} becoming FOLLOWER via AppendEntries.", new Object[]{term, nodeId});
+                state = State.FOLLOWER;
+                votedFor = null;
+                updateSelfRoleInDB("FOLLOWER");
+            }
+            lastHeartbeatTime = System.currentTimeMillis();
         }
 
         if (term < currentTerm) {
@@ -436,15 +527,27 @@ public class RaftNode {
         }
 
         this.leaderId = leaderId;
-        this.state = State.FOLLOWER;
         this.lastHeartbeatTime = System.currentTimeMillis();
 
-        if (configManager.isBootstrap()) {
-            configManager.setBootstrap(false);
+        if (!leaderId.equals(nodeId) && state != State.FOLLOWER) {
+            LOGGER.log(Level.INFO, "Node {0} becoming FOLLOWER of {1} for term {2}", new Object[]{nodeId, leaderId, term});
+            this.state = State.FOLLOWER;
+            updateSelfRoleInDB("FOLLOWER");
         }
 
         if (leaderCommit > commitIndex) {
             commitIndex = Math.min(leaderCommit, log.size());
+        }
+
+        // Add entries to log and apply
+        if (entries != null && !entries.isEmpty()) {
+            for (LogEntry entry : entries) {
+                log.add(entry);
+                if (entry.command != null) {
+                    LOGGER.info("Applying entry from AppendEntries log: " + entry.command.get("op"));
+                    applyCommand(entry.command);
+                }
+            }
         }
 
         return true;
@@ -574,7 +677,8 @@ public class RaftNode {
         if (state != State.LEADER) {
             return false;
         }
-        log.add(new LogEntry(currentTerm, command));
+        LogEntry entry = new LogEntry(currentTerm, command);
+        log.add(entry);
         sendAppendEntries(command);
         return true;
     }
@@ -673,13 +777,12 @@ public class RaftNode {
             cmd.put("op", "cluster_register");
             cmd.put("node", nodeDoc);
 
-            replicate(cmd);
-            LOGGER.info("Replicated registration for " + url);
-            applyCommand(cmd); // Apply locally
-            LOGGER.info("Applied registration command locally.");
+            applyCommand(cmd); // Apply locally first to update 'peers' list
+            replicate(cmd);   // Then replicate to others
+            LOGGER.info("Registered and replicated node: " + url);
         }
         
-        // Send snapshot to new node
+        // Send snapshot to new node (background)
         replicateStateTo(url);
     }
 
@@ -770,6 +873,12 @@ public class RaftNode {
         return null;
     }
 
+    private boolean isClusterMember(String id) {
+        if (id == null) return false;
+        if (id.equals(this.nodeId)) return true;
+        return peerUrlToId.containsValue(id);
+    }
+
     public synchronized List<Map<String, Object>> getClusterStatus() {
         try {
             return store.query("_system", "_clusternodes", null, 1000, 0);
@@ -781,29 +890,48 @@ public class RaftNode {
 
     private void replicateStateTo(String url) {
         java.util.concurrent.CompletableFuture.runAsync(() -> {
-            LOGGER.info("Starting background state replication (snapshot) to " + url);
-            File snapshot = createSnapshot();
-            if (snapshot == null)
-                return;
+            // Wait a bit to ensure the target node's web server is up if this was a fresh registration
+            try { Thread.sleep(2000); } catch (InterruptedException e) {}
 
-            try {
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(url + "/raft/rpc/installsnapshot"))
-                        .header("Content-Type", "application/octet-stream")
-                        .POST(HttpRequest.BodyPublishers.ofFile(snapshot.toPath()))
-                        .build();
+            int maxRetries = 3;
+            int attempt = 0;
+            boolean success = false;
 
-                httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                        .thenAccept(res -> {
-                            LOGGER.info("Snapshot sent to " + url + " status: " + res.statusCode());
-                            if (res.statusCode() == 200) {
-                                if (!snapshot.delete()) {
-                                    snapshot.deleteOnExit();
-                                }
-                            }
-                        });
-            } catch (Exception e) {
-                LOGGER.severe("Failed to send snapshot: " + e.getMessage());
+            while (attempt < maxRetries && !success) {
+                attempt++;
+                LOGGER.info("State replication attempt " + attempt + " for " + url);
+                
+                File snapshot = createSnapshot();
+                if (snapshot == null) return;
+                long size = snapshot.length();
+                LOGGER.info("Created snapshot size: " + size + " bytes for " + url);
+
+                try {
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(url + "/raft/rpc/installsnapshot"))
+                            .header("Content-Type", "application/octet-stream")
+                            .header("X-Snapshot-Size", String.valueOf(size))
+                            .POST(HttpRequest.BodyPublishers.ofFile(snapshot.toPath()))
+                            .timeout(java.time.Duration.ofMinutes(5)) // Allow time for large snapshots
+                            .build();
+
+                    HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+                    if (response.statusCode() == 200) {
+                        LOGGER.info("Successfully replicated state to " + url + " on attempt " + attempt);
+                        success = true;
+                    } else {
+                        LOGGER.warning("Failed to replicate state to " + url + ". Status: " + response.statusCode() + " Body: " + response.body());
+                        if (attempt < maxRetries) Thread.sleep(3000 * attempt);
+                    }
+                } catch (Exception e) {
+                    LOGGER.severe("Error sending snapshot to " + url + " (attempt " + attempt + "): " + e.getMessage());
+                    try { if (attempt < maxRetries) Thread.sleep(3000 * attempt); } catch (InterruptedException ie) {}
+                } finally {
+                    if (snapshot != null && snapshot.exists()) {
+                        if (!snapshot.delete()) snapshot.deleteOnExit();
+                    }
+                }
             }
         });
     }
@@ -850,11 +978,9 @@ public class RaftNode {
         synchronized(this) {
             this.state = State.FOLLOWER;
             this.votedFor = null;
-            // Term logic? If we don't know the term, 0 might cause rejection of future heartbeats unless we accept any term > current.
-            // But usually snapshot includes term.
-            // For now, reset to 0 to be safe, or keep it if we persist it?
-            // Resetting to 0 ensures we accept any Leader with Term >= 1.
-            this.currentTerm = 0; 
+            // Removed currentTerm = 0; Keep current term to avoid being disruptive.
+            // Heartbeats from Leader will keep us synced or update us if we are behind.
+            LOGGER.info("Accepted snapshot. Ensuring Node " + nodeId + " is FOLLOWER.");
         }
     }
     

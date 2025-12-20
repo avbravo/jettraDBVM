@@ -314,8 +314,11 @@ public class RouterDocumentStore implements DocumentStore {
     @Override
     public void reload() {
         cache.clear();
-        // Also reload sub-stores if needed, but they seem mostly stateless or per-op.
-        // Actually JettraEngineStore has indices potentially?
-        // For MVP, router cache clear is most important for new DBs.
+        try {
+            basicStore.reload();
+            engineStore.reload();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

@@ -239,6 +239,10 @@
                                             <tr>
                                                 <th>Node ID</th>
                                                 <th>URL</th>
+                                                <th>Description</th>
+                                                <th>Role</th>
+                                                <th>Status</th>
+                                                <th>Metrics</th>
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
@@ -669,100 +673,42 @@
                                     onchange="app.loadInvoices()"></select>
                             </div>
 
-                            <div class="glass-panel" style="margin-bottom: 2rem;">
-                                <h3 class="text-xl font-semibold mb-4">Cluster Map</h3>
-                                <style>
-                                    .node-circle {
-                                        width: 60px;
-                                        height: 60px;
-                                        border-radius: 50%;
-                                        display: flex;
-                                        flex-direction: column;
-                                        align-items: center;
-                                        justify-content: center;
-                                        font-weight: bold;
-                                        font-size: 0.8rem;
-                                        color: white;
-                                        position: relative;
-                                        border: 2px solid transparent;
-                                        transition: all 0.3s ease;
-                                        background: var(--bg-card);
-                                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-                                    }
+                        </div>
 
-                                    .node-leader {
-                                        background: linear-gradient(135deg, #10b981, #059669);
-                                        border-color: #34d399;
-                                        transform: scale(1.1);
-                                        box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
-                                    }
-
-                                    .node-follower {
-                                        background: linear-gradient(135deg, #3b82f6, #2563eb);
-                                        border-color: #60a5fa;
-                                    }
-
-                                    .node-candidate {
-                                        background: linear-gradient(135deg, #f59e0b, #d97706);
-                                        border-color: #fbbf24;
-                                    }
-
-                                    .node-inactive {
-                                        background: linear-gradient(135deg, #ef4444, #dc2626);
-                                        border-color: #f77272;
-                                        opacity: 0.7;
-                                    }
-
-                                    .node-self::after {
-                                        content: "(You)";
-                                        position: absolute;
-                                        bottom: -20px;
-                                        font-size: 0.7rem;
-                                        color: var(--text-muted);
-                                    }
-
-                                    .node-label {
-                                        font-family: monospace;
-                                        margin-top: 2px;
-                                    }
-                                </style>
+                        <div class="glass-panel">
+                            <h3 class="text-xl font-semibold mb-4">Invoice List</h3>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Date</th>
+                                            <th>Client</th>
+                                            <th>Total</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="invoices-table-body">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
                             </div>
-
-                            <div class="glass-panel">
-                                <h3 class="text-xl font-semibold mb-4">Invoice List</h3>
-                                <div class="table-container">
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>ID</th>
-                                                <th>Date</th>
-                                                <th>Client</th>
-                                                <th>Total</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="invoices-table-body">
-                                            <!-- JS populated -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div class="pagination mt-4">
-                                    <button class="btn btn-sm btn-secondary"
-                                        onclick="app.prevInvoicePage()">Previous</button>
-                                    <span id="invoice-page-num" style="margin: 0 10px;">Page 1</span>
-                                    <button class="btn btn-sm btn-secondary"
-                                        onclick="app.nextInvoicePage()">Next</button>
-                                </div>
+                            <div class="pagination mt-4">
+                                <button class="btn btn-sm btn-secondary"
+                                    onclick="app.prevInvoicePage()">Previous</button>
+                                <span id="invoice-page-num" style="margin: 0 10px;">Page 1</span>
+                                <button class="btn btn-sm btn-secondary" onclick="app.nextInvoicePage()">Next</button>
                             </div>
                         </div>
                     </div>
                 </div>
-
         </div>
-        <footer class="app-footer">
-            &copy; 2025 JettraDB. All Rights Reserved.
-        </footer>
-        </main>
+
+    </div>
+    <footer class="app-footer">
+        &copy; 2025 JettraDB. All Rights Reserved.
+    </footer>
+    </main>
     </div>
     </div>
 

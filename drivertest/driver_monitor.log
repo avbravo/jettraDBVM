@@ -1,0 +1,75 @@
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::staticFieldBase has been called by com.google.inject.internal.aop.HiddenClassDefiner (file:/snap/netbeans/138/netbeans/java/maven/lib/guice-5.1.0-classes.jar)
+WARNING: Please consider reporting this to the maintainers of class com.google.inject.internal.aop.HiddenClassDefiner
+WARNING: sun.misc.Unsafe::staticFieldBase will be removed in a future release
+[INFO] Scanning for projects...
+Downloading from central: https://repo.maven.apache.org/maven2/org/codehaus/mojo/exec-maven-plugin/maven-metadata.xml
+Progress (1): 1.1 kB                    Downloaded from central: https://repo.maven.apache.org/maven2/org/codehaus/mojo/exec-maven-plugin/maven-metadata.xml (1.1 kB at 2.6 kB/s)
+[INFO] 
+[INFO] ------------------------< io.jettra:drivertest >------------------------
+[INFO] Building drivertest 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- exec:3.6.2:java (default-cli) @ drivertest ---
+Monitoring Cluster via Driver at localhost:8080
+1766192433088 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192435093 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192437095 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192439099 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192441101 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192443104 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192445107 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192447109 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192449111 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192451115 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192453120 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192455122 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192457125 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192459128 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192461131 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192463135 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192465137 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192467140 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192469142 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192471146 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192473149 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192475152 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192477155 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192479158 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192481161 | Leader: node-42bc3533-f1cb-4f9d-9c02-84b910a53d80 | State: LEADER | Term: 0
+1766192483166 | Error: Communication error
+1766192485170 | Error: Communication error
+1766192487189 | Leader: null | State: CANDIDATE | Term: 1
+1766192489195 | Leader: null | State: CANDIDATE | Term: 1
+1766192491198 | Leader: null | State: CANDIDATE | Term: 2
+1766192493203 | Leader: null | State: CANDIDATE | Term: 2
+1766192495207 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192497210 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192499214 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192501217 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192503221 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192505224 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192507226 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192509312 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192511356 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192513417 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192515427 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192517474 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192519509 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192521529 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192523547 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192525584 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192527601 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192529613 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192531624 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192533628 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192535643 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192537660 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192539662 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192541675 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192543697 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192545712 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192547736 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192549740 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3
+1766192551771 | Leader: node-066b2bb7-68e0-4144-b7c8-4e4f78bcbf13 | State: LEADER | Term: 3

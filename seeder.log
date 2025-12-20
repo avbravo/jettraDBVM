@@ -1,0 +1,73 @@
+Login successful.
+Database testdb created/verified.
+Collection clientes created.
+Collection categoriasproductos created.
+Collection productos created.
+Collection facturas created.
+Collection facturasdetalles created.
+Generating data for testdb (JettraBasicStore)...
+Generating 50000 clients...
+Clients: 1000/50000
+Clients: 2000/50000
+Clients: 3000/50000
+Clients: 4000/50000
+Clients: 5000/50000
+Clients: 6000/50000
+Clients: 7000/50000
+Clients: 8000/50000
+Clients: 9000/50000
+Clients: 10000/50000
+Clients: 11000/50000
+Clients: 12000/50000
+Clients: 13000/50000
+Clients: 14000/50000
+Clients: 15000/50000
+Clients: 16000/50000
+Clients: 17000/50000
+Clients: 18000/50000
+Clients: 19000/50000
+Clients: 20000/50000
+Clients: 21000/50000
+Clients: 22000/50000
+Clients: 23000/50000
+Clients: 24000/50000
+Clients: 25000/50000
+Clients: 26000/50000
+Clients: 27000/50000
+Clients: 28000/50000
+Clients: 29000/50000
+Clients: 30000/50000
+Clients: 31000/50000
+Clients: 32000/50000
+Clients: 33000/50000
+Clients: 34000/50000
+Clients: 35000/50000
+Clients: 36000/50000
+Clients: 37000/50000
+Clients: 38000/50000
+Clients: 39000/50000
+Clients: 40000/50000
+Clients: 41000/50000
+Clients: 42000/50000
+Clients: 43000/50000
+Clients: 44000/50000
+Clients: 45000/50000
+Clients: 46000/50000
+Clients: 47000/50000
+Clients: 48000/50000
+Clients: 49000/50000
+Clients: 50000/50000
+Generating 100 categories...
+Generating 10000 products...
+Products: 1000/10000
+Products: 2000/10000
+Products: 3000/10000
+Products: 4000/10000
+Products: 5000/10000
+Products: 6000/10000
+Products: 7000/10000
+Products: 8000/10000
+Products: 9000/10000
+Products: 10000/10000
+Generating 100 invoices...
+Seeding completed for testdb

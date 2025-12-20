@@ -650,6 +650,16 @@ public class JettraEngineStore implements DocumentStore {
 
 
     @Override
+    public void reload() {
+        lock.writeLock().lock();
+        try {
+            cache.clear();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
     public String getDatabaseEngine(String database) throws Exception {
         return "JettraEngineStore";
     }

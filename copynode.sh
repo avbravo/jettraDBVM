@@ -14,6 +14,13 @@ echo "Copiando jettraDBVM.jar a /node3"
 rm -f /home/avbravo/jettradbvmnodes/node3/jettraDBVM.jar
 cp jettra-server/target/jettraDBVM.jar /home/avbravo/jettradbvmnodes/node3/jettraDBVM.jar
 
+echo "Copiando jettraDBVM.jar a /node4"
+rm -f /home/avbravo/jettradbvmnodes/node4/jettraDBVM.jar
+cp jettra-server/target/jettraDBVM.jar /home/avbravo/jettradbvmnodes/node4/jettraDBVM.jar
+
+
+
+
 echo "Generating shell..."
 cp jettra-shell/target/jettraDBVMShell.jar .
 
@@ -30,6 +37,10 @@ cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node2/j
 echo "Copiando JettraDBVMShell a /jettradbvmnodes/node3/"
 rm -f /home/avbravo/jettradbvmnodes/node3/jettraDBVMShell.jar
 cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node3/jettraDBVMShell.jar
+
+echo "Copiando JettraDBVMShell a /jettradbvmnodes/node4/"
+rm -f /home/avbravo/jettradbvmnodes/node4/jettraDBVMShell.jar
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node4/jettraDBVMShell.jar
 
 
 echo "Proceso finalizado"

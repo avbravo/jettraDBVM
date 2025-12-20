@@ -44,16 +44,22 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Distributed Databases
 
-- [] Ocurre una falla cada cierto tiempo convierte el lider en nodo aunque este funcionando bien y a los pocos segundos lo vuelve a convertir en lider
+- [x] se mantiene el error que muesta en la parte grafica el nombre de nodo 1 para todos los nodos y debe ser el nombre de cada nodo, y en el nodo 3 marcha que el nodo 1 y nodo2 estan inactivos cuando no es cierto ademas mostrar la inforamcion del estado de cada nodo, como cpu consumidad, ram disponible, espacio en disco disponible
+
+- [x] En los grafos simpre coloca como nombre en el circulo nodo 1 y a todos les pone comoe estado follower. 
+Ademas agregar metrics a cada nodo, de manera que se pueda mionitoorraear ele stados, cuando cpc concume, cuanto disco consume y cuanta memoria ram tiene disponible
+
+
+- [x] Ocurre una falla cada cierto tiempo convierte el lider en nodo aunque este funcionando bien y a los pocos segundos lo vuelve a convertir en lider
 esto puede provocar inconsistencia ya que dejaria en ciertos momentos al cluster sin un lider aunque el lider nunca se ha detenido.
 
-- [] Hacer pruebas desde el shell
+- [x] Hacer pruebas desde el shell
 
-- [] Hacer pruebas desde Curl
+- [x] Hacer pruebas desde Curl
 
-- [] Hacer pruebas desde el driver
+- [x] Hacer pruebas desde el driver
 
-- [] Crear un proyecto de ejemplo del driver en una carpetra al nivel de jettra-server llamado drivertest
+- [x] Crear un proyecto de ejemplo del driver en una carpetra al nivel de jettra-server llamado drivertest
 
 
 
