@@ -14,10 +14,92 @@ document.addEventListener('DOMContentLoaded', () => {
     const configNodeSelect = document.getElementById('config-node-select');
     const configEditorArea = document.getElementById('config-editor-area');
     const saveConfigBtn = document.getElementById('save-config-btn');
-    const saveRestartConfigBtn = document.getElementById('save-restart-config-btn');
     const configStatusMsg = document.getElementById('config-status-msg');
 
     let updateInterval;
+    let confirmModal, successModal;
+
+    // Initialize Flowbite Modals
+    setTimeout(() => {
+        const $confirmModalEl = document.getElementById('generic-confirm-modal');
+        const $successModalEl = document.getElementById('success-modal');
+
+        if ($confirmModalEl && typeof Modal !== 'undefined') {
+            confirmModal = new Modal($confirmModalEl);
+
+            // Explicitly handle cancel buttons
+            document.getElementById('cancel-confirm-modal').addEventListener('click', () => confirmModal.hide());
+            document.getElementById('close-confirm-modal').addEventListener('click', () => confirmModal.hide());
+        }
+
+        if ($successModalEl && typeof Modal !== 'undefined') {
+            successModal = new Modal($successModalEl);
+        }
+    }, 500);
+
+    function showConfirmGeneric(text, onConfirm) {
+        document.getElementById('confirm-modal-text').innerHTML = text;
+        const confirmBtn = document.getElementById('confirm-modal-action-btn');
+
+        // Remove old listeners by cloning
+        const newConfirmBtn = confirmBtn.cloneNode(true);
+        confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+
+        newConfirmBtn.addEventListener('click', () => {
+            if (confirmModal) confirmModal.hide();
+            // Give a small delay for the hide animation before starting the next action
+            // or showing another modal.
+            setTimeout(() => {
+                onConfirm();
+            }, 300);
+        });
+
+        if (confirmModal) confirmModal.show();
+    }
+
+    function showSuccess(message, autoClose = true, duration = 3000) {
+        const msgEl = document.getElementById('success-message');
+        const progressContainer = document.getElementById('success-progress-container');
+        const progressBar = document.getElementById('success-progress-bar');
+        const modalBtn = document.getElementById('success-modal-btn');
+
+        msgEl.textContent = message;
+
+        if (autoClose) {
+            progressContainer.classList.remove('hidden');
+            modalBtn.classList.add('hidden');
+            progressBar.style.width = '0%';
+
+            successModal.show();
+
+            let start = null;
+            const animate = (timestamp) => {
+                if (!start) start = timestamp;
+                const progress = timestamp - start;
+                const percent = Math.min((progress / duration) * 100, 100);
+                progressBar.style.width = percent + '%';
+
+                if (progress < duration) {
+                    requestAnimationFrame(animate);
+                } else {
+                    setTimeout(() => {
+                        successModal.hide();
+                        // Reset for next time
+                        setTimeout(() => {
+                            progressContainer.classList.add('hidden');
+                            modalBtn.classList.remove('hidden');
+                            progressBar.style.width = '0%';
+                        }, 500);
+                    }, 200);
+                }
+            };
+            requestAnimationFrame(animate);
+        } else {
+            progressContainer.classList.add('hidden');
+            modalBtn.classList.remove('hidden');
+            successModal.show();
+        }
+    }
 
     // -- Authentication --
 
@@ -150,7 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     saveConfigBtn.addEventListener('click', () => handleSave(false));
-    saveRestartConfigBtn.addEventListener('click', () => handleSave(true));
 
     async function handleSave(restart) {
         const configText = configEditorArea.value;
@@ -241,13 +322,33 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const isLeader = node.id === data.leaderId;
+            const metrics = node.metrics || {};
+            const ramUsage = metrics.ramUsage ? `${metrics.ramUsage}%` : '--';
+            const cpuUsage = metrics.cpuUsage ? `${metrics.cpuUsage}%` : '--';
+            const diskUsage = metrics.diskUsage ? `${metrics.diskUsage}%` : '--';
+            const latency = metrics.latency ? `${metrics.latency}ms` : '--';
+
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><span class="status-dot ${node.status}"></span> ${node.status}</td>
                 <td class="code">${node.id} ${isLeader ? '<i class="fas fa-crown text-warning" title="Leader"></i>' : ''}</td>
                 <td>${node.url}</td>
                 <td><span class="node-role">${isLeader ? 'LEADER' : 'FOLLOWER'}</span></td>
+                <td>${cpuUsage}</td>
+                <td>${ramUsage}</td>
+                <td>${diskUsage}</td>
+                <td>${latency}</td>
                 <td>${node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A'}</td>
+                <td>
+                    <div class="action-group">
+                        <button class="btn-icon text-warning" onclick="stopNode('${node.id}')" title="Detener Nodo">
+                            <i class="fas fa-stop-circle"></i>
+                        </button>
+                        <button class="btn-icon text-danger" onclick="removeNode('${node.id}')" title="Remover del Cluster">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </div>
+                </td>
             `;
             list.appendChild(row);
         });
@@ -263,4 +364,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('last-update').textContent = `Actualizado: ${new Date().toLocaleTimeString()}`;
     }
+
+    window.stopNode = async (nodeId) => {
+        const msg = `¿Está seguro de que desea detener el nodo <span class="font-bold text-primary">${nodeId}</span>?`;
+        showConfirmGeneric(msg, async () => {
+            try {
+                const res = await fetch(`/federated/node/stop/${nodeId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('fed_token') }
+                });
+                if (res.ok) {
+                    showSuccess(`Comando de detención enviado al nodo ${nodeId}`);
+                    updateStatus();
+                }
+            } catch (e) {
+                console.error('Error sending stop command:', e);
+            }
+        });
+    };
+
+    window.removeNode = async (nodeId) => {
+        const msg = `¿Está seguro de que desea remover el nodo <span class="font-bold text-danger">${nodeId}</span> del cluster federado?`;
+        showConfirmGeneric(msg, async () => {
+            try {
+                const res = await fetch(`/federated/node/remove/${nodeId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('fed_token') }
+                });
+                if (res.ok) {
+                    showSuccess(`Nodo ${nodeId} removido del cluster federado`);
+                    // Remove from select if present
+                    const opt = configNodeSelect.querySelector(`option[value="${nodeId}"]`);
+                    if (opt) opt.remove();
+                    updateStatus();
+                }
+            } catch (e) {
+                console.error('Error removing node:', e);
+            }
+        });
+    };
 });

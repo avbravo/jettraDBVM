@@ -96,12 +96,12 @@ public class FederatedEngine {
         } else {
             saveState();
         }
-        LOGGER.info("Registered DB node: " + nodeId + " at " + url);
+        LOGGER.info(() -> String.format("Registered DB node: %s at %s", nodeId, url));
     }
 
     private synchronized void assignLeader(String nodeId) {
         this.currentLeaderId = nodeId;
-        LOGGER.info("Assigned NEW LEADER: " + nodeId);
+        LOGGER.info(() -> String.format("Assigned NEW LEADER: %s", nodeId));
         saveState();
         
         // Call promote endpoint on the new leader
@@ -115,10 +115,10 @@ public class FederatedEngine {
             httpClient.sendAsync(req, HttpResponse.BodyHandlers.discarding())
                     .thenAccept(res -> {
                         if (res.statusCode() == 200) {
-                            LOGGER.info("Successfully promoted " + nodeId + " via API");
+                            LOGGER.info(() -> String.format("Successfully promoted %s via API", nodeId));
                             notifyAllNodesOfLeader();
                         } else {
-                            LOGGER.warning("Failed to promote " + nodeId + " (Status: " + res.statusCode() + ")");
+                            LOGGER.warning(() -> String.format("Failed to promote %s (Status: %d)", nodeId, res.statusCode()));
                         }
                     });
         }
@@ -139,15 +139,9 @@ public class FederatedEngine {
         if (leaderNode == null) return;
         String leaderUrl = (String) leaderNode.get("url");
 
-        // Tell the leader about all other nodes so it can update its _clusternodes
-        // We iterate and send register/update commands to the Leader
         for (Map<String, Object> node : dbNodes.values()) {
-             // We can optimize by sending a batch, but for now loop is fine
              try {
-                String status = (String) node.getOrDefault("status", "ACTIVE");
-                // Construct payload
                 Map<String, Object> payload = new HashMap<>(node);
-                // Ensure ID is set
                 if (!payload.containsKey("_id")) payload.put("_id", node.get("id"));
                 
                 String json = mapper.writeValueAsString(payload);
@@ -161,12 +155,12 @@ public class FederatedEngine {
                 httpClient.sendAsync(req, HttpResponse.BodyHandlers.discarding())
                         .thenAccept(res -> {
                             if (res.statusCode() != 200) {
-                                LOGGER.warning("Failed to sync node " + node.get("id") + " to leader " + currentLeaderId);
+                                LOGGER.warning(() -> String.format("Failed to sync node %s to leader %s", node.get("id"), currentLeaderId));
                             }
                         });
 
-             } catch (Exception e) {
-                 LOGGER.warning("Error notifying leader: " + e.getMessage());
+             } catch (IOException e) {
+                 LOGGER.warning(() -> "Error notifying leader: " + e.getMessage());
              }
         }
     }
@@ -178,17 +172,75 @@ public class FederatedEngine {
             Map<String, Object> info = entry.getValue();
             if (!info.containsKey("lastSeen")) continue;
             long lastSeen = (long) info.get("lastSeen");
-            if (now - lastSeen > 10000) { // Reduced to 10 seconds for better responsiveness
-                if (!"INACTIVE".equals(info.get("status"))) {
+            String status = (String) info.getOrDefault("status", "ACTIVE");
+            
+            if (now - lastSeen > 10000) { 
+                if (!"INACTIVE".equals(status)) {
                     info.put("status", "INACTIVE");
                     changed = true;
                     if (isFederatedLeader && entry.getKey().equals(currentLeaderId)) {
                         electNewLeader();
                     }
                 }
+            } else if ("ACTIVE".equals(status)) {
+                // Fetch metrics if active
+                fetchNodeMetrics(entry.getKey(), (String) info.get("url"));
             }
         }
         if (changed) saveState();
+    }
+
+    private void fetchNodeMetrics(String nodeId, String url) {
+        if (url == null) return;
+        long startTime = System.currentTimeMillis();
+        try {
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url + "/api/metrics"))
+                    .GET()
+                    .timeout(java.time.Duration.ofSeconds(2))
+                    .build();
+            
+            httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(res -> {
+                        long latency = System.currentTimeMillis() - startTime;
+                        if (res.statusCode() == 200) {
+                            try {
+                                Map<String, Object> metrics = mapper.readValue(res.body(), Map.class);
+                                metrics.put("latency", latency);
+                                Map<String, Object> info = dbNodes.get(nodeId);
+                                if (info != null) {
+                                    info.put("metrics", metrics);
+                                }
+                            } catch (Exception e) {}
+                        }
+                    });
+        } catch (Exception e) {}
+    }
+
+    public void stopNode(String nodeId) {
+        Map<String, Object> node = dbNodes.get(nodeId);
+        if (node != null) {
+            String url = (String) node.get("url");
+            // Call stop endpoint. Note: /raft/rpc/stop or /api/cluster/restart?
+            // User requested "detener" which usually means permanent or at least exit(0).
+            // We'll use the raft stop endpoint which is System.exit(0)
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url + "/raft/rpc/stop"))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            httpClient.sendAsync(req, HttpResponse.BodyHandlers.discarding());
+        }
+    }
+
+    public void removeNode(String nodeId) {
+        if (dbNodes.remove(nodeId) != null) {
+            if (nodeId.equals(currentLeaderId)) {
+                electNewLeader();
+            } else {
+                saveState();
+            }
+            LOGGER.info(() -> String.format("Removed DB node: %s", nodeId));
+        }
     }
 
     private synchronized void electNewLeader() {

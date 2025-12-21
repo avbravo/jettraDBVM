@@ -62,6 +62,8 @@ public class FederatedService implements HttpService {
         rules.post("/config", this::saveConfig);
         rules.get("/node-config/{nodeId}", this::getNodeConfig);
         rules.post("/node-config/{nodeId}", this::saveNodeConfig);
+        rules.post("/node/stop/{nodeId}", this::handleStopNode);
+        rules.post("/node/remove/{nodeId}", this::handleRemoveNode);
     }
 
     private void handleLogin(ServerRequest req, ServerResponse res) {
@@ -271,5 +273,16 @@ public class FederatedService implements HttpService {
         } catch (Exception e) {
             res.status(500).send(e.getMessage());
         }
+    }
+    private void handleStopNode(ServerRequest req, ServerResponse res) {
+        String nodeId = req.path().pathParameters().get("nodeId");
+        engine.stopNode(nodeId);
+        res.send(Map.of("status", "stop_sent").toString());
+    }
+
+    private void handleRemoveNode(ServerRequest req, ServerResponse res) {
+        String nodeId = req.path().pathParameters().get("nodeId");
+        engine.removeNode(nodeId);
+        res.send(Map.of("status", "removed").toString());
     }
 }

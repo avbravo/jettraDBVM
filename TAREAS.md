@@ -49,12 +49,18 @@ curl -u admin:adminadmin "http://localhost:8080/..."
      esta base de datos se usa con el servidor federado para almacenar los datos en memoria , mientras un proceso asincrono 
       se encarga de persistir los datos en el lider y los nodos controlados por el servidor federado.
 
-
+- [] Integrar la base de datos en Memoria con el servidor federado para que escriba en cache los datos
 - [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
+
+# Driver
+
+- [] Modificar el driver para que interactue con el servidor federado en lugar de las bases de datos directamente
+- [] Modificar el shell para que interactue con el servidor federado en lugar de las bases de datos directamente
+- [] Modificar el curl para que interactue con el servidor federado en lugar de las bases de datos directamente
 
 
 # Servidor Federado
-- [] Realizar metricas de cada nodo (consumo de ram, espacio libre, consumo de cpu, latencia)
+
 
 - [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
 y actualiza los archivos .md que se refieren al tema.
@@ -74,8 +80,43 @@ deben pasar por el servidor federado.
 
 - [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
 
+- [] Crear un shell para el servidor federado que permita administrar los nodos
 
-- [] En Servidor Federado debe  permitir detener un nodo, removerlo, ver el estado de metrics y actualizar el nodo correspondiente con el cambio realizado.
+- [] Para mantener la seguridad una vez que se reinicia o detienen los nodos la interface web debe dirigirse al login en cuanto inicia para que el usuario se autentique esto debe ser aplicacado en el servidor federado y en el lider y en los nodos
+para evitar que un usuario use la interface web sin autorizacion.
+
+-[] Cuando un nodo este inactivo no debe estar hablitado el boton detener nodo  y lñas estadistocas  de consumo de CPU, RAM, DISCO Y LATENCIA DEBEN ESTAR EN CERO 
+
+
+
+
+
+
+
+# Referencias entre documentos
+
+
+# Jettra Storage 
+
+
+
+# Base de datos prueba JetrraBasic
+
+
+# ---------------------------------------------------------
+# Completadas
+# ------------------------------------------------------------
+
+# Servidor Federado
+- [x] el dialogo se queda con el mnensaje Comando de detención enviado al nodo node-2
+Entendido y no se cierra automaticamente, se puede colocar un progress bar indicando el proceso y en cuanto finalice de manera autom,atica cerrar ese dialogo
+
+- [x] Realizar metricas de cada nodo (consumo de ram, espacio libre, consumo de cpu, latencia)
+- [] Cuando intentas detener un nodo puedes cambiar el dialogo que dice ¿Está seguro de que desea detener el nodo node-2? qiue es un dialogo estarndar javsactrip por uno mas elegante usando flowbitecss y has lo mismo para el dialogo Comando de detención enviado la idea es que los dialogos se vean mas elegantres
+- [x] En Servidor Federado debe  permitir detener un nodo, removerlo, ver el estado de metrics(Memoria Ram, consumo de CPU, Disco duro disponible, latencia de red) y actualizar el nodo correspondiente con el cambio realizado se debe notificar al nodo.
+     realizarla implementacion desde la interface web en el formulario Dashboard del Cluster
+
+
 
 
 - [x] El reiniciar el servidor desde el formulario web Configuración del Nodo (config.json), lo detiene automaticamente
@@ -108,22 +149,6 @@ si el lider falla asigna otro nodo como lider.
 Si falla el servidor federado otro servidor federado toma el lugar de lider federado.
 Actualiza la interfaces web, el shell, curl y driver para implementarlo.
 Ademas crea en /books/guide/federated.md donde se describe el objetivo como se implementa.
-
-
-
-
-
-
-
-# Referencias entre documentos
-
-
-# Jettra Storage 
-
-
-
-# Base de datos prueba JetrraBasic
-
 
 
 
