@@ -103,6 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // -- Authentication --
 
+    // Security: Force login on application startup by clearing stored tokens
+    localStorage.removeItem('fed_token');
+    localStorage.removeItem('fed_user');
+
     if (localStorage.getItem('fed_token')) {
         showDashboard();
     }
@@ -323,10 +327,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const isLeader = node.id === data.leaderId;
             const metrics = node.metrics || {};
-            const ramUsage = metrics.ramUsage ? `${metrics.ramUsage}%` : '--';
-            const cpuUsage = metrics.cpuUsage ? `${metrics.cpuUsage}%` : '--';
-            const diskUsage = metrics.diskUsage ? `${metrics.diskUsage}%` : '--';
-            const latency = metrics.latency ? `${metrics.latency}ms` : '--';
+            const isActive = node.status === 'ACTIVE';
+
+            // Metrics: Set to zero if node is inactive
+            const ramUsage = (isActive && metrics.ramUsage) ? `${metrics.ramUsage}%` : '0%';
+            const cpuUsage = (isActive && metrics.cpuUsage) ? `${metrics.cpuUsage}%` : '0%';
+            const diskUsage = (isActive && metrics.diskUsage) ? `${metrics.diskUsage}%` : '0%';
+            const latency = (isActive && metrics.latency) ? `${metrics.latency}ms` : '0ms';
 
             const row = document.createElement('tr');
             row.innerHTML = `
@@ -341,7 +348,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A'}</td>
                 <td>
                     <div class="action-group">
-                        <button class="btn-icon text-warning" onclick="stopNode('${node.id}')" title="Detener Nodo">
+                        <button class="btn-icon text-warning ${!isActive ? 'opacity-50 cursor-not-allowed' : ''}" 
+                                onclick="${isActive ? `stopNode('${node.id}')` : ''}" 
+                                title="${isActive ? 'Detener Nodo' : 'Nodo ya inactivo'}"
+                                ${!isActive ? 'disabled' : ''}>
                             <i class="fas fa-stop-circle"></i>
                         </button>
                         <button class="btn-icon text-danger" onclick="removeNode('${node.id}')" title="Remover del Cluster">

@@ -77,15 +77,12 @@ deben pasar por el servidor federado.
 - [] Puedes documentar como acceder a la interface web del servidor federeado y cambia la contraseña inicial por adminadmin y crea un registro que permita cambiar la contraseña y almacenarla para mayor seguridad. y en el Dashboard Federated siempre dice que esta activo el nodeo cuando no esta activo.
 - [] En la interface grafica de cada nodo solo debe mostrar al servidor federado al que pertenece
 
-
-- [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
-
 - [] Crear un shell para el servidor federado que permita administrar los nodos
 
-- [] Para mantener la seguridad una vez que se reinicia o detienen los nodos la interface web debe dirigirse al login en cuanto inicia para que el usuario se autentique esto debe ser aplicacado en el servidor federado y en el lider y en los nodos
-para evitar que un usuario use la interface web sin autorizacion.
+- [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
+     Documentar en federated.md como debe ser el proceso a nivel de servidor federado y nodos.
 
--[] Cuando un nodo este inactivo no debe estar hablitado el boton detener nodo  y lñas estadistocas  de consumo de CPU, RAM, DISCO Y LATENCIA DEBEN ESTAR EN CERO 
+
 
 
 
@@ -108,11 +105,19 @@ para evitar que un usuario use la interface web sin autorizacion.
 # ------------------------------------------------------------
 
 # Servidor Federado
+- [x] Para mantener la seguridad una vez que se reinicia o detienen los nodos la interface web debe dirigirse al login en cuanto inicia para que el usuario se autentique esto debe ser aplicacado en el servidor federado y en el lider y en los nodos
+para evitar que un usuario use la interface web sin autorizacion.
+
+-[x] Cuando un nodo este inactivo no debe estar hablitado el boton detener nodo  y lñas estadistocas  de consumo de CPU, RAM, DISCO Y LATENCIA DEBEN ESTAR EN CERO en el formulario web del servidor federado
+
+
+
+
 - [x] el dialogo se queda con el mnensaje Comando de detención enviado al nodo node-2
 Entendido y no se cierra automaticamente, se puede colocar un progress bar indicando el proceso y en cuanto finalice de manera autom,atica cerrar ese dialogo
 
 - [x] Realizar metricas de cada nodo (consumo de ram, espacio libre, consumo de cpu, latencia)
-- [] Cuando intentas detener un nodo puedes cambiar el dialogo que dice ¿Está seguro de que desea detener el nodo node-2? qiue es un dialogo estarndar javsactrip por uno mas elegante usando flowbitecss y has lo mismo para el dialogo Comando de detención enviado la idea es que los dialogos se vean mas elegantres
+- [x] Cuando intentas detener un nodo puedes cambiar el dialogo que dice ¿Está seguro de que desea detener el nodo node-2? qiue es un dialogo estarndar javsactrip por uno mas elegante usando flowbitecss y has lo mismo para el dialogo Comando de detención enviado la idea es que los dialogos se vean mas elegantres
 - [x] En Servidor Federado debe  permitir detener un nodo, removerlo, ver el estado de metrics(Memoria Ram, consumo de CPU, Disco duro disponible, latencia de red) y actualizar el nodo correspondiente con el cambio realizado se debe notificar al nodo.
      realizarla implementacion desde la interface web en el formulario Dashboard del Cluster
 

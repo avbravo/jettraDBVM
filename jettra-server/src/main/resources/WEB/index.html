@@ -695,6 +695,21 @@
 
     <script src="js/app.bundle.js"></script>
     <script>
+        // Security: Force login on startup by clearing stored tokens
+        localStorage.removeItem('jettra_token');
+        localStorage.removeItem('jettra_user');
+        if (window.app && window.app.state) {
+            window.app.state.token = null;
+            window.app.state.user = null;
+            // Force return to login view if app has that method
+            if (typeof window.app.logout === 'function') {
+                window.app.logout();
+            } else {
+                window.location.hash = '#login'; // Heuristic
+            }
+        }
+    </script>
+    <script>
         (function () {
             // Monkey patch app.showSection to trigger data load
             const originalShowSection = app.showSection;
