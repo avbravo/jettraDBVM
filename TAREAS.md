@@ -44,8 +44,17 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 [BellSoft](https://bell-sw.com/pages/downloads/#jdk-25-lts)
 
+# JettraMemoryDB
+- [] Crear la base de datos JettraMemoryDB que es una base de datos Key-Value en memoria desarrollada en Golang y que contiene un driver Java
+     esta base de datos se usa con el servidor federado para almacenar los datos en memoria , mientras un proceso asincrono 
+      se encarga de persistir los datos en el lider y los nodos controlados por el servidor federado.
+
+
+- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
+
 
 # Servidor Federado
+- [] Realizar metricas de cada nodo (consumo de ram, espacio libre, consumo de cpu, latencia)
 
 - [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
 y actualiza los archivos .md que se refieren al tema.
@@ -59,10 +68,9 @@ deben pasar por el servidor federado.
 - [] Verifica que en los nodos que no son lider no pueda insertar , actualizar o eliminar bases de datos, coleccion, documentos, indices, reglas.
 
 
-
-
 - [] Puedes documentar como acceder a la interface web del servidor federeado y cambia la contraseña inicial por adminadmin y crea un registro que permita cambiar la contraseña y almacenarla para mayor seguridad. y en el Dashboard Federated siempre dice que esta activo el nodeo cuando no esta activo.
-- [] En la interface grafica de cada nodo solo debe mostrar al servidor federado al que pertenece, Eliminar la opcion que tenia que mostraba todos los nodos. Esa opcion solo se vera desde el servidor federado.
+- [] En la interface grafica de cada nodo solo debe mostrar al servidor federado al que pertenece
+
 
 - [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
 
@@ -70,7 +78,13 @@ deben pasar por el servidor federado.
 - [] En Servidor Federado debe  permitir detener un nodo, removerlo, ver el estado de metrics y actualizar el nodo correspondiente con el cambio realizado.
 
 
-- [] al reiniciar el servidor se queda detenido y no reinicia de manera automatica
+- [x] El reiniciar el servidor desde el formulario web Configuración del Nodo (config.json), lo detiene automaticamente
+
+pero se queda detenido y no reinicia de manera automatica el nodo. (El reinicio debe ser manual)
+
+
+
+- [x] Eliminar la opcion que tenia que mostraba todos los nodos. Esa opcion solo se vera desde el servidor federado.
 
 - [x] Cuando el lider no esta disponible el sistema no asigna un nodo como nuevo lider
 
@@ -99,8 +113,7 @@ Ademas crea en /books/guide/federated.md donde se describe el objetivo como se i
 
 
 
-# JettraMemory
-- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
+
 
 # Referencias entre documentos
 

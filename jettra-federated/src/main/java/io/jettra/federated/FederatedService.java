@@ -185,7 +185,7 @@ public class FederatedService implements HttpService {
                 new Thread(() -> {
                     try {
                         Thread.sleep(1000);
-                        System.exit(0);
+                        System.exit(3);
                     } catch (Exception e) {}
                 }).start();
             }
