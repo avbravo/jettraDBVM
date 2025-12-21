@@ -154,6 +154,17 @@
                                     <span class="flex-1 ml-3 whitespace-nowrap">Invoices</span>
                                 </a>
                             </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('federated')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
+                                </a>
+                            </li>
                             <!-- <li>
                                 <a href="#"
                                     class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
@@ -701,6 +712,52 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Federated Section -->
+                    <div id="federated-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Federated Cluster Management</h2>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Federated Status</h3>
+                                <div id="federated-status-content" class="bg-black/20 p-4 rounded mb-4">
+                                    Loading Federated Status...
+                                </div>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Server ID</th>
+                                                <th>URL</th>
+                                                <th>Role</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="federated-servers-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel mt-6" style="margin-top: 2rem;">
+                                <h3 class="text-xl font-semibold mb-4">Managed DB Nodes</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Node ID</th>
+                                                <th>URL</th>
+                                                <th>Status</th>
+                                                <th>Last Seen</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="federated-managed-nodes-tbody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
         </div>
 
@@ -730,6 +787,99 @@
     </div>
 
     <script src="js/app.bundle.js"></script>
+    <script>
+        (function () {
+            // Monkey patch app.showSection to trigger data load
+            const originalShowSection = app.showSection;
+            app.showSection = function (section) {
+                if (originalShowSection) originalShowSection(section);
+                if (section === 'federated') {
+                    loadFederatedStatus();
+                }
+            };
+
+            function loadFederatedStatus() {
+                const statusDiv = document.getElementById('federated-status-content');
+                statusDiv.innerHTML = 'Loading...';
+
+                fetch('/api/federated', {
+                    headers: { 'Authorization': localStorage.getItem('jettra_token') || '' }
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error(res.statusText);
+                        return res.json();
+                    })
+                    .then(data => {
+                        let html = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <div class="stat-card">
+                                <div class="stat-title">DB Cluster Leader</div>
+                                <div class="stat-value text-primary">${data.leaderId || 'None'}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-title">Federated Role</div>
+                                <div class="stat-value ${data.isFederatedLeader ? 'text-success' : 'text-warning'}">
+                                    ${data.isFederatedLeader ? 'LEADER' : 'FOLLOWER'}
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-title">Raft State</div>
+                                <div class="stat-value">${data.raftState || 'Unknown'}</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-title">Raft Term</div>
+                                <div class="stat-value">${data.raftTerm || 0}</div>
+                            </div>
+                        </div>
+                    `;
+                        statusDiv.innerHTML = html;
+
+                        // Managed Nodes table
+                        const tbody = document.getElementById('federated-managed-nodes-tbody');
+                        if (tbody) {
+                            tbody.innerHTML = '';
+                            if (data.nodes) {
+                                data.nodes.forEach(node => {
+                                    const tr = document.createElement('tr');
+                                    tr.innerHTML = `
+                                    <td>${node.id || 'N/A'}</td>
+                                    <td>${node.url}</td>
+                                    <td><span class="badge badge-${node.status === 'ACTIVE' ? 'success' : 'danger'}">${node.status}</span></td>
+                                    <td>${node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : '-'}</td>
+                                `;
+                                    tbody.appendChild(tr);
+                                });
+                            }
+                        }
+
+                        // Federated Peers table
+                        const serverTbody = document.getElementById('federated-servers-tbody');
+                        if (serverTbody) {
+                            serverTbody.innerHTML = '';
+                            if (data.raftPeers) {
+                                data.raftPeers.forEach(peer => {
+                                    const tr = document.createElement('tr');
+                                    // Determine role based on ID if possible, otherwise guess
+                                    let role = 'PEER';
+                                    if (data.raftLeaderId && peer.includes(data.raftLeaderId)) role = 'LEADER'; // Simple heuristic
+
+                                    tr.innerHTML = `
+                                   <td>-</td>
+                                   <td>${peer}</td>
+                                   <td>${role}</td>
+                                   <td>Active</td>
+                                `;
+                                    serverTbody.appendChild(tr);
+                                });
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        statusDiv.innerHTML = `<div class="text-danger">Error loading status: ${err.message}</div>`;
+                    });
+            }
+        })();
+    </script>
 </body>
 
 </html>

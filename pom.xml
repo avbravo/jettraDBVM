@@ -10,14 +10,14 @@
 
     <modules>
         <module>jettra-server</module>
+        <module>jettra-federated</module>
         <module>jettra-shell</module>
         <module>jettra-driver</module>
         <module>jettra-collections</module>
     </modules>
 
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <helidon.version>4.0.5</helidon.version>
     </properties>

@@ -1,5 +1,8 @@
 # TASK
 
+
+java -XX:+UseCompactObjectHeaders -jar jettraFederated.jar
+
 java -XX:+UseCompactObjectHeaders -jar jettraDBVM.jar
 
 java -XX:+UseCompactObjectHeaders -jar jettraDBVMShell.jar
@@ -42,6 +45,48 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 [BellSoft](https://bell-sw.com/pages/downloads/#jdk-25-lts)
 
 
+# Servidor Federado
+
+- [] Puedes documentar como acceder a la interface web del servidor federeado y cambia la contraseña inicial por adminadmin y crea un registro que permita cambiar la contraseña y almacenarla para mayor seguridad. y en el Dashboard Federated siempre dice que esta activo el nodeo cuando no esta activo.
+- [] En la interface grafica de cada nodo solo debe mostrar al servidor federado al que pertenece, Eliminar la opcion que tenia que mostraba todos los nodos. Esa opcion solo se vera desde el servidor federado.
+
+- [ ]ejecutar dos servidores federados.
+
+- [x] Puedes añadir una interface grafica para el servidor federado qe contenga un login, y un dashboard que permita ver todos los nodos y sus estados indicando el nodo lider
+
+
+- [x] Actualizar curl, shell, driver con el uso de servidor federado y actualizar la documentacion respectiva
+- [x] Crear la interface web del servidor federado.
+
+- [x] Crea un proyecto a nivel de jettra-server llamado jettra-federated cuya funcion es actuar como servidor federado
+este servidor no almacena bases de datos ni reglas ni indices es un enrutador interno que se usa para asignar 
+mediante algoritmo de consenso el lider y los nodos leyendo la configuracion de config.json
+El actualiza la base de datos del lider con los nodos y el estatus y se asegura de que sean replicadaos a todos los nodos
+si el lider falla asigna otro nodo como lider.
+Si falla el servidor federado otro servidor federado toma el lugar de lider federado.
+Actualiza la interfaces web, el shell, curl y driver para implementarlo.
+Ademas crea en /books/guide/federated.md donde se describe el objetivo como se implementa.
+
+
+
+
+
+# JettraMemory
+- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
+
+# Referencias entre documentos
+
+
+# Jettra Storage 
+
+
+
+# Base de datos prueba JetrraBasic
+
+
+
+
+
 # Distributed Databases
 
 - [x] se mantiene el error que muesta en la parte grafica el nombre de nodo 1 para todos los nodos y debe ser el nombre de cada nodo, y en el nodo 3 marcha que el nodo 1 y nodo2 estan inactivos cuando no es cierto ademas mostrar la inforamcion del estado de cada nodo, como cpu consumidad, ram disponible, espacio en disco disponible
@@ -67,26 +112,6 @@ esto puede provocar inconsistencia ya que dejaria en ciertos momentos al cluster
 
 Nanoservicio gRPC (Comunicación Inter-Nodo Raft)
 gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionales y una estructura de servicio bien definida (via .proto).
-
-
-
-
-
-# JettraMemory
-- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
-
-# Referencias entre documentos
-
-
-# Jettra Storage 
-
-
-
-# Base de datos prueba JetrraBasic
-
-
-
-# Distributed Databases
 
 
 - [x] Cuando un nodo deja de funcionar no actualiza el estado a inactivo en la interface Web

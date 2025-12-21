@@ -1,8 +1,12 @@
 {
-  "Host" : "0.0.0.0",
-  "Port" : 6585,
-  "DataDir" : "data",
-  "distributed" : true,
-  "Bootstrap" : true,
-  "NodeID" : "node-1"
+  "Host": "0.0.0.0",
+  "Port": 6585,
+  "DataDir": "data",
+  "distributed": true,
+  "Bootstrap": true,
+  "NodeID": "node-1",
+  "Mode": "federated",
+  "FederatedServers": [
+    "http://localhost:9000"
+  ]
 }

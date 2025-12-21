@@ -1370,6 +1370,7 @@ const App = {
             if (sectionId === 'invoices') this.initInvoicesView();
             if (sectionId === 'query') this.initQueryView();
             if (sectionId === 'users') this.initUsersView();
+            if (sectionId === 'federated') this.initFederatedView();
 
             return;
         }
@@ -3019,6 +3020,68 @@ const App = {
                 }
             }
         });
+    },
+
+    async initFederatedView() {
+        if (this.state.federatedInterval) clearInterval(this.state.federatedInterval);
+        this.refreshFederatedStatus();
+        this.state.federatedInterval = setInterval(() => this.refreshFederatedStatus(), 5000);
+    },
+
+    async refreshFederatedStatus() {
+        if (!document.getElementById('federated-section').classList.contains('active') &&
+            document.getElementById('federated-section').style.display === 'none') {
+            clearInterval(this.state.federatedInterval);
+            this.state.federatedInterval = null;
+            return;
+        }
+
+        try {
+            const res = await this.authenticatedFetch('/api/federated');
+            if (res.ok) {
+                const data = await res.json();
+                this.renderFederatedStatus(data);
+            } else {
+                document.getElementById('federated-status-content').innerHTML = `
+                    <div class="alert alert-error">Federated server not responding or not configured.</div>
+                `;
+            }
+        } catch (e) {
+            console.error('Federated status error:', e);
+        }
+    },
+
+    renderFederatedStatus(data) {
+        const statusContent = document.getElementById('federated-status-content');
+        const leaderId = data.leaderId || 'None';
+        statusContent.innerHTML = `
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="text-gray-400">Current Federated Leader:</span> 
+                    <span class="ml-2 font-bold text-blue-400">${leaderId}</span>
+                </div>
+                <div class="text-sm opacity-70">
+                    Last sync: ${new Date().toLocaleTimeString()}
+                </div>
+            </div>
+        `;
+
+        const nodesTbody = document.getElementById('federated-managed-nodes-tbody');
+        nodesTbody.innerHTML = '';
+        if (data.nodes) {
+            data.nodes.forEach(node => {
+                const tr = document.createElement('tr');
+                const lastSeen = node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A';
+                const statusClass = node.status === 'ACTIVE' ? 'status-active' : 'status-inactive';
+                tr.innerHTML = `
+                    <td>${node.id}</td>
+                    <td>${node.url}</td>
+                    <td><span class="status-badge ${statusClass}">${node.status}</span></td>
+                    <td>${lastSeen}</td>
+                `;
+                nodesTbody.appendChild(tr);
+            });
+        }
     }
 
 };

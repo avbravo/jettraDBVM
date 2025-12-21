@@ -1,0 +1,7 @@
+{
+    "Mode": "federated",
+    "Port": 9000,
+    "FederatedServers": [
+        "http://localhost:9000"
+    ]
+}

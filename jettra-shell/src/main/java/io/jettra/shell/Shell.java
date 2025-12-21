@@ -194,6 +194,9 @@ public class Shell {
                     case "cluster":
                         handleCluster(arg);
                         break;
+                    case "federated":
+                        handleFederated(arg);
+                        break;
 
                     default:
                         // Treat as raw command (JQL/SQL/Mongo)
@@ -952,6 +955,38 @@ public class Shell {
          } else {
              System.out.println("Unknown cluster command: " + subCmd);
          }
+    }
+
+    private static void handleFederated(String arg) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/api/federated"))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                Map<String, Object> status = mapper.readValue(response.body(), Map.class);
+                System.out.println("Federated Leader: " + status.get("leaderId"));
+                System.out.println("----------------------------------------");
+                java.util.List<Map<String, Object>> nodes = (java.util.List<Map<String, Object>>) status.get("nodes");
+                if (nodes != null) {
+                    System.out.printf("%-15s | %-25s | %-10s | %-15s\n", "Node ID", "URL", "Status", "Last Seen");
+                    for (Map<String, Object> node : nodes) {
+                        String id = (String) node.get("id");
+                        String url = (String) node.get("url");
+                        String nStatus = (String) node.get("status");
+                        Long lastSeen = (Long) node.get("lastSeen");
+                        String lastSeenStr = lastSeen != null ? new java.util.Date(lastSeen).toString() : "N/A";
+                        System.out.printf("%-15s | %-25s | %-10s | %-15s\n", id, url, nStatus, lastSeenStr);
+                    }
+                }
+            } else {
+                System.out.println("Federated mode not active or server unreachable: " + response.body());
+            }
+        } catch (Exception e) {
+            System.out.println("Error fetching federated status: " + e.getMessage());
+        }
     }
 }
 

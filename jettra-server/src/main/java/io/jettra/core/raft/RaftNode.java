@@ -6,7 +6,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,6 +29,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 public class RaftNode {
     private static final Logger LOGGER = Logger.getLogger(RaftNode.class.getName());
+
+    public java.net.http.HttpClient getHttpClientProxy() {
+        return httpClient;
+    }
 
     public enum State {
         FOLLOWER, CANDIDATE, LEADER
@@ -150,10 +156,50 @@ public class RaftNode {
             this.state = State.FOLLOWER;
         }
 
+        startFederatedSync();
+
         this.lastHeartbeatTime = System.currentTimeMillis();
 
         // Start single tick loop for both heartbeats and election timeouts
         scheduler.scheduleAtFixedRate(this::tick, 1000, 200, TimeUnit.MILLISECONDS);
+    }
+
+    private void startFederatedSync() {
+        List<String> fedServers = (List<String>) configManager.getOrDefault("FederatedServers", Collections.emptyList());
+        if (!fedServers.isEmpty()) {
+            LOGGER.info("Federated mode active. Starting registration and heartbeat sync.");
+            scheduler.scheduleAtFixedRate(this::syncWithFederated, 0, 5, TimeUnit.SECONDS);
+        }
+    }
+
+    private void syncWithFederated() {
+        try {
+            List<String> fedServers = (List<String>) configManager.getOrDefault("FederatedServers", Collections.emptyList());
+            if (fedServers.isEmpty()) return;
+
+            String fedUrl = fedServers.get(0);
+            
+            // Register or Heartbeat
+            Map<String, String> data = new HashMap<>();
+            data.put("nodeId", nodeId);
+            data.put("url", "http://localhost:" + configManager.get("Port"));
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(fedUrl + "/federated/register"))
+                    .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(data)))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofMillis(2000))
+                    .build();
+
+            httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(res -> {
+                        if (res.statusCode() != 200) {
+                            LOGGER.warning("Failed to sync with Federated Server: " + res.body());
+                        }
+                    });
+        } catch (Exception e) {
+            LOGGER.warning("Federated sync error: " + e.getMessage());
+        }
     }
 
     private final java.util.concurrent.ConcurrentHashMap<String, String> peerUrlToId = new java.util.concurrent.ConcurrentHashMap<>();

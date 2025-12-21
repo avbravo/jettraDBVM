@@ -105,6 +105,7 @@ public class WebServices {
                 // Cluster
                 .get("/api/cluster", this::getClusterStatus)
                 .get("/api/metrics", this::getMetrics)
+                .get("/api/federated", this::getFederatedStatus)
                 .post("/api/cluster/register", this::registerNode)
                 .post("/api/cluster/deregister", this::deregisterNode)
                 .post("/api/cluster/stop", this::stopNode)
@@ -1447,6 +1448,35 @@ public class WebServices {
         try {
             String dataDir = (String) engine.getConfigManager().getOrDefault("DataDir", "data");
             res.send(jsonMapper.writeValueAsString(io.jettra.core.util.MetricsUtils.getSystemMetrics(dataDir)));
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getFederatedStatus(ServerRequest req, ServerResponse res) {
+        try {
+            List<String> fedServers = (List<String>) engine.getConfigManager().getOrDefault("FederatedServers", java.util.Collections.emptyList());
+            if (fedServers.isEmpty()) {
+                res.status(Status.NOT_FOUND_404).send("Federated mode not configured");
+                return;
+            }
+
+            // Simple proxy to the first federated server for now
+            String fedUrl = fedServers.get(0);
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(fedUrl + "/federated/status"))
+                    .GET()
+                    .timeout(java.time.Duration.ofMillis(2000))
+                    .build();
+
+            engine.getRaftNode().getHttpClientProxy().sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(response -> {
+                        res.send(response.body());
+                    })
+                    .exceptionally(ex -> {
+                        res.status(Status.INTERNAL_SERVER_ERROR_500).send("Federated server unreachable: " + ex.getMessage());
+                        return null;
+                    });
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }

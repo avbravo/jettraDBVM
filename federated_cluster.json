@@ -1,0 +1,9 @@
+{
+  "nodes" : [ {
+    "lastSeen" : 1766203836203,
+    "id" : "db-1",
+    "url" : "http://localhost:8080",
+    "status" : "ACTIVE"
+  } ],
+  "leaderId" : "db-1"
+}
