@@ -72,19 +72,22 @@ public class FederatedRaftNode {
         votedFor = selfId;
         lastHeartbeatReceived = System.currentTimeMillis();
         
-        // If single node cluster (myself + no peers), become leader immediately
-        if (federatedPeers.isEmpty()) {
+        List<String> otherPeers = federatedPeers.stream()
+                .filter(url -> !url.contains("localhost:" + engine.getPort()))
+                .filter(url -> !url.contains("127.0.0.1:" + engine.getPort()))
+                .filter(url -> !url.contains("0.0.0.0:" + engine.getPort()))
+                .toList();
+
+        if (otherPeers.isEmpty()) {
             becomeLeader();
             return;
         }
 
-        int votes = 1; // Vote for self
-        for (String peerUrl : federatedPeers) {
-             // Avoid sending to self if it's in the list (though simple list usually excludes self, 
-             // but let's assume external config might have all)
-             if (peerUrl.contains("localhost:" + engine.getPort())) continue; // Simple self check
-             
-             sendRequestVote(peerUrl);
+        final java.util.concurrent.atomic.AtomicInteger votes = new java.util.concurrent.atomic.AtomicInteger(1);
+        int majority = (federatedPeers.size() / 2) + 1;
+
+        for (String peerUrl : otherPeers) {
+             sendRequestVote(peerUrl, votes, majority);
         }
     }
 
@@ -111,7 +114,7 @@ public class FederatedRaftNode {
 
     // --- RPC Senders ---
 
-    private void sendRequestVote(String peerUrl) {
+    private void sendRequestVote(String peerUrl, java.util.concurrent.atomic.AtomicInteger votes, int majority) {
          Map<String, Object> body = new HashMap<>();
          body.put("term", currentTerm);
          body.put("candidateId", selfId);
@@ -124,14 +127,9 @@ public class FederatedRaftNode {
                  if (term > currentTerm) {
                      stepDown(term);
                  } else if (state == State.CANDIDATE && voteGranted) {
-                     // In a real implementation we count votes. 
-                     // For MVP, if we get ANY vote in a small cluster, or just majority logic.
-                     // Let's implement simple majority.
-                     // But we can't easily track majority across async calls without atomic counters.
-                     // For now, let's just assume we need at least one peer to ack if we have peers.
-                     // Actually, let's do a trick: if we get a vote, we check if we have enough.
-                     // Implementation of strict majority is skipped for brevity/complexity in this artifact,
-                     // but normally we'd collect `votes`.
+                     if (votes.incrementAndGet() >= majority) {
+                         becomeLeader();
+                     }
                  }
              }
          });
@@ -255,5 +253,9 @@ public class FederatedRaftNode {
 
     public String getLeaderId() {
         return leaderId;
+    }
+
+    public HttpClient getHttpClient() {
+        return httpClient;
     }
 }

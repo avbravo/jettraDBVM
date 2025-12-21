@@ -33,6 +33,10 @@ public class FederatedEngine {
         loadState();
     }
 
+    public Map<String, Map<String, Object>> getDbNodes() {
+        return dbNodes;
+    }
+
     public void onBecomeLeader() {
         this.isFederatedLeader = true;
         LOGGER.info("This node is now the FEDERATED LEADER. Taking control of DB cluster.");
@@ -99,7 +103,25 @@ public class FederatedEngine {
         this.currentLeaderId = nodeId;
         LOGGER.info("Assigned NEW LEADER: " + nodeId);
         saveState();
-        notifyAllNodesOfLeader();
+        
+        // Call promote endpoint on the new leader
+        Map<String, Object> node = dbNodes.get(nodeId);
+        if (node != null && isFederatedLeader) {
+            String url = (String) node.get("url");
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url + "/api/cluster/promote"))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            httpClient.sendAsync(req, HttpResponse.BodyHandlers.discarding())
+                    .thenAccept(res -> {
+                        if (res.statusCode() == 200) {
+                            LOGGER.info("Successfully promoted " + nodeId + " via API");
+                            notifyAllNodesOfLeader();
+                        } else {
+                            LOGGER.warning("Failed to promote " + nodeId + " (Status: " + res.statusCode() + ")");
+                        }
+                    });
+        }
     }
 
     private final HttpClient httpClient = HttpClient.newBuilder()

@@ -9,7 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const passwordModal = document.getElementById('password-modal');
     const closeModal = document.getElementById('close-modal');
     const changePasswordForm = document.getElementById('change-password-form');
-    const passwordMsg = document.getElementById('password-msg');
+    const configBtn = document.getElementById('config-btn');
+    const configSection = document.getElementById('config-section');
+    const configNodeSelect = document.getElementById('config-node-select');
+    const configEditorArea = document.getElementById('config-editor-area');
+    const saveConfigBtn = document.getElementById('save-config-btn');
+    const saveRestartConfigBtn = document.getElementById('save-restart-config-btn');
+    const configStatusMsg = document.getElementById('config-status-msg');
 
     let updateInterval;
 
@@ -111,6 +117,81 @@ document.addEventListener('DOMContentLoaded', () => {
         updateInterval = setInterval(updateStatus, 3000);
     }
 
+    // -- Configuration Management --
+
+    configBtn.addEventListener('click', () => {
+        configSection.classList.toggle('hidden');
+        if (!configSection.classList.contains('hidden')) {
+            loadConfig();
+        }
+    });
+
+    configNodeSelect.addEventListener('change', loadConfig);
+
+    async function loadConfig() {
+        const nodeId = configNodeSelect.value;
+        const endpoint = nodeId === 'federated' ? '/federated/config' : `/federated/node-config/${nodeId}`;
+
+        configEditorArea.value = 'Cargando...';
+        try {
+            const res = await fetch(endpoint, {
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('fed_token') }
+            });
+            if (res.ok) {
+                const configText = await res.text();
+                configEditorArea.value = configText;
+            } else {
+                configEditorArea.value = 'Error al cargar la configuración: ' + await res.text();
+            }
+        } catch (error) {
+            configEditorArea.value = 'Error de conexión';
+            console.error('Error connecting for config:', error);
+        }
+    }
+
+    saveConfigBtn.addEventListener('click', () => handleSave(false));
+    saveRestartConfigBtn.addEventListener('click', () => handleSave(true));
+
+    async function handleSave(restart) {
+        const configText = configEditorArea.value;
+        try {
+            JSON.parse(configText); // Basic validation
+        } catch (e) {
+            showConfigMsg('JSON inválido: ' + e.message, 'error');
+            return;
+        }
+
+        try {
+            const nodeId = configNodeSelect.value;
+            let url = nodeId === 'federated' ? '/federated/config' : `/federated/node-config/${nodeId}`;
+            if (restart) url += (url.includes('?') ? '&' : '?') + 'restart=true';
+
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + localStorage.getItem('fed_token')
+                },
+                body: configText
+            });
+
+            if (res.ok) {
+                showConfigMsg(restart ? 'Configuración guardada. Reiniciando...' : 'Configuración guardada correctamente', 'success');
+            } else {
+                showConfigMsg('Error al guardar: ' + await res.text(), 'error');
+            }
+        } catch (error) {
+            showConfigMsg('Error de conexión', 'error');
+        }
+    }
+
+    function showConfigMsg(text, type) {
+        configStatusMsg.textContent = text;
+        configStatusMsg.className = 'msg ' + type;
+        configStatusMsg.classList.remove('hidden');
+        setTimeout(() => configStatusMsg.classList.add('hidden'), 3000);
+    }
+
     async function updateStatus() {
         try {
             const res = await fetch('/federated/status', {
@@ -146,7 +227,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = document.getElementById('nodes-list');
         list.innerHTML = '';
 
+        // Update config node select if hidden
+        const currentSelectedNode = configNodeSelect.value;
+        const currentOptions = Array.from(configNodeSelect.options).map(o => o.value);
+
         nodes.sort((a, b) => a.id.localeCompare(b.id)).forEach(node => {
+            // Add to dropdown if not present
+            if (!currentOptions.includes(node.id)) {
+                const opt = document.createElement('option');
+                opt.value = node.id;
+                opt.textContent = `Nodo: ${node.id}`;
+                configNodeSelect.appendChild(opt);
+            }
+
             const isLeader = node.id === data.leaderId;
             const row = document.createElement('tr');
             row.innerHTML = `

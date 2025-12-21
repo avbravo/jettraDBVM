@@ -193,7 +193,49 @@ public class RaftNode {
 
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(res -> {
-                        if (res.statusCode() != 200) {
+                        if (res.statusCode() == 200) {
+                             try {
+                                Map<String, Object> status = mapper.readValue(res.body(), Map.class);
+                                String fedLeaderId = (String) status.get("leaderId");
+                                List<Map<String, Object>> nodes = (List<Map<String, Object>>) status.get("nodes");
+
+                                if (fedLeaderId != null && !fedLeaderId.equals(leaderId)) {
+                                    if (!fedLeaderId.equals(nodeId)) {
+                                        LOGGER.info("Federated server reports NEW LEADER: " + fedLeaderId + ". Updating local view.");
+                                        leaderId = fedLeaderId;
+                                        if (state == State.LEADER) {
+                                             state = State.FOLLOWER;
+                                             updateSelfRoleInDB("FOLLOWER");
+                                        }
+                                    }
+                                }
+                                
+                                if (nodes != null) {
+                                    for (Map<String, Object> node : nodes) {
+                                        String id = (String) node.get("id");
+                                        String url = (String) node.get("url");
+                                        String nstatus = (String) node.get("status");
+                                        
+                                        Map<String, Object> doc = new HashMap<>();
+                                        doc.put("_id", id);
+                                        doc.put("url", url);
+                                        doc.put("status", nstatus);
+                                        doc.put("role", id.equals(fedLeaderId) ? "LEADER" : "FOLLOWER");
+                                        
+                                        try {
+                                            if (store.findByID("_system", "_clusternodes", id) != null) {
+                                                store.update("_system", "_clusternodes", id, doc);
+                                            } else {
+                                                store.save("_system", "_clusternodes", doc);
+                                            }
+                                        } catch(Exception e) {}
+                                    }
+                                    loadPeersFromStore();
+                                }
+                            } catch (Exception e) {
+                                LOGGER.warning("Error parsing federated response: " + e.getMessage());
+                            }
+                        } else {
                             LOGGER.warning("Failed to sync with Federated Server: " + res.body());
                         }
                     });
@@ -248,6 +290,13 @@ public class RaftNode {
 
     public synchronized void start() {
         LOGGER.log(Level.INFO, "RaftNode started: {0} Peers: {1}", new Object[]{nodeId, peers});
+    }
+
+    public synchronized void promoteToLeader() {
+        if (state != State.LEADER) {
+            LOGGER.info("Promotion request received. Transitioning to LEADER.");
+            becomeLeader();
+        }
     }
 
     public synchronized String getNodeId() {

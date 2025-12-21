@@ -67,17 +67,6 @@
                                 </a>
                             </li>
                             <li>
-                                <a href="#" class="sidebar-link group" onclick="app.showSection('cluster')">
-                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
-                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 01-2 2v4a2 2 0 012 2h14a2 2 0 012-2v-4a2 2 0 01-2-2m-2-4h.01M17 16h.01" />
-                                    </svg>
-                                    <span class="flex-1 ml-3 whitespace-nowrap">Cluster</span>
-                                </a>
-                            </li>
-                            <li>
                                 <a href="#" class="sidebar-link group" onclick="app.showSection('rules')">
                                     <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
                                         xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
@@ -154,15 +143,17 @@
                                     <span class="flex-1 ml-3 whitespace-nowrap">Invoices</span>
                                 </a>
                             </li>
-                            <li>
-                                <a href="#" class="sidebar-link group" onclick="app.showSection('federated')">
+                            <li id="menu-config" class="hidden">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('config')">
                                     <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
                                         xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
                                         stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
-                                    <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Configuración</span>
                                 </a>
                             </li>
                             <!-- <li>
@@ -217,69 +208,6 @@
                         </div>
                     </div>
 
-                    <!-- Cluster Section -->
-                    <div id="cluster-section" class="section-content hidden">
-                        <div class="p-4" style="padding: 2rem;">
-                            <div class="section-header">
-                                <h2 class="section-title">Cluster Management</h2>
-                            </div>
-
-                            <div class="glass-panel">
-                                <h3 class="text-xl font-semibold mb-2">Node Status</h3>
-                                <div id="raft-status-content">Loading...</div>
-                                <div class="mt-4" style="margin-top: 1rem; margin-bottom: 1rem;">
-                                    <div id="cluster-visual-map"
-                                        style="display: flex; gap: 2rem; align-items: center; justify-content: center; min-height: 150px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1rem;">
-                                        <!-- Nodes rendered here -->
-                                    </div>
-                                </div>
-                                <div class="mt-4" style="margin-top: 1rem; display: flex; gap: 0.5rem;">
-                                    <button onclick="app.refreshClusterStatus()"
-                                        class="btn btn-sm btn-secondary">Refresh Status</button>
-                                    <button onclick="app.forceLeader()" class="btn btn-sm btn-danger">Force Leader
-                                        (Debug)</button>
-                                </div>
-                            </div>
-
-                            <div class="glass-panel">
-                                <h3 class="text-xl font-semibold mb-4">Peers</h3>
-
-                                <div class="table-container mb-4" style="margin-bottom: 1.5rem;">
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Node ID</th>
-                                                <th>URL</th>
-                                                <th>Description</th>
-                                                <th>Role</th>
-                                                <th>Status</th>
-                                                <th>Metrics</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="peers-table-body">
-                                            <!-- Peers injected here -->
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div class="add-peer-form form-grid">
-                                    <div class="form-group">
-                                        <label>Description</label>
-                                        <input type="text" id="peer-desc" placeholder="e.g. Worker Node 1"
-                                            class="form-control">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Peer URL</label>
-                                        <input type="text" id="peer-url" placeholder="http://192.168.1.x:8080"
-                                            class="form-control">
-                                    </div>
-                                    <button onclick="app.addPeer()" class="btn btn-primary" style="height: 48px;">Add
-                                        Peer</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
 
                     <!-- Indexes Section -->
                     <div id="indexes-section" class="section-content hidden">
@@ -713,61 +641,40 @@
                         </div>
                     </div>
 
-                    <!-- Federated Section -->
-                    <div id="federated-section" class="section-content hidden">
+                    <!-- Config Section -->
+                    <div id="config-section" class="section-content hidden">
                         <div class="p-4" style="padding: 2rem;">
                             <div class="section-header">
-                                <h2 class="section-title">Federated Cluster Management</h2>
+                                <h2 class="section-title">Configuración del Nodo (config.json)</h2>
                             </div>
 
                             <div class="glass-panel">
-                                <h3 class="text-xl font-semibold mb-4">Federated Status</h3>
-                                <div id="federated-status-content" class="bg-black/20 p-4 rounded mb-4">
-                                    Loading Federated Status...
-                                </div>
-                                <div class="table-container">
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Server ID</th>
-                                                <th>URL</th>
-                                                <th>Role</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="federated-servers-tbody"></tbody>
-                                    </table>
-                                </div>
-                            </div>
+                                <p class="mb-4 text-secondary">Edite la configuración local de este nodo JettraDB.</p>
+                                <textarea id="config-editor" spellcheck="false"
+                                    placeholder="Cargando configuración..."></textarea>
 
-                            <div class="glass-panel mt-6" style="margin-top: 2rem;">
-                                <h3 class="text-xl font-semibold mb-4">Managed DB Nodes</h3>
-                                <div class="table-container">
-                                    <table class="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Node ID</th>
-                                                <th>URL</th>
-                                                <th>Status</th>
-                                                <th>Last Seen</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="federated-managed-nodes-tbody"></tbody>
-                                    </table>
+                                <div id="config-status" class="hidden"></div>
+
+                                <div class="config-actions">
+                                    <button id="save-config-btn" class="btn btn-primary"
+                                        onclick="saveNodeConfig(false)">
+                                        Guardar sin Reiniciar
+                                    </button>
+                                    <button id="save-restart-config-btn" class="btn btn-success"
+                                        onclick="saveNodeConfig(true)">
+                                        Guardar y Reiniciar
+                                    </button>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-        </div>
-
-    </div>
-    <footer class="app-footer">
-        &copy; 2025 JettraDB. All Rights Reserved.
-    </footer>
-    </main>
-    </div>
-    </div>
+                </div> <!-- content-area -->
+                <footer class="app-footer">
+                    &copy; 2025 JettraDB. All Rights Reserved.
+                </footer>
+            </main>
+        </div> <!-- dashboard-view -->
+    </div> <!-- app -->
 
     <!-- Deprecated Modals Removed: Using Center View Router -->
     <!-- Global Modal Overlay -->
@@ -792,9 +699,97 @@
             // Monkey patch app.showSection to trigger data load
             const originalShowSection = app.showSection;
             app.showSection = function (section) {
-                if (originalShowSection) originalShowSection(section);
-                if (section === 'federated') {
-                    loadFederatedStatus();
+                if (originalShowSection) originalShowSection.apply(this, arguments);
+                if (section === 'config') {
+                    loadNodeConfig();
+                }
+            };
+
+            // Monkey patch upgradeUsersMenuVisibility to handle Config menu
+            const originalUpdateMenuVisibility = app.updateUsersMenuVisibility;
+            app.updateUsersMenuVisibility = function () {
+                if (originalUpdateMenuVisibility) originalUpdateMenuVisibility.apply(this, arguments);
+                const configMenu = document.getElementById('menu-config');
+                if (configMenu) {
+                    if (this.state.role === 'admin') {
+                        configMenu.classList.remove('hidden');
+                    } else {
+                        configMenu.classList.add('hidden');
+                    }
+                }
+            };
+
+            // Initial call if already in-app
+            if (app.state.token) {
+                app.updateUsersMenuVisibility();
+            }
+
+            window.loadNodeConfig = function () {
+                const editor = document.getElementById('config-editor');
+                const statusDiv = document.getElementById('config-status');
+
+                statusDiv.classList.add('hidden');
+                editor.value = 'Cargando configuración...';
+
+                fetch('/api/config', {
+                    headers: { 'Authorization': localStorage.getItem('jettra_token') || '' }
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error('Error al cargar config: ' + res.status);
+                        return res.json();
+                    })
+                    .then(data => {
+                        editor.value = JSON.stringify(data, null, 4);
+                    })
+                    .catch(err => {
+                        editor.value = '';
+                        statusDiv.textContent = err.message;
+                        statusDiv.className = 'status-error';
+                        statusDiv.classList.remove('hidden');
+                    });
+            };
+
+            window.saveNodeConfig = function (restart) {
+                const editor = document.getElementById('config-editor');
+                const statusDiv = document.getElementById('config-status');
+
+                try {
+                    const config = JSON.parse(editor.value);
+                    const url = '/api/config' + (restart ? '?restart=true' : '');
+
+                    statusDiv.textContent = 'Guardando...';
+                    statusDiv.className = 'status-success';
+                    statusDiv.classList.remove('hidden');
+
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': localStorage.getItem('jettra_token') || ''
+                        },
+                        body: JSON.stringify(config)
+                    })
+                        .then(res => {
+                            if (!res.ok) return res.text().then(t => { throw new Error(t) });
+
+                            statusDiv.textContent = restart ? 'Cambios guardados. El servidor se está reiniciando...' : 'Cambios guardados correctamente.';
+                            statusDiv.className = 'status-success';
+
+                            if (restart) {
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 5000);
+                            }
+                        })
+                        .catch(err => {
+                            statusDiv.textContent = 'Error al guardar: ' + err.message;
+                            statusDiv.className = 'status-error';
+                        });
+
+                } catch (e) {
+                    statusDiv.textContent = 'JSON inválido: ' + e.message;
+                    statusDiv.className = 'status-error';
+                    statusDiv.classList.remove('hidden');
                 }
             };
 

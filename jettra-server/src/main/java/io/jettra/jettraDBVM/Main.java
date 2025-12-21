@@ -66,8 +66,8 @@ public class Main {
             // use jettraConfig
             Config helidonConfig = Config.create();
 
-            // Initialize Engine with the Map config
-            engine = new io.jettra.core.Engine(jettraConfig);
+            // Initialize Engine with the Map config and File reference
+            engine = new io.jettra.core.Engine(jettraConfig, configFile);
             engine.start();
 
             int port = (int) jettraConfig.getOrDefault("Port", 8080);

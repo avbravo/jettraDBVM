@@ -440,3 +440,25 @@ td {
     background: rgba(239, 68, 68, 0.1);
     color: var(--error);
 }
+
+.code-editor {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    color: #a5f3fc;
+    font-family: 'Fira Code', 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.code-editor:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.text-warning {
+    color: var(--warning);
+}

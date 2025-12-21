@@ -34,7 +34,7 @@ public class FederatedMain {
                 // Optionally read port from config if specified for federated mode, but config usually has client port.
                 // Assuming port 9000 as per previous code unless arg overrides.
             } catch (IOException e) {
-                LOGGER.warning("Failed to read config.json: " + e.getMessage());
+                LOGGER.warning("Failed to read cluster.json: " + e.getMessage());
             }
         }
 

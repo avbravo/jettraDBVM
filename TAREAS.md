@@ -47,14 +47,42 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Servidor Federado
 
+- [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
+y actualiza los archivos .md que se refieren al tema.
+
+- [] Que ocurre si no existe un servidor federado para gestionar el lider y los nodos, ya que las operaciones 
+deben pasar por el servidor federado.
+
+
+
+- [] Verificar que distribuya las bases de datos desde el nodo lider.
+- [] Verifica que en los nodos que no son lider no pueda insertar , actualizar o eliminar bases de datos, coleccion, documentos, indices, reglas.
+
+
+
+
 - [] Puedes documentar como acceder a la interface web del servidor federeado y cambia la contraseña inicial por adminadmin y crea un registro que permita cambiar la contraseña y almacenarla para mayor seguridad. y en el Dashboard Federated siempre dice que esta activo el nodeo cuando no esta activo.
 - [] En la interface grafica de cada nodo solo debe mostrar al servidor federado al que pertenece, Eliminar la opcion que tenia que mostraba todos los nodos. Esa opcion solo se vera desde el servidor federado.
 
-- [ ]ejecutar dos servidores federados.
+- [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
 
+
+- [] En Servidor Federado debe  permitir detener un nodo, removerlo, ver el estado de metrics y actualizar el nodo correspondiente con el cambio realizado.
+
+
+- [] al reiniciar el servidor se queda detenido y no reinicia de manera automatica
+
+- [x] Cuando el lider no esta disponible el sistema no asigna un nodo como nuevo lider
+
+- [x] En el formulario web configuracion de jettra server no muestra el contenido del archivo config.json para que l  usario con rol admin pueda editarlo.
+
+- [x] Cometiste un error eliminaste el formulariom de configuracion del proyecto jetrta server en la interface web
+
+-[x]En el formulario Federated Cluster Management del proyecto jettra-server,  cambia todos el formulario web, y permite editar el archivo config.json y añade dos bortones uno Guardar sin Reiniciar, que guarda los cambios y no reinicar el servidor de bases de datos y el otro Guardar y Reiniciar que guarda los cambios y reinicar al servidor de la base de de datos
+
+- [x] Eliminar el formulario Cluster del proyecto jettra-server y modifcar el formulario Federated Cluster Management.
+De manera que muestre el archivo de configuaracion y permita modificar el archivo config.json 
 - [x] Puedes añadir una interface grafica para el servidor federado qe contenga un login, y un dashboard que permita ver todos los nodos y sus estados indicando el nodo lider
-
-
 - [x] Actualizar curl, shell, driver con el uso de servidor federado y actualizar la documentacion respectiva
 - [x] Crear la interface web del servidor federado.
 

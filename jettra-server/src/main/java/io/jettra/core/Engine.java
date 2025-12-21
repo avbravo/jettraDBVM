@@ -18,12 +18,8 @@ public class Engine {
     private final io.jettra.core.raft.RaftNode raftNode;
     private final io.jettra.core.raft.RaftService raftService;
 
-    public Engine(java.util.Map<String, Object> config) throws Exception {
-        // Assume config.json is in current directory for now, or derive from args if we
-        // had them.
-        // For simple migration, we re-wrap the map.Ideally Main passed us ConfigManager
-        // or we create it.
-        this.configManager = new io.jettra.core.config.ConfigManager(new java.io.File("config.json"), config);
+    public Engine(java.util.Map<String, Object> config, java.io.File configFile) throws Exception {
+        this.configManager = new io.jettra.core.config.ConfigManager(configFile, config);
 
         String dataDir = (String) config.getOrDefault("DataDir", "data");
 

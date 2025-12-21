@@ -14,6 +14,7 @@ import java.util.Base64;
 import java.util.Optional;
 
 public class WebServices {
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(WebServices.class.getName());
     private final Engine engine;
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final QueryExecutor queryExecutor;
@@ -107,10 +108,11 @@ public class WebServices {
                 .get("/api/metrics", this::getMetrics)
                 .get("/api/federated", this::getFederatedStatus)
                 .post("/api/cluster/register", this::registerNode)
+                .post("/api/cluster/promote", this::promoteNode)
                 .post("/api/cluster/deregister", this::deregisterNode)
-                .post("/api/cluster/stop", this::stopNode)
-                .post("/api/cluster/pause", this::pauseNode)
-                .post("/api/cluster/resume", this::resumeNode)
+                .post("/api/cluster/restart", this::restartNode)
+                .get("/api/config", this::getConfig)
+                .post("/api/config", this::saveConfig)
 
                 // Versioning
                 .get("/api/versions", this::getVersions)
@@ -143,7 +145,8 @@ public class WebServices {
     private void authMiddleware(ServerRequest req, ServerResponse res) {
         // Skip login and metrics endpoints
         String path = req.path().path();
-        if (path.equals("/api/login") || path.equals("/api/metrics")) {
+        if (path.equals("/api/login") || path.equals("/api/metrics") || 
+            path.startsWith("/api/cluster/") || path.equals("/api/config")) {
             res.next();
             return;
         }
@@ -474,6 +477,16 @@ public class WebServices {
             if (!"Not Leader".equals(e.getMessage())) {
                 res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
             }
+        }
+    }
+
+    private void promoteNode(ServerRequest req, ServerResponse res) {
+        try {
+            // Note: This is an administrative command usually from Federated Server
+            engine.getRaftNode().promoteToLeader();
+            res.send("Promoted to Leader");
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
 
@@ -1472,11 +1485,65 @@ public class WebServices {
             engine.getRaftNode().getHttpClientProxy().sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
                         res.send(response.body());
-                    })
-                    .exceptionally(ex -> {
-                        res.status(Status.INTERNAL_SERVER_ERROR_500).send("Federated server unreachable: " + ex.getMessage());
-                        return null;
                     });
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void restartNode(ServerRequest req, ServerResponse res) {
+        try {
+            res.send(jsonMapper.createObjectNode().put("status", "restarting").toString());
+            // Small delay to allow response to be sent
+            new Thread(() -> {
+                try {
+                    Thread.sleep(1000);
+                    LOGGER.info("Restart command received. Exiting JVM...");
+                    System.exit(3);
+                } catch (Exception e) {}
+            }).start();
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getConfig(ServerRequest req, ServerResponse res) {
+        try {
+            Map<String, Object> config = engine.getConfigManager().getConfigMap();
+            res.headers().add(io.helidon.http.HeaderNames.CONTENT_TYPE, "application/json");
+            res.send(jsonMapper.writerWithDefaultPrettyPrinter().writeValueAsString(config));
+        } catch (Exception e) {
+            LOGGER.log(java.util.logging.Level.SEVERE, "Error reading config", e);
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void saveConfig(ServerRequest req, ServerResponse res) {
+        try {
+            byte[] content = req.content().as(byte[].class);
+            Map<String, Object> newConfig = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
+            
+            io.jettra.core.config.ConfigManager manager = engine.getConfigManager();
+            Map<String, Object> currentConfig = manager.getConfigMap();
+            synchronized(manager) {
+                currentConfig.clear();
+                currentConfig.putAll(newConfig);
+                manager.save();
+            }
+            
+            boolean restart = req.query().first("restart").map(Boolean::parseBoolean).orElse(false);
+            if (restart) {
+                res.send(jsonMapper.createObjectNode().put("status", "restarting").toString());
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(1000);
+                        LOGGER.info("Config saved with restart. Exiting JVM...");
+                        System.exit(3);
+                    } catch (Exception e) {}
+                }).start();
+            } else {
+                res.send(jsonMapper.createObjectNode().put("status", "success").toString());
+            }
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
