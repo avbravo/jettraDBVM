@@ -63,7 +63,7 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 
 - [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
-y actualiza los archivos .md que se refieren al tema.
+y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los diversos componentes.
 
 - [] Que ocurre si no existe un servidor federado para gestionar el lider y los nodos, ya que las operaciones 
 deben pasar por el servidor federado.
@@ -79,12 +79,13 @@ deben pasar por el servidor federado.
 - [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
      Documentar en federated.md como debe ser el proceso a nivel de servidor federado y nodos.
 
-- [] Cuando crea un backup en la interface web en la pagina Backup y restore salta a otra pagina y envia el mensaje Unauthorized
-y no aparece en la lista de backup para descargar
+
+- [] Cuando se crea un indice el mensaje de confirmacion debe ser en un dialogo estilo flowbiewcss y no de javascript estandar
 
 
-- [] Modificar el dialogo eliminar indice en la interface web para que cuando muestre el dialogo de confirmacion por ejemplo Delete index on 'name'?. use estilo flowbiew css en lugar del dialogo estandar javascript
-la idea es que se vea mas elegante.
+- [] Cuando se crea un nuevo backup el proceso se realiza perfecto pero no lo agrega a la lista Existing Backups del formulario.
+
+
 
 
 
@@ -106,7 +107,27 @@ la idea es que se vea mas elegante.
 # Completadas
 # ------------------------------------------------------------
 
+
+
 # Servidor Federado
+
+- [x] Cuando se intenta crear un backup envia el mensaje Success
+Backup created. Downloading...
+
+× Error
+Download failed: Query parameter "token" is not available
+
+Y no lo muestra en el listado de backup ni permite descargarlo 
+- [x] Cuando se intenta descargar un backup envia el mensaje Download failed: Query parameter "token" is not available y no deja descargarlo
+
+
+- [x] Cuando crea un backup en la interface web en la pagina Backup y restore salta a otra pagina y envia el mensaje Unauthorized
+y no aparece en la lista de backup para descargar
+
+
+- [x] Modificar el dialogo eliminar indice en la interface web para que cuando muestre el dialogo de confirmacion por ejemplo Delete index on 'name'?. use estilo flowbiew css en lugar del dialogo estandar javascript
+la idea es que se vea mas elegante.
+
 - [x] Verifica que en los nodos que no son lider no pueda insertar , actualizar o eliminar bases de datos, coleccion, documentos, indices, reglas.
 
 

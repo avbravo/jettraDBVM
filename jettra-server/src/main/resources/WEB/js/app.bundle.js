@@ -283,15 +283,39 @@ const App = {
                 if (res.ok) {
                     const data = await res.json();
                     this.showNotification('Backup created. Downloading...', 'success');
-                    // Trigger download
-                    window.location.href = `/api/backup/download?file=${data.file}&token=${this.state.token || localStorage.getItem('jettra_token')}`;
 
-                    if (document.getElementById('backups-view').classList.contains('active')) {
-                        this.loadBackups();
+                    // Use fetch to download with auth header to avoid Unauthorized errors
+                    try {
+                        const downloadRes = await this.authenticatedFetch(`/api/backup/download?file=${data.file}`);
+                        if (downloadRes.ok) {
+                            const blob = await downloadRes.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = data.file;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+
+                            // Refresh list
+                            if (document.getElementById('backups-view').classList.contains('active')) {
+                                this.loadBackups();
+                            }
+                        } else {
+                            const text = await downloadRes.text();
+                            this.showNotification('Download failed: ' + text, 'error');
+                        }
+                    } catch (e) {
+                        this.showNotification('Download failed: ' + e.message, 'error');
                     }
                 } else {
-                    this.showNotification('Backup failed', 'error');
+                    const errorDetails = await res.text();
+                    this.showNotification('Backup failed: ' + errorDetails, 'error');
                 }
+            })
+            .catch(e => {
+                this.showNotification('Backup request failed: ' + e.message, 'error');
             });
     },
 
@@ -410,12 +434,28 @@ const App = {
         reader.readAsArrayBuffer(file);
     },
 
-    downloadBackup(file) {
-        // Direct link download with auth is tricky. 
-        // For now, assume admin logged in browser context works or we use a temporary token param logic if implemented.
-        // Or simply:
-        window.location.href = `/api/backup/download?file=${file}&token=${localStorage.getItem('jettra_token')}`;
-        // Note: passing token in URL is not ideal security but common for file downloads
+    async downloadBackup(file) {
+        this.showNotification(`Downloading ${file}...`, 'info');
+        try {
+            const res = await this.authenticatedFetch(`/api/backup/download?file=${file}`);
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = file;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                this.showNotification('Download started', 'success');
+            } else {
+                const text = await res.text();
+                this.showNotification('Download failed: ' + text, 'error');
+            }
+        } catch (e) {
+            this.showNotification('Download error: ' + e.message, 'error');
+        }
     },
 
     promptRestore(file) {
@@ -2266,7 +2306,7 @@ const App = {
         }
     },
 
-    async createIndex() {
+    createIndex() {
         const db = document.getElementById('idx-db-select').value;
         const col = document.getElementById('idx-col-select').value;
         const field = document.getElementById('idx-field').value;
@@ -2274,50 +2314,83 @@ const App = {
         const sequential = document.getElementById('idx-sequential').checked;
 
         if (!db || !col || !field) {
-            alert("Please fill all fields");
+            this.showNotification("Please fill all fields", 'warning');
             return;
         }
 
-        try {
-            const res = await this.authenticatedFetch('/api/index', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    database: db,
-                    collection: col,
-                    field: field,
-                    unique: type === 'unique',
-                    sequential: sequential
-                })
-            });
+        this.renderCustomModal('Confirm Index Creation', `
+            <div class="alert alert-info" style="background: #e1f5fe; color: #01579b; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                 <strong>ℹ️ Index Details</strong>
+                 <p style="margin: 10px 0 0;">You are about to create a <strong>${type}</strong> index on field <strong>'${field}'</strong> for collection <strong>${col}</strong>.</p>
+                 ${sequential ? '<p style="margin-top:5px;"><em>Sequential optimization enabled.</em></p>' : ''}
+            </div>
+            <p>Do you want to proceed?</p>
+        `, `
+            <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+            <button class="btn btn-primary" id="modal-confirm-create-index-btn">Create Index</button>
+        `);
 
-            if (res.ok) {
-                alert('Index created');
-                document.getElementById('idx-field').value = '';
-                document.getElementById('idx-sequential').checked = false; // Reset
-                this.loadIndexes();
-            } else {
-                alert('Failed to create index');
+        document.getElementById('modal-confirm-create-index-btn').addEventListener('click', async () => {
+            this.closeInputModal();
+            try {
+                this.showNotification('Creating index...', 'info');
+                const res = await this.authenticatedFetch('/api/index', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        database: db,
+                        collection: col,
+                        field: field,
+                        unique: type === 'unique',
+                        sequential: sequential
+                    })
+                });
+
+                if (res.ok) {
+                    this.showNotification('Index created successfully', 'success');
+                    document.getElementById('idx-field').value = '';
+                    document.getElementById('idx-sequential').checked = false;
+                    this.loadIndexes();
+                } else {
+                    const text = await res.text();
+                    this.showNotification('Failed to create index: ' + text, 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                this.showNotification('Error creating index: ' + e.message, 'error');
             }
-        } catch (e) {
-            console.error(e);
-            alert('Error creating index');
-        }
+        });
     },
 
-    async deleteIndex(db, col, field) {
-        if (!confirm(`Delete index on '${field}'?`)) return;
-        try {
-            const res = await this.authenticatedFetch(`/api/index?db=${db}&col=${col}&field=${field}`, { method: 'DELETE' });
-            if (res.ok) {
-                this.loadIndexes();
-            } else {
-                alert('Failed to delete index');
+    deleteIndex(db, col, field) {
+        this.renderCustomModal('Delete Index', `
+            <div class="alert alert-danger" style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                 <strong>⚠️ Confirm Deletion</strong>
+                 <p style="margin: 10px 0 0;">Are you sure you want to delete the index on field <strong>'${field}'</strong>?</p>
+            </div>
+        `, `
+            <button class="btn btn-secondary" onclick="app.closeInputModal()">Cancel</button>
+            <button class="btn danger" id="modal-confirm-delete-index-btn">Delete Index</button>
+        `);
+
+        // Bind logic to the dynamically created button
+        document.getElementById('modal-confirm-delete-index-btn').addEventListener('click', async () => {
+            try {
+                this.showNotification('Deleting index...', 'info');
+                const res = await this.authenticatedFetch(`/api/index?db=${db}&col=${col}&field=${field}`, { method: 'DELETE' });
+                if (res.ok) {
+                    this.showNotification('Index deleted successfully', 'success');
+                    this.closeInputModal();
+                    this.loadIndexes();
+                } else {
+                    const text = await res.text();
+                    this.showNotification('Failed to delete index: ' + text, 'error');
+                }
+            } catch (e) {
+                console.error(e);
+                this.showNotification('Error deleting index: ' + e.message, 'error');
             }
-        } catch (e) {
-            console.error(e);
-            alert('Error deleting index');
-        }
+        });
     },
 
     // Initialize Indexes View

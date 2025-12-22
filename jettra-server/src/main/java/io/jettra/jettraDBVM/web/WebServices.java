@@ -1250,7 +1250,7 @@ public class WebServices {
 
         try {
             // Check auth from parameter if header missing (for direct browser links)
-            String token = req.query().get("token");
+            String token = req.query().first("token").orElse(null);
             if (token != null) {
                 // Validate token manually since middleware might have failed or skipped
                 // Actually middleware runs before this. If middleware blocks missing header, we
