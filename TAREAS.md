@@ -70,9 +70,6 @@ deben pasar por el servidor federado.
 
 
 
-- [] Verificar que distribuya las bases de datos desde el nodo lider.
-- [] Verifica que en los nodos que no son lider no pueda insertar , actualizar o eliminar bases de datos, coleccion, documentos, indices, reglas.
-
 
 - [] Puedes documentar como acceder a la interface web del servidor federeado y cambia la contraseña inicial por adminadmin y crea un registro que permita cambiar la contraseña y almacenarla para mayor seguridad. y en el Dashboard Federated siempre dice que esta activo el nodeo cuando no esta activo.
 - [] En la interface grafica de cada nodo solo debe mostrar al servidor federado al que pertenece
@@ -82,7 +79,12 @@ deben pasar por el servidor federado.
 - [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
      Documentar en federated.md como debe ser el proceso a nivel de servidor federado y nodos.
 
+- [] Cuando crea un backup en la interface web en la pagina Backup y restore salta a otra pagina y envia el mensaje Unauthorized
+y no aparece en la lista de backup para descargar
 
+
+- [] Modificar el dialogo eliminar indice en la interface web para que cuando muestre el dialogo de confirmacion por ejemplo Delete index on 'name'?. use estilo flowbiew css en lugar del dialogo estandar javascript
+la idea es que se vea mas elegante.
 
 
 
@@ -105,6 +107,13 @@ deben pasar por el servidor federado.
 # ------------------------------------------------------------
 
 # Servidor Federado
+- [x] Verifica que en los nodos que no son lider no pueda insertar , actualizar o eliminar bases de datos, coleccion, documentos, indices, reglas.
+
+
+- [x] Verificar que distribuya las bases de datos desde el nodo lider a los nodos y que estos sepan cual es el lider mediante consultas al servidor federado
+
+
+
 - [x] Para mantener la seguridad una vez que se reinicia o detienen los nodos la interface web debe dirigirse al login en cuanto inicia para que el usuario se autentique esto debe ser aplicacado en el servidor federado y en el lider y en los nodos
 para evitar que un usuario use la interface web sin autorizacion.
 

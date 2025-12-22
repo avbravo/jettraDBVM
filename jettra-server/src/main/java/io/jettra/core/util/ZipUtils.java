@@ -35,6 +35,12 @@ public class ZipUtils {
                     if (isExcluded(dir, sourceFolderPath, exclusionPatterns)) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
+                    if (!dir.equals(sourceFolderPath)) {
+                        Path targetDir = sourceFolderPath.relativize(dir);
+                        String entryName = targetDir.toString().replace("\\", "/") + "/";
+                        zos.putNextEntry(new ZipEntry(entryName));
+                        zos.closeEntry();
+                    }
                     return FileVisitResult.CONTINUE;
                 }
             });

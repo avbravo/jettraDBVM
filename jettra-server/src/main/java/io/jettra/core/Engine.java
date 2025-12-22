@@ -28,7 +28,8 @@ public class Engine {
         ((RouterDocumentStore) this.store).setValidator(validator);
 
         // Run Bootstrap (Must run before Auth/Raft which rely on system collections)
-        io.jettra.core.bootstrap.BootstrapManager bootstrap = new io.jettra.core.bootstrap.BootstrapManager(store, config);
+        io.jettra.core.bootstrap.BootstrapManager bootstrap = new io.jettra.core.bootstrap.BootstrapManager(store,
+                config);
         bootstrap.init();
 
         this.indexer = new BTreeIndexEngine(dataDir);
@@ -44,7 +45,7 @@ public class Engine {
             java.util.List<String> peers = (java.util.List<String>) config.getOrDefault("Peers",
                     new java.util.ArrayList<>());
 
-            this.raftNode = new io.jettra.core.raft.RaftNode(nodeId, peers, configManager, this.store);
+            this.raftNode = new io.jettra.core.raft.RaftNode(nodeId, peers, configManager, this.store, this.indexer);
             this.raftService = new io.jettra.core.raft.RaftService(raftNode);
         } else {
             this.raftNode = null;
@@ -52,7 +53,6 @@ public class Engine {
         }
 
         // Bootstrap moved up
-
 
         LOGGER.info("JettraDB Engine initialized with dataDir: " + dataDir);
     }

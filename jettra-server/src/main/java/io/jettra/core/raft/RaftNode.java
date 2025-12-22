@@ -1,5 +1,6 @@
 package io.jettra.core.raft;
 
+import io.jettra.core.storage.IndexEngine;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -25,7 +26,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Simplified Raft implementation for JettraDBVM.
- * Handles Leader Election, Log storage, and Dynamic Clustering via _clusternodes collection.
+ * Handles Leader Election, Log storage, and Dynamic Clustering via
+ * _clusternodes collection.
  */
 public class RaftNode {
     private static final Logger LOGGER = Logger.getLogger(RaftNode.class.getName());
@@ -71,17 +73,19 @@ public class RaftNode {
 
     private final io.jettra.core.config.ConfigManager configManager;
     private final io.jettra.core.storage.DocumentStore store;
+    private final IndexEngine indexer;
 
     // Cache for node statuses to avoid DB lookups in heartbeats
     private final Map<String, String> nodeStatusCache = new java.util.concurrent.ConcurrentHashMap<>();
     private final Map<String, Integer> nodeFailureCount = new java.util.concurrent.ConcurrentHashMap<>();
-    private static final int MAX_FAILURE_COUNT = 5; 
+    private static final int MAX_FAILURE_COUNT = 5;
 
     public RaftNode(String nodeId, List<String> peers, io.jettra.core.config.ConfigManager configManager,
-            io.jettra.core.storage.DocumentStore store) {
+            io.jettra.core.storage.DocumentStore store, IndexEngine indexer) {
         this.nodeId = nodeId;
         this.configManager = configManager;
         this.store = store;
+        this.indexer = indexer;
 
         // Ensure collection exists
         try {
@@ -106,16 +110,16 @@ public class RaftNode {
                     self.put("role", "LEADER");
                     self.put("status", "ACTIVE");
                     store.save("_system", "_clusternodes", self);
-                    
+
                     loadPeersFromStore();
-                    
+
                     LOGGER.info("Bootstrap node initialized in _clusternodes. Becoming LEADER.");
                     becomeLeader();
                 }
             } else if (this.peers.isEmpty() && peers != null && !peers.isEmpty()) {
-                 // Fallback: if provided peers args but DB empty, maybe we should seed?
-                 // For now, trust the DB or the register flow. 
-                 // If we are a joiner, we wait for registration.
+                // Fallback: if provided peers args but DB empty, maybe we should seed?
+                // For now, trust the DB or the register flow.
+                // If we are a joiner, we wait for registration.
             }
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error initializing cluster storage", e);
@@ -134,18 +138,22 @@ public class RaftNode {
                     int idNum = 0;
                     try {
                         String numericPart = nodeId.replaceAll("[^0-9]", "");
-                        if (!numericPart.isEmpty()) idNum = Integer.parseInt(numericPart);
-                    } catch(Exception e) {}
-                    delay = 300 + ((long)(idNum % 100) * 100); 
+                        if (!numericPart.isEmpty())
+                            idNum = Integer.parseInt(numericPart);
+                    } catch (Exception e) {
+                    }
+                    delay = 300 + ((long) (idNum % 100) * 100);
                 }
-                
-                LOGGER.log(Level.INFO, "Bootstrap node with peers. Cautiously checking for leader before election in {0}ms.", delay);
+
+                LOGGER.log(Level.INFO,
+                        "Bootstrap node with peers. Cautiously checking for leader before election in {0}ms.", delay);
                 scheduler.schedule(() -> {
                     if (this.leaderId == null && this.state != State.LEADER) {
                         LOGGER.info("No leader detected after bootstrap delay. Starting election to assert priority.");
                         startElection();
                     } else {
-                        LOGGER.log(Level.INFO, "Leader already present ({0}), bootstrap node will stay as FOLLOWER.", this.leaderId);
+                        LOGGER.log(Level.INFO, "Leader already present ({0}), bootstrap node will stay as FOLLOWER.",
+                                this.leaderId);
                     }
                 }, delay, TimeUnit.MILLISECONDS);
             }
@@ -165,7 +173,8 @@ public class RaftNode {
     }
 
     private void startFederatedSync() {
-        List<String> fedServers = (List<String>) configManager.getOrDefault("FederatedServers", Collections.emptyList());
+        List<String> fedServers = (List<String>) configManager.getOrDefault("FederatedServers",
+                Collections.emptyList());
         if (!fedServers.isEmpty()) {
             LOGGER.info("Federated mode active. Starting registration and heartbeat sync.");
             scheduler.scheduleAtFixedRate(this::syncWithFederated, 0, 5, TimeUnit.SECONDS);
@@ -174,11 +183,13 @@ public class RaftNode {
 
     private void syncWithFederated() {
         try {
-            List<String> fedServers = (List<String>) configManager.getOrDefault("FederatedServers", Collections.emptyList());
-            if (fedServers.isEmpty()) return;
+            List<String> fedServers = (List<String>) configManager.getOrDefault("FederatedServers",
+                    Collections.emptyList());
+            if (fedServers.isEmpty())
+                return;
 
             String fedUrl = fedServers.get(0);
-            
+
             // Register or Heartbeat
             Map<String, String> data = new HashMap<>();
             data.put("nodeId", nodeId);
@@ -194,41 +205,48 @@ public class RaftNode {
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(res -> {
                         if (res.statusCode() == 200) {
-                             try {
+                            try {
                                 Map<String, Object> status = mapper.readValue(res.body(), Map.class);
                                 String fedLeaderId = (String) status.get("leaderId");
                                 List<Map<String, Object>> nodes = (List<Map<String, Object>>) status.get("nodes");
 
                                 if (fedLeaderId != null && !fedLeaderId.equals(leaderId)) {
                                     if (!fedLeaderId.equals(nodeId)) {
-                                        LOGGER.info("Federated server reports NEW LEADER: " + fedLeaderId + ". Updating local view.");
+                                        LOGGER.info("Federated server reports NEW LEADER: " + fedLeaderId
+                                                + ". Updating local view.");
                                         leaderId = fedLeaderId;
                                         if (state == State.LEADER) {
-                                             state = State.FOLLOWER;
-                                             updateSelfRoleInDB("FOLLOWER");
+                                            state = State.FOLLOWER;
+                                            updateSelfRoleInDB("FOLLOWER");
+                                        }
+                                    } else {
+                                        if (state != State.LEADER) {
+                                            LOGGER.info("Federated server reports ME as LEADER. Transitioning.");
+                                            becomeLeader();
                                         }
                                     }
                                 }
-                                
+
                                 if (nodes != null) {
                                     for (Map<String, Object> node : nodes) {
                                         String id = (String) node.get("id");
                                         String url = (String) node.get("url");
                                         String nstatus = (String) node.get("status");
-                                        
+
                                         Map<String, Object> doc = new HashMap<>();
                                         doc.put("_id", id);
                                         doc.put("url", url);
                                         doc.put("status", nstatus);
                                         doc.put("role", id.equals(fedLeaderId) ? "LEADER" : "FOLLOWER");
-                                        
+
                                         try {
                                             if (store.findByID("_system", "_clusternodes", id) != null) {
                                                 store.update("_system", "_clusternodes", id, doc);
                                             } else {
                                                 store.save("_system", "_clusternodes", doc);
                                             }
-                                        } catch(Exception e) {}
+                                        } catch (Exception e) {
+                                        }
                                     }
                                     loadPeersFromStore();
                                 }
@@ -256,7 +274,7 @@ public class RaftNode {
             for (Map<String, Object> node : nodes) {
                 String id = (String) (node.get("_id") != null ? node.get("_id") : node.get("id"));
                 String url = (String) node.get("url");
-                
+
                 if (id != null && url != null) {
                     if (id.equals(this.nodeId)) {
                         foundSelf = true;
@@ -272,24 +290,27 @@ public class RaftNode {
                 }
             }
             this.peers.addAll(uniquePeers);
-            
+
             if (!foundSelf && !nodes.isEmpty()) {
-                LOGGER.log(Level.WARNING, "This node ({0}) is not present in _clusternodes! It has been removed. Disabling cluster activities.", nodeId);
+                LOGGER.log(Level.WARNING,
+                        "This node ({0}) is not present in _clusternodes! It has been removed. Disabling cluster activities.",
+                        nodeId);
                 this.state = State.FOLLOWER;
                 this.votedFor = null;
                 this.leaderId = null;
                 this.peers.clear();
                 this.peerUrlToId.clear();
             }
-            
-            LOGGER.log(Level.FINE, "Loaded peers from storage: {0} with statuses: {1}", new Object[]{peers, nodeStatusCache});
+
+            LOGGER.log(Level.FINE, "Loaded peers from storage: {0} with statuses: {1}",
+                    new Object[] { peers, nodeStatusCache });
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to load peers from storage: {0}", e.getMessage());
         }
     }
 
     public synchronized void start() {
-        LOGGER.log(Level.INFO, "RaftNode started: {0} Peers: {1}", new Object[]{nodeId, peers});
+        LOGGER.log(Level.INFO, "RaftNode started: {0} Peers: {1}", new Object[] { nodeId, peers });
     }
 
     public synchronized void promoteToLeader() {
@@ -328,14 +349,15 @@ public class RaftNode {
             if (state == State.LEADER)
                 return;
         }
-        
+
         // Fix: Do not start election if we are not initialized in the cluster storage
         try {
             int count = store.count("_system", "_clusternodes");
             if (count == 0) {
-                 return;
+                return;
             }
-        } catch(Exception e) {}
+        } catch (Exception e) {
+        }
 
         long last;
         synchronized (this) {
@@ -343,7 +365,7 @@ public class RaftNode {
         }
 
         long now = System.currentTimeMillis();
-        long timeout = ELECTION_TIMEOUT_MIN + (long)(Math.random() * (ELECTION_TIMEOUT_MAX - ELECTION_TIMEOUT_MIN));
+        long timeout = ELECTION_TIMEOUT_MIN + (long) (Math.random() * (ELECTION_TIMEOUT_MAX - ELECTION_TIMEOUT_MIN));
         if (now - last > timeout) {
             startElection();
         }
@@ -365,11 +387,11 @@ public class RaftNode {
         if (peers.isEmpty()) {
             try {
                 if (store.count("_system", "_clusternodes") > 0) {
-                     becomeLeader();
+                    becomeLeader();
                 } else {
                     state = State.FOLLOWER;
                 }
-            } catch(Exception e) {
+            } catch (Exception e) {
                 state = State.FOLLOWER;
             }
             return;
@@ -378,7 +400,7 @@ public class RaftNode {
         String body = String.format("{\"term\":%d, \"candidateId\":\"%s\", \"lastLogIndex\":%d, \"lastLogTerm\":%d}",
                 termForElection, nodeId, log.size(), 0);
 
-        List<String> currentPeers = new ArrayList<>(peers); 
+        List<String> currentPeers = new ArrayList<>(peers);
         for (String peer : currentPeers) {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(peer + "/raft/rpc/requestvote"))
@@ -397,15 +419,18 @@ public class RaftNode {
                                         becomeLeader();
                                     }
                                 }
-                            } catch (Exception e) {}
+                            } catch (Exception e) {
+                            }
                         }
                     });
         }
     }
 
     private synchronized void becomeLeader() {
-        if (state == State.LEADER) return;
-        LOGGER.log(Level.INFO, "{0} becoming FOLLOWER of {1} for term {2}", new Object[]{nodeId, leaderId, currentTerm});
+        if (state == State.LEADER)
+            return;
+        LOGGER.log(Level.INFO, "{0} becoming FOLLOWER of {1} for term {2}",
+                new Object[] { nodeId, leaderId, currentTerm });
         state = State.LEADER;
         leaderId = nodeId;
         lastHeartbeatTime = System.currentTimeMillis();
@@ -420,7 +445,7 @@ public class RaftNode {
                     self.put("role", role);
                     self.put("status", "ACTIVE");
                     store.update("_system", "_clusternodes", nodeId, self);
-                    
+
                     Map<String, Object> cmd = new HashMap<>();
                     cmd.put("op", "cluster_update_node");
                     cmd.put("id", nodeId);
@@ -428,7 +453,8 @@ public class RaftNode {
                     replicate(cmd);
                 }
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+        }
     }
 
     private void sendHeartbeats() {
@@ -447,15 +473,16 @@ public class RaftNode {
         for (String peer : peersSnapshot) {
             String peerId = peerUrlToId.get(peer);
             boolean isPaused = false;
-            
+
             if (peerId != null) {
                 String status = nodeStatusCache.get(peerId);
                 if ("PAUSED".equals(status)) {
                     isPaused = true;
                 }
             }
-            
-            if (isPaused) continue;
+
+            if (isPaused)
+                continue;
 
             String body = String.format(
                     "{\"term\":%d, \"leaderId\":\"%s\", \"prevLogIndex\":%d, \"prevLogTerm\":%d, \"leaderCommit\":%d}",
@@ -470,11 +497,11 @@ public class RaftNode {
 
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
-                         if (response.statusCode() == 200) {
-                             markNodeActive(peer);
-                         } else {
-                             markNodeInactive(peer);
-                         }
+                        if (response.statusCode() == 200) {
+                            markNodeActive(peer);
+                        } else {
+                            markNodeInactive(peer);
+                        }
                     })
                     .exceptionally(e -> {
                         markNodeInactive(peer);
@@ -485,7 +512,8 @@ public class RaftNode {
 
     private void markNodeActive(String url) {
         String id = peerUrlToId.get(url);
-        if (id != null) nodeFailureCount.put(id, 0);
+        if (id != null)
+            nodeFailureCount.put(id, 0);
         updateNodeStatus(url, "ACTIVE", "INACTIVE");
     }
 
@@ -498,32 +526,34 @@ public class RaftNode {
                 return;
             }
         }
-        updateNodeStatus(url, "INACTIVE", null); 
+        updateNodeStatus(url, "INACTIVE", null);
     }
 
     private void updateNodeStatus(String url, String newStatus, String currentStatusConstraint) {
         String id = peerUrlToId.get(url);
-        if (id == null) return;
-        
+        if (id == null)
+            return;
+
         try {
             Map<String, Object> node = store.findByID("_system", "_clusternodes", id);
             if (node != null) {
                 String current = (String) node.get("status");
                 if (currentStatusConstraint != null && !currentStatusConstraint.equals(current)) {
-                    return; 
+                    return;
                 }
-                
+
                 if (newStatus.equals(current)) {
                     nodeStatusCache.put(id, newStatus);
                     return;
                 }
 
-                LOGGER.log(Level.INFO, "Updating node status for {0} from {1} to {2}", new Object[]{url, current, newStatus});
+                LOGGER.log(Level.INFO, "Updating node status for {0} from {1} to {2}",
+                        new Object[] { url, current, newStatus });
                 node.put("status", newStatus);
                 nodeStatusCache.put(id, newStatus);
-                
+
                 store.update("_system", "_clusternodes", id, node);
-                
+
                 Map<String, Object> cmd = new HashMap<>();
                 cmd.put("op", "cluster_update_node");
                 cmd.put("id", id);
@@ -536,7 +566,7 @@ public class RaftNode {
                     replicateStateTo(url);
                 }
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOGGER.severe("Error updating node status for " + url + ": " + e.getMessage());
         }
     }
@@ -549,7 +579,8 @@ public class RaftNode {
                     if (self == null) {
                         return;
                     }
-                } catch (Exception e) {}
+                } catch (Exception e) {
+                }
             }
         }
 
@@ -578,7 +609,8 @@ public class RaftNode {
         if (term > currentTerm) {
             currentTerm = term;
             if (state != State.FOLLOWER) {
-                LOGGER.log(Level.INFO, "Term increased to {0}. Node {1} becoming FOLLOWER via RequestVote.", new Object[]{term, nodeId});
+                LOGGER.log(Level.INFO, "Term increased to {0}. Node {1} becoming FOLLOWER via RequestVote.",
+                        new Object[] { term, nodeId });
                 state = State.FOLLOWER;
                 votedFor = null;
                 updateSelfRoleInDB("FOLLOWER");
@@ -609,7 +641,8 @@ public class RaftNode {
         if (term > currentTerm) {
             currentTerm = term;
             if (state != State.FOLLOWER) {
-                LOGGER.log(Level.INFO, "Term increased to {0}. Node {1} becoming FOLLOWER via AppendEntries.", new Object[]{term, nodeId});
+                LOGGER.log(Level.INFO, "Term increased to {0}. Node {1} becoming FOLLOWER via AppendEntries.",
+                        new Object[] { term, nodeId });
                 state = State.FOLLOWER;
                 votedFor = null;
                 updateSelfRoleInDB("FOLLOWER");
@@ -625,7 +658,8 @@ public class RaftNode {
         this.lastHeartbeatTime = System.currentTimeMillis();
 
         if (!leaderId.equals(nodeId) && state != State.FOLLOWER) {
-            LOGGER.log(Level.INFO, "Node {0} becoming FOLLOWER of {1} for term {2}", new Object[]{nodeId, leaderId, term});
+            LOGGER.log(Level.INFO, "Node {0} becoming FOLLOWER of {1} for term {2}",
+                    new Object[] { nodeId, leaderId, term });
             this.state = State.FOLLOWER;
             updateSelfRoleInDB("FOLLOWER");
         }
@@ -663,7 +697,8 @@ public class RaftNode {
     private void applyCommand(Map<String, Object> command) {
         try {
             String op = (String) command.get("op");
-            if (op == null) return;
+            if (op == null)
+                return;
 
             switch (op) {
                 case "create_db": {
@@ -683,7 +718,7 @@ public class RaftNode {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> nodeDoc = (Map<String, Object>) command.get("node");
                     String id = (String) nodeDoc.get("_id");
-                    
+
                     try {
                         if (store.findByID("_system", "_clusternodes", id) != null) {
                             store.update("_system", "_clusternodes", id, nodeDoc);
@@ -691,23 +726,23 @@ public class RaftNode {
                             store.save("_system", "_clusternodes", nodeDoc);
                         }
                     } catch (Exception e) {
-                         LOGGER.warning("Error saving/updating node " + id + ": " + e.getMessage());
+                        LOGGER.warning("Error saving/updating node " + id + ": " + e.getMessage());
                     }
-                    
+
                     LOGGER.info("Replicated Node Register: " + id);
                     loadPeersFromStore();
                     break;
                 }
                 case "cluster_deregister": {
-                     String url = (String) command.get("url");
-                     List<Map<String,Object>> nodes = store.query("_system", "_clusternodes", null, 1000, 0);
-                     for(Map<String, Object> n : nodes) {
-                         if (url.equals(n.get("url"))) {
-                             String id = (String) (n.get("_id") != null ? n.get("_id") : n.get("id"));
-                             store.delete("_system", "_clusternodes", id);
-                             LOGGER.info("Replicated Node Deregister: " + url);
-                         }
-                     }
+                    String url = (String) command.get("url");
+                    List<Map<String, Object>> nodes = store.query("_system", "_clusternodes", null, 1000, 0);
+                    for (Map<String, Object> n : nodes) {
+                        if (url.equals(n.get("url"))) {
+                            String id = (String) (n.get("_id") != null ? n.get("_id") : n.get("id"));
+                            store.delete("_system", "_clusternodes", id);
+                            LOGGER.info("Replicated Node Deregister: " + url);
+                        }
+                    }
                     loadPeersFromStore();
                     break;
                 }
@@ -719,7 +754,7 @@ public class RaftNode {
                             String id = (String) (n.get("_id") != null ? n.get("_id") : n.get("id"));
                             n.put("status", "INACTIVE");
                             store.update("_system", "_clusternodes", id, n);
-                             LOGGER.info("Replicated Node Stop: " + url);
+                            LOGGER.info("Replicated Node Stop: " + url);
                         }
                     }
                     loadPeersFromStore();
@@ -753,14 +788,92 @@ public class RaftNode {
                     LOGGER.info("Replicated Delete: " + db + "/" + col + " ID: " + id);
                     break;
                 }
-                 case "cluster_update_node": {
-                     String id = (String) command.get("id");
-                     @SuppressWarnings("unchecked")
-                     Map<String, Object> data = (Map<String, Object>) command.get("data");
-                     store.update("_system", "_clusternodes", id, data);
-                     loadPeersFromStore();
-                     break;
-                 }
+                case "cluster_update_node": {
+                    String id = (String) command.get("id");
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = (Map<String, Object>) command.get("data");
+                    store.update("_system", "_clusternodes", id, data);
+                    loadPeersFromStore();
+                    break;
+                }
+                case "create_collection": {
+                    String db = (String) command.get("db");
+                    String col = (String) command.get("col");
+                    try {
+                        store.createCollection(db, col);
+                    } catch (Exception e) {
+                    }
+                    LOGGER.info("Replicated Create Collection: " + db + "/" + col);
+                    break;
+                }
+                case "delete_collection": {
+                    String db = (String) command.get("db");
+                    String col = (String) command.get("col");
+                    try {
+                        store.deleteCollection(db, col);
+                    } catch (Exception e) {
+                    }
+                    LOGGER.info("Replicated Delete Collection: " + db + "/" + col);
+                    break;
+                }
+                case "rename_collection": {
+                    String db = (String) command.get("db");
+                    String oldName = (String) command.get("oldName");
+                    String newName = (String) command.get("newName");
+                    try {
+                        store.renameCollection(db, oldName, newName);
+                    } catch (Exception e) {
+                    }
+                    LOGGER.info("Replicated Rename Collection: " + db + "/" + oldName + " -> " + newName);
+                    break;
+                }
+                case "delete_db": {
+                    String db = (String) command.get("db");
+                    try {
+                        store.deleteDatabase(db);
+                    } catch (Exception e) {
+                    }
+                    LOGGER.info("Replicated Delete DB: " + db);
+                    break;
+                }
+                case "rename_db": {
+                    String oldName = (String) command.get("oldName");
+                    String newName = (String) command.get("newName");
+                    try {
+                        store.renameDatabase(oldName, newName);
+                    } catch (Exception e) {
+                    }
+                    LOGGER.info("Replicated Rename DB: " + oldName + " -> " + newName);
+                    break;
+                }
+                case "create_index": {
+                    String db = (String) command.get("db");
+                    String col = (String) command.get("col");
+                    List<String> fields = (List<String>) command.get("fields");
+                    boolean unique = (boolean) command.get("unique");
+                    boolean sequential = (boolean) command.get("sequential");
+                    try {
+                        if (indexer != null) {
+                            indexer.createIndex(db, col, fields, unique, sequential);
+                        }
+                    } catch (Exception e) {
+                    }
+                    LOGGER.info("Replicated Create Index: " + db + "/" + col);
+                    break;
+                }
+                case "delete_index": {
+                    String db = (String) command.get("db");
+                    String col = (String) command.get("col");
+                    List<String> fields = (List<String>) command.get("fields");
+                    try {
+                        if (indexer != null) {
+                            indexer.deleteIndex(db, col, fields);
+                        }
+                    } catch (Exception e) {
+                    }
+                    LOGGER.info("Replicated Delete Index: " + db + "/" + col);
+                    break;
+                }
             }
         } catch (Exception e) {
             LOGGER.severe("Failed to apply command: " + e.getMessage());
@@ -786,31 +899,34 @@ public class RaftNode {
             String cmdJson = mapper.writeValueAsString(command);
             String body = String.format("{\"term\":%d, \"leaderId\":\"%s\", \"leaderCommit\":%d, \"command\": %s}",
                     currentTerm, nodeId, commitIndex, cmdJson);
-            
+
             List<String> peersSnapshot = new ArrayList<>(peers);
             for (String peer : peersSnapshot) {
-                // Check status before sending data
-                String id = peerUrlToId.get(peer);
-                if (id != null) {
-                     try {
-                         Map<String, Object> node = store.findByID("_system", "_clusternodes", id);
-                         if (node != null) {
-                             String status = (String) node.get("status");
-                             // Skip sending commands to PAUSED or INACTIVE nodes
-                             if ("PAUSED".equals(status) || "INACTIVE".equals(status)) continue;
-                         }
-                     } catch(Exception e) {}
-                }
+                try {
+                    // Check status before sending data
+                    String id = peerUrlToId.get(peer);
+                    if (id != null) {
+                        Map<String, Object> node = store.findByID("_system", "_clusternodes", id);
+                        if (node != null) {
+                            String status = (String) node.get("status");
+                            // Skip sending commands to PAUSED or INACTIVE nodes
+                            if ("PAUSED".equals(status) || "INACTIVE".equals(status))
+                                continue;
+                        }
+                    }
 
-                HttpRequest request = HttpRequest.newBuilder()
-                        .uri(URI.create(peer + "/raft/rpc/appendentries"))
-                        .header("Content-Type", "application/json")
-                        .POST(HttpRequest.BodyPublishers.ofString(body))
-                        .build();
-                httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+                    HttpRequest request = HttpRequest.newBuilder()
+                            .uri(URI.create(peer + "/raft/rpc/appendentries"))
+                            .header("Content-Type", "application/json")
+                            .POST(HttpRequest.BodyPublishers.ofString(body))
+                            .build();
+                    httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString());
+                } catch (Exception e) {
+                    LOGGER.warning("Error sending AppendEntries to " + peer + ": " + e.getMessage());
+                }
             }
         } catch (Exception e) {
-            LOGGER.severe("Error sending AppendEntries: " + e.getMessage());
+            LOGGER.severe("Error formatting AppendEntries body: " + e.getMessage());
         }
     }
 
@@ -843,12 +959,12 @@ public class RaftNode {
                 if (description != null && !description.isEmpty()) {
                     data.put("description", description);
                 }
-                
+
                 Map<String, Object> cmd = new HashMap<>();
                 cmd.put("op", "cluster_update_node");
                 cmd.put("id", existingId);
                 cmd.put("data", data);
-                
+
                 replicate(cmd);
                 applyCommand(cmd);
                 replicateStateTo(url); // Replicate state even if updating
@@ -873,41 +989,41 @@ public class RaftNode {
             cmd.put("node", nodeDoc);
 
             applyCommand(cmd); // Apply locally first to update 'peers' list
-            replicate(cmd);   // Then replicate to others
+            replicate(cmd); // Then replicate to others
             LOGGER.info("Registered and replicated node: " + url);
         }
-        
+
         // Send snapshot to new node (background)
         replicateStateTo(url);
     }
 
     public void deregisterNode(String url) {
         synchronized (this) {
-             if (state != State.LEADER) {
+            if (state != State.LEADER) {
                 throw new IllegalStateException("Not Leader");
             }
-             
+
             Map<String, Object> cmd = new HashMap<>();
             cmd.put("op", "cluster_deregister");
             cmd.put("url", url);
-            
+
             replicate(cmd);
             applyCommand(cmd);
         }
     }
-    
+
     public void stopNode(String nodeIdOrUrl) {
-         if (state != State.LEADER) {
+        if (state != State.LEADER) {
             throw new IllegalStateException("Only Leader can stop nodes");
         }
-        
+
         String targetUrl = findPeerUrl(nodeIdOrUrl);
         if (targetUrl == null) {
             throw new IllegalArgumentException("Node not found: " + nodeIdOrUrl);
         }
 
         LOGGER.info("Sending STOP command to " + targetUrl);
-        
+
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(targetUrl + "/raft/rpc/stop"))
                 .POST(HttpRequest.BodyPublishers.noBody())
@@ -915,16 +1031,16 @@ public class RaftNode {
 
         httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                 .thenAccept(res -> LOGGER.info("Stop sent to " + nodeIdOrUrl + ": " + res.statusCode()));
-        
+
         // Also mark as INACTIVE
         updateNodeStatus(targetUrl, "INACTIVE", null);
     }
 
     public void pauseNode(String nodeIdOrUrl) {
-         if (state != State.LEADER) {
+        if (state != State.LEADER) {
             throw new IllegalStateException("Only Leader can pause nodes");
         }
-        
+
         String targetUrl = findPeerUrl(nodeIdOrUrl);
         if (targetUrl == null) {
             throw new IllegalArgumentException("Node not found: " + nodeIdOrUrl);
@@ -935,10 +1051,10 @@ public class RaftNode {
     }
 
     public void resumeNode(String nodeIdOrUrl) {
-         if (state != State.LEADER) {
+        if (state != State.LEADER) {
             throw new IllegalStateException("Only Leader can resume nodes");
         }
-        
+
         String targetUrl = findPeerUrl(nodeIdOrUrl);
         if (targetUrl == null) {
             throw new IllegalArgumentException("Node not found: " + nodeIdOrUrl);
@@ -946,14 +1062,14 @@ public class RaftNode {
 
         LOGGER.info("Resuming node: " + targetUrl);
         updateNodeStatus(targetUrl, "ACTIVE", null);
-        
+
         // Immediately trigger a snapshot or replication?
         // Heartbeats will resume and fix term/commit index.
         replicateStateTo(targetUrl);
     }
-    
+
     private String findPeerUrl(String key) {
-         try {
+        try {
             List<Map<String, Object>> nodes = store.query("_system", "_clusternodes", null, 1000, 0);
             for (Map<String, Object> n : nodes) {
                 String id = (String) (n.get("_id") != null ? n.get("_id") : n.get("id"));
@@ -962,22 +1078,24 @@ public class RaftNode {
                     return u;
                 }
             }
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOGGER.severe("Error searching for node: " + e.getMessage());
         }
         return null;
     }
 
     private boolean isClusterMember(String id) {
-        if (id == null) return false;
-        if (id.equals(this.nodeId)) return true;
+        if (id == null)
+            return false;
+        if (id.equals(this.nodeId))
+            return true;
         return peerUrlToId.containsValue(id);
     }
 
     public synchronized List<Map<String, Object>> getClusterStatus() {
         try {
             return store.query("_system", "_clusternodes", null, 1000, 0);
-        } catch(Exception e) {
+        } catch (Exception e) {
             LOGGER.severe("Failed to get cluster status: " + e.getMessage());
             return new ArrayList<>();
         }
@@ -985,8 +1103,12 @@ public class RaftNode {
 
     private void replicateStateTo(String url) {
         java.util.concurrent.CompletableFuture.runAsync(() -> {
-            // Wait a bit to ensure the target node's web server is up if this was a fresh registration
-            try { Thread.sleep(2000); } catch (InterruptedException e) {}
+            // Wait a bit to ensure the target node's web server is up if this was a fresh
+            // registration
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+            }
 
             int maxRetries = 3;
             int attempt = 0;
@@ -995,9 +1117,10 @@ public class RaftNode {
             while (attempt < maxRetries && !success) {
                 attempt++;
                 LOGGER.info("State replication attempt " + attempt + " for " + url);
-                
+
                 File snapshot = createSnapshot();
-                if (snapshot == null) return;
+                if (snapshot == null)
+                    return;
                 long size = snapshot.length();
                 LOGGER.info("Created snapshot size: " + size + " bytes for " + url);
 
@@ -1016,15 +1139,22 @@ public class RaftNode {
                         LOGGER.info("Successfully replicated state to " + url + " on attempt " + attempt);
                         success = true;
                     } else {
-                        LOGGER.warning("Failed to replicate state to " + url + ". Status: " + response.statusCode() + " Body: " + response.body());
-                        if (attempt < maxRetries) Thread.sleep(3000 * attempt);
+                        LOGGER.warning("Failed to replicate state to " + url + ". Status: " + response.statusCode()
+                                + " Body: " + response.body());
+                        if (attempt < maxRetries)
+                            Thread.sleep(3000 * attempt);
                     }
                 } catch (Exception e) {
                     LOGGER.severe("Error sending snapshot to " + url + " (attempt " + attempt + "): " + e.getMessage());
-                    try { if (attempt < maxRetries) Thread.sleep(3000 * attempt); } catch (InterruptedException ie) {}
+                    try {
+                        if (attempt < maxRetries)
+                            Thread.sleep(3000 * attempt);
+                    } catch (InterruptedException ie) {
+                    }
                 } finally {
                     if (snapshot != null && snapshot.exists()) {
-                        if (!snapshot.delete()) snapshot.deleteOnExit();
+                        if (!snapshot.delete())
+                            snapshot.deleteOnExit();
                     }
                 }
             }
@@ -1068,9 +1198,9 @@ public class RaftNode {
         }
         LOGGER.info("Snapshot installed successfully.");
         this.lastHeartbeatTime = System.currentTimeMillis();
-        
+
         // Force step down to Follower as we accepted a snapshot from Leader
-        synchronized(this) {
+        synchronized (this) {
             this.state = State.FOLLOWER;
             this.votedFor = null;
             // Removed currentTerm = 0; Keep current term to avoid being disruptive.
@@ -1078,7 +1208,7 @@ public class RaftNode {
             LOGGER.info("Accepted snapshot. Ensuring Node " + nodeId + " is FOLLOWER.");
         }
     }
-    
+
     public static class LogEntry {
         public int term;
         public Map<String, Object> command;

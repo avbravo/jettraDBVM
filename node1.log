@@ -1,0 +1,138 @@
+nohup: no se tendrá en cuenta la entrada
+       _      _   _            ____  ______      ____  __
+      | |    | | | |          |  _ \|  _ \ \    / /  \/  |
+      | | ___| |_| |_ _ __ __ | | | | |_) \ \  / /| \  / |
+  _   | |/ _ \ __| __| '__/ _` | | | |  _ < \ \/ / | |\/| |
+ | |__| |  __/ |_| |_| | | (_| | |_| | |_) | \  /  | |  | |
+  \____/ \___|\__|\__|_|  \__,_|____/|____/   \/   |_|  |_|
+
+JettraDBVM Server v1.0
+
+dic 21, 2025 5:24:18 P. M. io.jettra.jettraDBVM.Main main
+INFORMACIÓN: Using config file: /home/avbravo/jettradbvmnodes/node1/config.json
+DEBUG: JettraBasicStore query _system/_users found 2 files.
+DEBUG: Reading file: data/_system/_users/f44a9c41-c0ac-46d7-afe0-64f90bf7ee3a.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 0 files.
+DEBUG: JettraBasicStore saved data/_system/_clusternodes/node-1.jdb ID: node-1
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+dic 21, 2025 5:24:19 P. M. io.jettra.core.raft.RaftNode <init>
+INFORMACIÓN: Bootstrap node initialized in _clusternodes. Becoming LEADER.
+dic 21, 2025 5:24:19 P. M. io.jettra.core.raft.RaftNode becomeLeader
+INFORMACIÓN: node-1 becoming FOLLOWER of null for term 0
+dic 21, 2025 5:24:19 P. M. io.jettra.core.raft.RaftNode <init>
+INFORMACIÓN: Bootstrap node with no peers (or single node). Forcing LEADER role.
+dic 21, 2025 5:24:19 P. M. io.jettra.core.raft.RaftNode startFederatedSync
+INFORMACIÓN: Federated mode active. Starting registration and heartbeat sync.
+dic 21, 2025 5:24:19 P. M. io.jettra.core.Engine <init>
+INFORMACIÓN: JettraDB Engine initialized with dataDir: data
+dic 21, 2025 5:24:19 P. M. io.jettra.core.Engine start
+INFORMACIÓN: Starting JettraDB Engine...
+dic 21, 2025 5:24:19 P. M. io.jettra.core.raft.RaftNode start
+INFORMACIÓN: RaftNode started: node-1 Peers: []
+dic 21, 2025 5:24:19 P. M. io.helidon.common.features.HelidonFeatures features
+INFORMACIÓN: Helidon SE 4.0.5 features: [WebServer]
+dic 21, 2025 5:24:19 P. M. io.helidon.webserver.ServerListener start
+INFORMACIÓN: [0x42a5a95a] http://0.0.0.0:6585 bound for socket '@default'
+dic 21, 2025 5:24:19 P. M. io.helidon.webserver.LoomServer startIt
+INFORMACIÓN: Started all channels in 10 milliseconds. 1144 milliseconds since JVM startup. Java 25.0.1+13-LTS
+dic 21, 2025 5:24:19 P. M. io.jettra.jettraDBVM.Main main
+INFORMACIÓN: Server started at http://0.0.0.0:6585
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+DEBUG: JettraBasicStore query _system/_clusternodes found 1 files.
+DEBUG: Reading file: data/_system/_clusternodes/node-1.jdb
+dic 21, 2025 5:32:00 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown requested by JVM shutting down
+dic 21, 2025 5:32:00 P. M. io.helidon.webserver.ServerListener listen
+INFORMACIÓN: [0x42a5a95a] @default socket closed.
+dic 21, 2025 5:32:00 P. M. io.helidon.webserver.LoomServer lambda$registerShutdownHook$4
+INFORMACIÓN: Shutdown finished

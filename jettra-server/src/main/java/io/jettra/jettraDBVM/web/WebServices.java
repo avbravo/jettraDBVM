@@ -14,13 +14,15 @@ import java.util.Base64;
 import java.util.Optional;
 
 public class WebServices {
-    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(WebServices.class.getName());
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger
+            .getLogger(WebServices.class.getName());
     private final Engine engine;
     private final ObjectMapper jsonMapper = new ObjectMapper();
     private final QueryExecutor queryExecutor;
     private static final ThreadLocal<String> CURRENT_USER = new ThreadLocal<>();
     private static final Map<String, Map<String, Object>> PEER_METRICS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
-    private final java.util.concurrent.ScheduledExecutorService metricsScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+    private final java.util.concurrent.ScheduledExecutorService metricsScheduler = java.util.concurrent.Executors
+            .newSingleThreadScheduledExecutor();
     private final java.net.http.HttpClient httpClientForMetrics = java.net.http.HttpClient.newBuilder()
             .connectTimeout(java.time.Duration.ofMillis(2000))
             .build();
@@ -34,17 +36,19 @@ public class WebServices {
     private void pollPeerMetrics() {
         try {
             io.jettra.core.raft.RaftNode raft = engine.getRaftNode();
-            if (raft == null) return;
-            
+            if (raft == null)
+                return;
+
             List<Map<String, Object>> nodes = raft.getClusterStatus();
-            if (nodes == null) return;
-            
+            if (nodes == null)
+                return;
+
             String selfId = raft.getNodeId();
-            
+
             for (Map<String, Object> node : nodes) {
                 final String idForLambda = (String) (node.get("_id") != null ? node.get("_id") : node.get("id"));
                 final String urlForLambda = (String) node.get("url");
-                
+
                 if (idForLambda != null && urlForLambda != null && !idForLambda.equals(selfId)) {
                     // Poll metrics from peer
                     try {
@@ -53,20 +57,25 @@ public class WebServices {
                                 .GET()
                                 .timeout(java.time.Duration.ofMillis(1000))
                                 .build();
-                                
+
                         httpClientForMetrics.sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                                 .thenAccept(response -> {
                                     if (response.statusCode() == 200) {
                                         try {
-                                            Map<String, Object> metrics = jsonMapper.readValue(response.body(), new TypeReference<Map<String, Object>>() {});
+                                            Map<String, Object> metrics = jsonMapper.readValue(response.body(),
+                                                    new TypeReference<Map<String, Object>>() {
+                                                    });
                                             PEER_METRICS_CACHE.put(idForLambda, metrics);
-                                        } catch (Exception e) {}
+                                        } catch (Exception e) {
+                                        }
                                     }
                                 });
-                    } catch (Exception e) {}
+                    } catch (Exception e) {
+                    }
                 }
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+        }
     }
 
     public void register(HttpRules rules) {
@@ -145,8 +154,8 @@ public class WebServices {
     private void authMiddleware(ServerRequest req, ServerResponse res) {
         // Skip login and metrics endpoints
         String path = req.path().path();
-        if (path.equals("/api/login") || path.equals("/api/metrics") || 
-            path.startsWith("/api/cluster/") || path.equals("/api/config")) {
+        if (path.equals("/api/login") || path.equals("/api/metrics") ||
+                path.startsWith("/api/cluster/") || path.equals("/api/config")) {
             res.next();
             return;
         }
@@ -381,6 +390,14 @@ public class WebServices {
         try {
             checkLeader(res);
             String db = req.query().get("name");
+
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "delete_db");
+                command.put("db", db);
+                engine.getRaftNode().replicate(command);
+            }
+
             engine.getStore().deleteDatabase(db);
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
         } catch (Exception e) {
@@ -396,6 +413,15 @@ public class WebServices {
             });
             String oldName = body.get("oldName");
             String newName = body.get("newName");
+
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "rename_db");
+                command.put("oldName", oldName);
+                command.put("newName", newName);
+                engine.getRaftNode().replicate(command);
+            }
+
             engine.getStore().renameDatabase(oldName, newName);
             res.send(jsonMapper.createObjectNode().put("status", "renamed").toString());
         } catch (Exception e) {
@@ -413,6 +439,15 @@ public class WebServices {
             });
             String db = body.get("database");
             String col = body.get("collection");
+
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "create_collection");
+                command.put("db", db);
+                command.put("col", col);
+                engine.getRaftNode().replicate(command);
+            }
+
             engine.getStore().createCollection(db, col);
             res.send(jsonMapper.createObjectNode().put("status", "created").toString());
         } catch (Exception e) {
@@ -427,6 +462,15 @@ public class WebServices {
             checkLeader(res); // Added checkLeader
             String db = req.query().get("database");
             String col = req.query().get("collection");
+
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "delete_collection");
+                command.put("db", db);
+                command.put("col", col);
+                engine.getRaftNode().replicate(command);
+            }
+
             engine.getStore().deleteCollection(db, col);
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
         } catch (Exception e) {
@@ -443,6 +487,16 @@ public class WebServices {
             String db = body.get("database");
             String oldName = body.get("oldName");
             String newName = body.get("newName");
+
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "rename_collection");
+                command.put("db", db);
+                command.put("oldName", oldName);
+                command.put("newName", newName);
+                engine.getRaftNode().replicate(command);
+            }
+
             engine.getStore().renameCollection(db, oldName, newName);
             res.send(jsonMapper.createObjectNode().put("status", "renamed").toString());
         } catch (Exception e) {
@@ -453,17 +507,18 @@ public class WebServices {
     private void checkLeader(ServerResponse res) throws Exception {
         if (engine.getRaftNode() != null && !engine.getRaftNode().isLeader()) {
             res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader. Writes must be sent to the cluster leader.");
-            throw new RuntimeException("Not Leader"); 
+            throw new RuntimeException("Not Leader");
         }
     }
 
     private void registerNode(ServerRequest req, ServerResponse res) {
         try {
             byte[] content = req.content().as(byte[].class);
-            Map<String, Object> data = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
+            Map<String, Object> data = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
+            });
             String url = (String) data.get("url");
             String description = (String) data.getOrDefault("description", "");
-            
+
             if (url == null) {
                 res.status(Status.BAD_REQUEST_400).send("Missing URL");
                 return;
@@ -587,47 +642,54 @@ public class WebServices {
             }
 
             if (txID != null && !txID.isEmpty()) {
-                 engine.getStore().saveTx(db, col, doc, txID);
+                engine.getStore().saveTx(db, col, doc, txID);
             } else {
-                 // Distributed Write Logic
-                 if (engine.getRaftNode() != null) {
+                // Distributed Write Logic
+                if (engine.getRaftNode() != null) {
                     if (!engine.getRaftNode().isLeader()) {
-                        res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader. Connect to: " + engine.getRaftNode().getLeaderId());
+                        res.status(Status.SERVICE_UNAVAILABLE_503)
+                                .send("Not Leader. Connect to: " + engine.getRaftNode().getLeaderId());
                         return;
-                    } 
-                     Map<String, Object> cmd = new java.util.HashMap<>();
-                     cmd.put("op", "save");
-                     cmd.put("db", db);
-                     cmd.put("col", col);
-                     cmd.put("doc", doc);
-                     engine.getRaftNode().replicate(cmd);
-                     // Also apply locally? replicate() does NOT apply locally automatically in standard Raft usually,
-                     // but here RaftNode.appendEntry calls applyCommand if it's leader?
-                     // Let's check RaftNode.replicate...
-                     // RaftNode.replicate -> log.add -> sendAppendEntries.
-                     // It does NOT apply immediately. It waits for consensus?
-                     // The current RaftNode implementation is simplified. 
-                     // RaftNode.appendEntry says: if (command != null) applyCommand(command).
-                     // But replicate() adds to log but doesn't call applyCommand directly?
-                     // Wait, `replicate` calls `sendAppendEntries`.
-                     // `appendEntry` is called by FOLLOWERS when they receive AppendEntries.
-                     // The LEADER must also apply it to its state machine once committed.
-                     // The current RaftNode doesn't seem to have a background "commit applier".
-                     // It seems simplified to: Leader applies immediately? No, `replicate` just adds to log.
-                     // Let's look at `RaftNode.java` again.
-                     // It seems missing "apply on commit" loop. 
-                     // For this MVP, we might need to apply locally immediately OR have a mechanism.
-                     // Given the "improve algorithm" prompt, maybe the current one IS slow because it waits?
-                     // But I don't see any waiting code in `replicate`.
-                     // To ensure it works: I will apply locally immediately for the Leader so UI updates, 
-                     // and replicate for Followers. This is "Async replication" (weaker consistency) but faster.
-                     // Or I can just call store.save() here as before.
-                     engine.getStore().save(db, col, doc);
-                 } else {
-                     // If Follower, simplistic approach: allow local write (bad) or rely on client to hit leader.
-                     // For now, consistent with previous behavior + replication:
-                     engine.getStore().save(db, col, doc);
-                 }
+                    }
+                    Map<String, Object> cmd = new java.util.HashMap<>();
+                    cmd.put("op", "save");
+                    cmd.put("db", db);
+                    cmd.put("col", col);
+                    cmd.put("doc", doc);
+                    engine.getRaftNode().replicate(cmd);
+                    // Also apply locally? replicate() does NOT apply locally automatically in
+                    // standard Raft usually,
+                    // but here RaftNode.appendEntry calls applyCommand if it's leader?
+                    // Let's check RaftNode.replicate...
+                    // RaftNode.replicate -> log.add -> sendAppendEntries.
+                    // It does NOT apply immediately. It waits for consensus?
+                    // The current RaftNode implementation is simplified.
+                    // RaftNode.appendEntry says: if (command != null) applyCommand(command).
+                    // But replicate() adds to log but doesn't call applyCommand directly?
+                    // Wait, `replicate` calls `sendAppendEntries`.
+                    // `appendEntry` is called by FOLLOWERS when they receive AppendEntries.
+                    // The LEADER must also apply it to its state machine once committed.
+                    // The current RaftNode doesn't seem to have a background "commit applier".
+                    // It seems simplified to: Leader applies immediately? No, `replicate` just adds
+                    // to log.
+                    // Let's look at `RaftNode.java` again.
+                    // It seems missing "apply on commit" loop.
+                    // For this MVP, we might need to apply locally immediately OR have a mechanism.
+                    // Given the "improve algorithm" prompt, maybe the current one IS slow because
+                    // it waits?
+                    // But I don't see any waiting code in `replicate`.
+                    // To ensure it works: I will apply locally immediately for the Leader so UI
+                    // updates,
+                    // and replicate for Followers. This is "Async replication" (weaker consistency)
+                    // but faster.
+                    // Or I can just call store.save() here as before.
+                    engine.getStore().save(db, col, doc);
+                } else {
+                    // If Follower, simplistic approach: allow local write (bad) or rely on client
+                    // to hit leader.
+                    // For now, consistent with previous behavior + replication:
+                    engine.getStore().save(db, col, doc);
+                }
             }
 
             System.out.println("DEBUG: Document saved with ID: " + id);
@@ -671,17 +733,17 @@ public class WebServices {
                     res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
                     return;
                 }
-                 Map<String, Object> cmd = new java.util.HashMap<>();
-                 cmd.put("op", "update");
-                 cmd.put("db", db);
-                 cmd.put("col", col);
-                 cmd.put("id", id);
-                 cmd.put("doc", doc);
-                 engine.getRaftNode().replicate(cmd);
+                Map<String, Object> cmd = new java.util.HashMap<>();
+                cmd.put("op", "update");
+                cmd.put("db", db);
+                cmd.put("col", col);
+                cmd.put("id", id);
+                cmd.put("doc", doc);
+                engine.getRaftNode().replicate(cmd);
             }
             // Always apply locally for now (Leader or Standalone)
             engine.getStore().update(db, col, id, doc);
-            
+
             res.send(jsonMapper.createObjectNode().put("status", "ok").toString());
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -703,12 +765,12 @@ public class WebServices {
                         res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
                         return;
                     }
-                     Map<String, Object> cmd = new java.util.HashMap<>();
-                     cmd.put("op", "delete");
-                     cmd.put("db", db);
-                     cmd.put("col", col);
-                     cmd.put("id", id);
-                     engine.getRaftNode().replicate(cmd);
+                    Map<String, Object> cmd = new java.util.HashMap<>();
+                    cmd.put("op", "delete");
+                    cmd.put("db", db);
+                    cmd.put("col", col);
+                    cmd.put("id", id);
+                    engine.getRaftNode().replicate(cmd);
                 }
                 engine.getStore().delete(db, col, id);
             }
@@ -827,7 +889,21 @@ public class WebServices {
                 return;
             }
 
+            checkLeader(res);
+
             List<String> fields = java.util.Arrays.asList(field.split(","));
+
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "create_index");
+                command.put("db", db);
+                command.put("col", col);
+                command.put("fields", fields);
+                command.put("unique", unique);
+                command.put("sequential", sequential);
+                engine.getRaftNode().replicate(command);
+            }
+
             engine.getIndexer().createIndex(db, col, fields, unique, sequential);
 
             res.send(jsonMapper.createObjectNode().put("status", "created").toString());
@@ -847,7 +923,19 @@ public class WebServices {
                 return;
             }
 
+            checkLeader(res);
+
             List<String> fields = java.util.Arrays.asList(field.split(","));
+
+            if (engine.getRaftNode() != null && engine.getRaftNode().isLeader()) {
+                Map<String, Object> command = new java.util.HashMap<>();
+                command.put("op", "delete_index");
+                command.put("db", db);
+                command.put("col", col);
+                command.put("fields", fields);
+                engine.getRaftNode().replicate(command);
+            }
+
             engine.getIndexer().deleteIndex(db, col, fields);
 
             res.send(jsonMapper.createObjectNode().put("status", "deleted").toString());
@@ -876,7 +964,7 @@ public class WebServices {
                 status.put("state", raft.getState().toString());
                 status.put("leaderId", raft.getLeaderId());
                 status.put("term", raft.getCurrentTerm());
-                
+
                 // Detailed node status - Transform _id to id for frontend
                 List<Map<String, Object>> nodes = raft.getClusterStatus();
                 if (nodes != null) {
@@ -885,40 +973,41 @@ public class WebServices {
                     System.out.println("WebServices: getClusterStatus returning 'null' nodes list.");
                     nodes = new java.util.ArrayList<>();
                 }
-                
+
                 List<Map<String, Object>> publicNodes = new java.util.ArrayList<>();
                 for (Map<String, Object> node : nodes) {
                     Map<String, Object> pNode = new java.util.HashMap<>(node);
                     // Robust ID handling
                     String id = (String) pNode.get("_id");
-                    if (id == null) id = (String) pNode.get("id");
-                    
-                    if (id != null) {
-                    pNode.put("id", id);
-                    // Ensure _id is also set for consistency
-                    pNode.put("_id", id);
-                } else {
-                     // Fallback if absolutely no ID found
-                     String url = (String) pNode.get("url");
-                     if (url != null) {
-                         pNode.put("id", "node-" + url.hashCode());
-                         pNode.put("_id", "node-" + url.hashCode());
-                     }
-                }
+                    if (id == null)
+                        id = (String) pNode.get("id");
 
-                // Add metrics if it's the current node
-                if (raft.getNodeId().equals(id)) {
-                    String dataDir = (String) engine.getConfigManager().getOrDefault("DataDir", "data");
-                    pNode.put("metrics", io.jettra.core.util.MetricsUtils.getSystemMetrics(dataDir));
-                } else if (id != null) {
-                    // Try to get from cache
-                    Map<String, Object> cached = PEER_METRICS_CACHE.get(id);
-                    if (cached != null) {
-                        pNode.put("metrics", cached);
+                    if (id != null) {
+                        pNode.put("id", id);
+                        // Ensure _id is also set for consistency
+                        pNode.put("_id", id);
+                    } else {
+                        // Fallback if absolutely no ID found
+                        String url = (String) pNode.get("url");
+                        if (url != null) {
+                            pNode.put("id", "node-" + url.hashCode());
+                            pNode.put("_id", "node-" + url.hashCode());
+                        }
                     }
-                }
-                
-                publicNodes.add(pNode);
+
+                    // Add metrics if it's the current node
+                    if (raft.getNodeId().equals(id)) {
+                        String dataDir = (String) engine.getConfigManager().getOrDefault("DataDir", "data");
+                        pNode.put("metrics", io.jettra.core.util.MetricsUtils.getSystemMetrics(dataDir));
+                    } else if (id != null) {
+                        // Try to get from cache
+                        Map<String, Object> cached = PEER_METRICS_CACHE.get(id);
+                        if (cached != null) {
+                            pNode.put("metrics", cached);
+                        }
+                    }
+
+                    publicNodes.add(pNode);
                 }
                 status.put("nodes", publicNodes);
             } else {
@@ -933,7 +1022,7 @@ public class WebServices {
 
     private void stopNode(ServerRequest req, ServerResponse res) {
         try {
-             if (engine.getRaftNode() == null) {
+            if (engine.getRaftNode() == null) {
                 res.status(Status.BAD_REQUEST_400).send("Raft not enabled");
                 return;
             }
@@ -942,10 +1031,10 @@ public class WebServices {
             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
             });
             String nodeIdOrUrl = body.get("node");
-            
+
             if (nodeIdOrUrl == null || nodeIdOrUrl.isEmpty()) {
-                 res.status(Status.BAD_REQUEST_400).send("Missing node ID or URL");
-                 return;
+                res.status(Status.BAD_REQUEST_400).send("Missing node ID or URL");
+                return;
             }
 
             engine.getRaftNode().stopNode(nodeIdOrUrl);
@@ -953,10 +1042,9 @@ public class WebServices {
         } catch (IllegalStateException e) {
             res.status(Status.BAD_REQUEST_400).send(e.getMessage());
         } catch (Exception e) {
-             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
-
 
     private void deregisterNode(ServerRequest req, ServerResponse res) {
         try {
@@ -1045,6 +1133,20 @@ public class WebServices {
             } catch (Exception e) {
             } // ignore if query fails (e.g. collection missing)
 
+            if (engine.getRaftNode() != null) {
+                if (!engine.getRaftNode().isLeader()) {
+                    res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
+                    return;
+                }
+
+                Map<String, Object> cmd = new java.util.HashMap<>();
+                cmd.put("op", "save");
+                cmd.put("db", "_system");
+                cmd.put("col", "_users");
+                cmd.put("doc", user);
+                engine.getRaftNode().replicate(cmd);
+            }
+
             engine.getStore().save("_system", "_users", user);
             res.send(jsonMapper.createObjectNode().put("status", "User created").toString());
         } catch (Exception e) {
@@ -1057,6 +1159,18 @@ public class WebServices {
             return;
         try {
             String id = req.query().get("id");
+            if (engine.getRaftNode() != null) {
+                if (!engine.getRaftNode().isLeader()) {
+                    res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
+                    return;
+                }
+                Map<String, Object> cmd = new java.util.HashMap<>();
+                cmd.put("op", "delete");
+                cmd.put("db", "_system");
+                cmd.put("col", "_users");
+                cmd.put("id", id);
+                engine.getRaftNode().replicate(cmd);
+            }
             engine.getStore().delete("_system", "_users", id);
             res.send(jsonMapper.createObjectNode().put("status", "User deleted").toString());
         } catch (Exception e) {
@@ -1174,6 +1288,7 @@ public class WebServices {
         if (!requireAdmin(req, res))
             return;
         try {
+            checkLeader(res);
             byte[] content = req.content().as(byte[].class);
             Map<String, String> body = jsonMapper.readValue(content, new TypeReference<Map<String, String>>() {
             });
@@ -1197,6 +1312,7 @@ public class WebServices {
         if (!requireAdmin(req, res))
             return;
         try {
+            checkLeader(res);
             String db = req.query().get("db");
             if (db == null || db.isEmpty()) {
                 res.status(Status.BAD_REQUEST_400).send("Missing db param");
@@ -1337,6 +1453,7 @@ public class WebServices {
 
     private void importCollection(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             String db = req.query().get("db");
             String col = req.query().get("col");
             String format = req.query().get("format");
@@ -1350,17 +1467,35 @@ public class WebServices {
             String content = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
 
             int count = 0;
+            boolean isLeader = (engine.getRaftNode() != null && engine.getRaftNode().isLeader());
+
             if ("json".equalsIgnoreCase(format)) {
                 List<Map<String, Object>> docs = jsonMapper.readValue(content,
                         new TypeReference<List<Map<String, Object>>>() {
                         });
                 for (Map<String, Object> doc : docs) {
+                    if (isLeader) {
+                        Map<String, Object> cmd = new java.util.HashMap<>();
+                        cmd.put("op", "save");
+                        cmd.put("db", db);
+                        cmd.put("col", col);
+                        cmd.put("doc", doc);
+                        engine.getRaftNode().replicate(cmd);
+                    }
                     engine.getStore().save(db, col, doc);
                     count++;
                 }
             } else if ("csv".equalsIgnoreCase(format)) {
                 List<Map<String, Object>> docs = parseCSV(content);
                 for (Map<String, Object> doc : docs) {
+                    if (isLeader) {
+                        Map<String, Object> cmd = new java.util.HashMap<>();
+                        cmd.put("op", "save");
+                        cmd.put("db", db);
+                        cmd.put("col", col);
+                        cmd.put("doc", doc);
+                        engine.getRaftNode().replicate(cmd);
+                    }
                     engine.getStore().save(db, col, doc);
                     count++;
                 }
@@ -1468,7 +1603,8 @@ public class WebServices {
 
     private void getFederatedStatus(ServerRequest req, ServerResponse res) {
         try {
-            List<String> fedServers = (List<String>) engine.getConfigManager().getOrDefault("FederatedServers", java.util.Collections.emptyList());
+            List<String> fedServers = (List<String>) engine.getConfigManager().getOrDefault("FederatedServers",
+                    java.util.Collections.emptyList());
             if (fedServers.isEmpty()) {
                 res.status(Status.NOT_FOUND_404).send("Federated mode not configured");
                 return;
@@ -1482,7 +1618,8 @@ public class WebServices {
                     .timeout(java.time.Duration.ofMillis(2000))
                     .build();
 
-            engine.getRaftNode().getHttpClientProxy().sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+            engine.getRaftNode().getHttpClientProxy()
+                    .sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
                     .thenAccept(response -> {
                         res.send(response.body());
                     });
@@ -1500,7 +1637,8 @@ public class WebServices {
                     Thread.sleep(1000);
                     LOGGER.info("Restart command received. Exiting JVM...");
                     System.exit(3);
-                } catch (Exception e) {}
+                } catch (Exception e) {
+                }
             }).start();
         } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -1521,16 +1659,17 @@ public class WebServices {
     private void saveConfig(ServerRequest req, ServerResponse res) {
         try {
             byte[] content = req.content().as(byte[].class);
-            Map<String, Object> newConfig = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {});
-            
+            Map<String, Object> newConfig = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
+            });
+
             io.jettra.core.config.ConfigManager manager = engine.getConfigManager();
             Map<String, Object> currentConfig = manager.getConfigMap();
-            synchronized(manager) {
+            synchronized (manager) {
                 currentConfig.clear();
                 currentConfig.putAll(newConfig);
                 manager.save();
             }
-            
+
             boolean restart = req.query().first("restart").map(Boolean::parseBoolean).orElse(false);
             if (restart) {
                 res.send(jsonMapper.createObjectNode().put("status", "restarting").toString());
@@ -1539,7 +1678,8 @@ public class WebServices {
                         Thread.sleep(1000);
                         LOGGER.info("Config saved with restart. Exiting JVM...");
                         System.exit(3);
-                    } catch (Exception e) {}
+                    } catch (Exception e) {
+                    }
                 }).start();
             } else {
                 res.send(jsonMapper.createObjectNode().put("status", "success").toString());
