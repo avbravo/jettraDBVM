@@ -61,7 +61,8 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Servidor Federado
 
-
+- [] No permitir accerder a los nodos si no hay un servidor federado disponible.
+    
 - [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
 y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los diversos componentes.
 
@@ -80,11 +81,14 @@ deben pasar por el servidor federado.
      Documentar en federated.md como debe ser el proceso a nivel de servidor federado y nodos.
 
 
-- [] Cuando se crea un indice el mensaje de confirmacion debe ser en un dialogo estilo flowbiewcss y no de javascript estandar
+- [] Cuando se intenta crear un indice en el lider envia el error 
+Info
+Creating index...
 
-
-- [] Cuando se crea un nuevo backup el proceso se realiza perfecto pero no lo agrega a la lista Existing Backups del formulario.
-
+×
+❌
+Error
+Failed to create index: Not Leader. Writes must be sent to the cluster leader.
 
 
 
@@ -106,6 +110,13 @@ deben pasar por el servidor federado.
 # ---------------------------------------------------------
 # Completadas
 # ------------------------------------------------------------
+
+- [x] Cuando se crea un indice el mensaje de confirmacion debe ser en un dialogo estilo flowbiewcss y no de javascript estandar
+
+
+- [x] Cuando se crea un nuevo backup el proceso se realiza perfecto pero no lo agrega a la lista Existing Backups del formulario.
+
+
 
 
 

@@ -299,7 +299,8 @@ const App = {
                             document.body.removeChild(a);
 
                             // Refresh list
-                            if (document.getElementById('backups-view').classList.contains('active')) {
+                            const backupsSection = document.getElementById('backups-section');
+                            if (backupsSection && !backupsSection.classList.contains('hidden')) {
                                 this.loadBackups();
                             }
                         } else {
