@@ -107,6 +107,9 @@ deben pasar por el servidor federado.
 
 
 # Servidor Federado
+- [x] El servidor federado lider no replica  a los otros servidores federados que son FOLLOWER el estado de todos los servidores federados 
+en la lista Servidores Federados de la interface grafica
+
 
 - [x] En la interface web del servidor federado mostrar el estatus de todos los servidores federados y el valor "NodeID del servidor federado para que se vea mas elegentantaa.
 
