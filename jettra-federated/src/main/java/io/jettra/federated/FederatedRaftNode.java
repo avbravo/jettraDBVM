@@ -182,6 +182,9 @@ public class FederatedRaftNode {
          body.put("leaderId", selfId);
          body.put("url", selfUrl);
          body.put("clusterState", engine.getClusterStatus());
+         body.put("raftPeerStates", getPeerStates());
+         body.put("raftPeerLastSeen", getPeerLastSeen());
+         body.put("raftPeerIds", getPeerUrlToId());
          
          for (String peerUrl : federatedPeers) {
              if (peerUrl.equals(selfUrl)) continue;
@@ -275,11 +278,38 @@ public class FederatedRaftNode {
 
         this.leaderId = leaderId;
         this.lastHeartbeatReceived = System.currentTimeMillis();
-        
         if (data.containsKey("clusterState")) {
             @SuppressWarnings("unchecked")
             Map<String, Object> clusterState = (Map<String, Object>) data.get("clusterState");
             engine.applyClusterState(clusterState);
+        }
+
+        if (data.containsKey("raftPeerIds")) {
+            @SuppressWarnings("unchecked")
+            Map<String, String> pIds = (Map<String, String>) data.get("raftPeerIds");
+            pIds.forEach((url, id) -> {
+                if (!url.equals(selfUrl)) peerUrlToId.put(url, id);
+            });
+        }
+
+        if (data.containsKey("raftPeerStates")) {
+            @SuppressWarnings("unchecked")
+            Map<String, String> pStates = (Map<String, String>) data.get("raftPeerStates");
+            pStates.forEach((url, s) -> {
+                if (!url.equals(selfUrl)) peerStates.put(url, s);
+            });
+        }
+        
+        if (data.containsKey("raftPeerLastSeen")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> pSeen = (Map<String, Object>) data.get("raftPeerLastSeen");
+            pSeen.forEach((url, ts) -> {
+                if (!url.equals(selfUrl)) {
+                    if (ts instanceof Number) {
+                        peerLastSeen.put(url, ((Number) ts).longValue());
+                    }
+                }
+            });
         }
         
         response.put("success", true);

@@ -61,8 +61,9 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Servidor Federado
 
-- [] No permitir accerder a los nodos si no hay un servidor federado disponible, por lo tanto los driver, curl, shell deben apuntar al servidor federado en lugar de la base  de datos directamente.
-`r
+- [] No permitir accerder a los nodos de bases de datos  si no hay un servidor federado disponible, por lo tanto los driver, curl, shell deben apuntar al servidor federado en lugar de la base  de datos directamente.
+
+- [] Como saber cual servidor federado es el lider y cual nodo es el lider
     
 - [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
 y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los diversos componentes.
@@ -78,10 +79,6 @@ deben pasar por el servidor federado.
 
 - [] Crear un shell para el servidor federado que permita administrar los nodos
 
-
-Federados
-Desconocido
-http://localhost:9000
 
 
 
