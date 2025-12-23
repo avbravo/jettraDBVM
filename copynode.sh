@@ -11,6 +11,10 @@ echo "Copiando servidor federado 2"
 rm -f /home/avbravo/jettradbvmnodes/federated2/jettraFederated.jar
 cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated2/jettraFederated.jar
 
+echo "Copiando servidor federado 3"
+rm -f /home/avbravo/jettradbvmnodes/federated3/jettraFederated.jar
+cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated3/jettraFederated.jar
+
 
 
 

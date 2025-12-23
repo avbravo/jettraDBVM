@@ -189,9 +189,20 @@ public class RaftNode {
             if (fedServers.isEmpty())
                 return;
 
-            String fedUrl = fedServers.get(0);
+            // Attempt to sync with servers until one succeeds
+            syncWithFirstAvailableFederated(fedServers, 0);
+        } catch (Exception e) {
+            LOGGER.warning("Federated sync error: " + e.getMessage());
+        }
+    }
 
-            // Register or Heartbeat
+    private void syncWithFirstAvailableFederated(List<String> fedServers, int index) {
+        if (index >= fedServers.size()) {
+            return;
+        }
+
+        String fedUrl = fedServers.get(index);
+        try {
             Map<String, String> data = new HashMap<>();
             data.put("nodeId", nodeId);
             data.put("url", "http://localhost:" + configManager.get("Port"));
@@ -206,66 +217,77 @@ public class RaftNode {
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(res -> {
                         if (res.statusCode() == 200) {
-                            try {
-                                Map<String, Object> status = mapper.readValue(res.body(), Map.class);
-                                String fedLeaderId = (String) status.get("leaderId");
-                                List<Map<String, Object>> nodes = (List<Map<String, Object>>) status.get("nodes");
-
-                                if (fedLeaderId != null) {
-                                    if (!fedLeaderId.equals(leaderId)) {
-                                        if (!fedLeaderId.equals(nodeId)) {
-                                            LOGGER.info("Federated server reports NEW LEADER: " + fedLeaderId
-                                                    + ". Updating local view.");
-                                            leaderId = fedLeaderId;
-                                            if (state == State.LEADER) {
-                                                state = State.FOLLOWER;
-                                                updateSelfRoleInDB("FOLLOWER");
-                                            }
-                                        } else {
-                                            if (state != State.LEADER) {
-                                                LOGGER.info("Federated server reports ME as LEADER. Transitioning.");
-                                                becomeLeader();
-                                            }
-                                        }
-                                    } else if (fedLeaderId.equals(nodeId) && state != State.LEADER) {
-                                        // Case where leaderId matches fedLeaderId (both are nodeId) but state is not LEADER
-                                        LOGGER.info("Federated server reports ME as LEADER and leaderId matches but local state is " + state + ". Recovering leadership.");
-                                        becomeLeader();
-                                    }
-                                }
-
-                                if (nodes != null) {
-                                    for (Map<String, Object> node : nodes) {
-                                        String id = (String) node.get("id");
-                                        String url = (String) node.get("url");
-                                        String nstatus = (String) node.get("status");
-
-                                        Map<String, Object> doc = new HashMap<>();
-                                        doc.put("_id", id);
-                                        doc.put("url", url);
-                                        doc.put("status", nstatus);
-                                        doc.put("role", id.equals(fedLeaderId) ? "LEADER" : "FOLLOWER");
-
-                                        try {
-                                            if (store.findByID("_system", "_clusternodes", id) != null) {
-                                                store.update("_system", "_clusternodes", id, doc);
-                                            } else {
-                                                store.save("_system", "_clusternodes", doc);
-                                            }
-                                        } catch (Exception e) {
-                                        }
-                                    }
-                                    loadPeersFromStore();
-                                }
-                            } catch (Exception e) {
-                                LOGGER.warning("Error parsing federated response: " + e.getMessage());
-                            }
+                            processFederatedResponse(res.body());
                         } else {
-                            LOGGER.warning("Failed to sync with Federated Server: " + res.body());
+                            LOGGER.warning("Failed to sync with Federated Server " + fedUrl + ". Trying next...");
+                            syncWithFirstAvailableFederated(fedServers, index + 1);
                         }
+                    })
+                    .exceptionally(e -> {
+                        LOGGER.warning("Error connecting to Federated Server " + fedUrl + ": " + e.getMessage());
+                        syncWithFirstAvailableFederated(fedServers, index + 1);
+                        return null;
                     });
         } catch (Exception e) {
-            LOGGER.warning("Federated sync error: " + e.getMessage());
+            syncWithFirstAvailableFederated(fedServers, index + 1);
+        }
+    }
+
+    private void processFederatedResponse(String body) {
+        try {
+            Map<String, Object> status = mapper.readValue(body, Map.class);
+            String fedLeaderId = (String) status.get("leaderId");
+            List<Map<String, Object>> nodes = (List<Map<String, Object>>) status.get("nodes");
+
+            if (fedLeaderId != null) {
+                if (!fedLeaderId.equals(leaderId)) {
+                    if (!fedLeaderId.equals(nodeId)) {
+                        LOGGER.info("Federated server reports NEW LEADER: " + fedLeaderId
+                                + ". Updating local view.");
+                        leaderId = fedLeaderId;
+                        if (state == State.LEADER) {
+                            state = State.FOLLOWER;
+                            updateSelfRoleInDB("FOLLOWER");
+                        }
+                    } else {
+                        if (state != State.LEADER) {
+                            LOGGER.info("Federated server reports ME as LEADER. Transitioning.");
+                            becomeLeader();
+                        }
+                    }
+                } else if (fedLeaderId.equals(nodeId) && state != State.LEADER) {
+                    LOGGER.info(
+                            "Federated server reports ME as LEADER and leaderId matches but local state is " + state
+                                    + ". Recovering leadership.");
+                    becomeLeader();
+                }
+            }
+
+            if (nodes != null) {
+                for (Map<String, Object> node : nodes) {
+                    String id = (String) node.get("id");
+                    String url = (String) node.get("url");
+                    String nstatus = (String) node.get("status");
+
+                    Map<String, Object> doc = new HashMap<>();
+                    doc.put("_id", id);
+                    doc.put("url", url);
+                    doc.put("status", nstatus);
+                    doc.put("role", id.equals(fedLeaderId) ? "LEADER" : "FOLLOWER");
+
+                    try {
+                        if (store.findByID("_system", "_clusternodes", id) != null) {
+                            store.update("_system", "_clusternodes", id, doc);
+                        } else {
+                            store.save("_system", "_clusternodes", doc);
+                        }
+                    } catch (Exception e) {
+                    }
+                }
+                loadPeersFromStore();
+            }
+        } catch (Exception e) {
+            LOGGER.warning("Error parsing federated response: " + e.getMessage());
         }
     }
 

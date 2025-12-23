@@ -28,19 +28,26 @@ public class FederatedRaftNode {
     private volatile String leaderId = null;
     
     private final String selfId;
+    private final String selfUrl;
     private final List<String> federatedPeers;
+    private final Map<String, String> peerUrlToId = new HashMap<>();
     private final FederatedEngine engine;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final HttpClient httpClient;
     private final ObjectMapper mapper = new ObjectMapper();
     
+    private final boolean bootstrap;
+    
     private long lastHeartbeatReceived;
     private final Random random = new Random();
+    private int unreachableCount = 0;
 
-    public FederatedRaftNode(String selfId, List<String> federatedPeers, FederatedEngine engine) {
+    public FederatedRaftNode(String selfId, String selfUrl, List<String> federatedPeers, FederatedEngine engine, boolean bootstrap) {
         this.selfId = selfId;
+        this.selfUrl = selfUrl;
         this.federatedPeers = federatedPeers;
         this.engine = engine;
+        this.bootstrap = bootstrap;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
@@ -50,6 +57,10 @@ public class FederatedRaftNode {
         lastHeartbeatReceived = System.currentTimeMillis();
         scheduler.scheduleAtFixedRate(this::tick, 500, 200, TimeUnit.MILLISECONDS);
         LOGGER.info("Federated Raft Node " + selfId + " started. Peers: " + federatedPeers);
+        if (bootstrap) {
+            LOGGER.info("Bootstrap enabled. Asserting leadership.");
+            becomeLeader();
+        }
     }
 
     private void tick() {
@@ -73,6 +84,7 @@ public class FederatedRaftNode {
         lastHeartbeatReceived = System.currentTimeMillis();
         
         List<String> otherPeers = federatedPeers.stream()
+                .filter(url -> !url.equals(selfUrl))
                 .filter(url -> !url.contains("localhost:" + engine.getPort()))
                 .filter(url -> !url.contains("127.0.0.1:" + engine.getPort()))
                 .filter(url -> !url.contains("0.0.0.0:" + engine.getPort()))
@@ -84,11 +96,26 @@ public class FederatedRaftNode {
         }
 
         final java.util.concurrent.atomic.AtomicInteger votes = new java.util.concurrent.atomic.AtomicInteger(1);
+        final java.util.concurrent.atomic.AtomicInteger responses = new java.util.concurrent.atomic.AtomicInteger(0);
         int majority = (federatedPeers.size() / 2) + 1;
 
         for (String peerUrl : otherPeers) {
-             sendRequestVote(peerUrl, votes, majority);
+             sendRequestVote(peerUrl, votes, majority, responses);
         }
+        
+        // Safety check for isolation
+        scheduler.schedule(() -> {
+            if (state == State.CANDIDATE && responses.get() == 0) {
+                unreachableCount++;
+                if (unreachableCount >= 3) {
+                    LOGGER.warning("Multiple election cycles without any peer response. Assuming SOLITARY LEADERSHIP.");
+                    becomeLeader();
+                    unreachableCount = 0;
+                }
+            } else if (responses.get() > 0) {
+                unreachableCount = 0;
+            }
+        }, 1500, TimeUnit.MILLISECONDS);
     }
 
     private void becomeLeader() {
@@ -114,15 +141,21 @@ public class FederatedRaftNode {
 
     // --- RPC Senders ---
 
-    private void sendRequestVote(String peerUrl, java.util.concurrent.atomic.AtomicInteger votes, int majority) {
+    private void sendRequestVote(String peerUrl, java.util.concurrent.atomic.AtomicInteger votes, int majority, java.util.concurrent.atomic.AtomicInteger responses) {
          Map<String, Object> body = new HashMap<>();
          body.put("term", currentTerm);
          body.put("candidateId", selfId);
+         body.put("url", selfUrl);
          
          sendAsync(peerUrl + "/federated/raft/vote", body).thenAccept(res -> {
              if (res != null) {
+                 responses.incrementAndGet();
                  int term = (int) res.get("term");
                  boolean voteGranted = (boolean) res.get("voteGranted");
+                 String responderId = (String) res.get("responderId");
+                 if (responderId != null) {
+                     peerUrlToId.put(peerUrl, responderId);
+                 }
                  
                  if (term > currentTerm) {
                      stepDown(term);
@@ -139,12 +172,17 @@ public class FederatedRaftNode {
          Map<String, Object> body = new HashMap<>();
          body.put("term", currentTerm);
          body.put("leaderId", selfId);
+         body.put("url", "http://localhost:" + engine.getPort());
          
          for (String peerUrl : federatedPeers) {
              if (peerUrl.contains("localhost:" + engine.getPort())) continue;
              sendAsync(peerUrl + "/federated/raft/appendEntries", body).thenAccept(res -> {
                  if (res != null) {
                      int term = (int) res.getOrDefault("term", 0);
+                     String responderId = (String) res.get("responderId");
+                     if (responderId != null) {
+                         peerUrlToId.put(peerUrl, responderId);
+                     }
                      if (term > currentTerm) {
                          stepDown(term);
                      }
@@ -158,10 +196,15 @@ public class FederatedRaftNode {
     public synchronized Map<String, Object> handleRequestVote(Map<String, Object> data) {
         int term = (int) data.get("term");
         String candidateId = (String) data.get("candidateId");
+        String candidateUrl = (String) data.get("url");
+        if (candidateUrl != null) {
+            peerUrlToId.put(candidateUrl, candidateId);
+        }
         
         Map<String, Object> response = new HashMap<>();
         response.put("term", currentTerm);
         response.put("voteGranted", false);
+        response.put("responderId", selfId);
 
         if (term < currentTerm) {
             return response;
@@ -183,10 +226,15 @@ public class FederatedRaftNode {
     public synchronized Map<String, Object> handleAppendEntries(Map<String, Object> data) {
         int term = (int) data.get("term");
         String leaderId = (String) data.get("leaderId");
+        String leaderUrl = (String) data.get("url");
+        if (leaderUrl != null) {
+            peerUrlToId.put(leaderUrl, leaderId);
+        }
         
         Map<String, Object> response = new HashMap<>();
         response.put("term", currentTerm);
         response.put("success", false);
+        response.put("responderId", selfId);
 
         if (term < currentTerm) {
             return response;
@@ -253,6 +301,14 @@ public class FederatedRaftNode {
 
     public String getLeaderId() {
         return leaderId;
+    }
+
+    public String getSelfId() {
+        return selfId;
+    }
+
+    public Map<String, String> getPeerUrlToId() {
+        return new HashMap<>(peerUrlToId);
     }
 
     public HttpClient getHttpClient() {

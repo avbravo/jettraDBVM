@@ -107,17 +107,20 @@ body {
 input {
     width: 100%;
     padding: 12px 16px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.4);
     border: 1px solid var(--border);
     border-radius: 8px;
-    color: white;
+    color: #ffffff !important;
     font-family: inherit;
-    transition: border-color 0.2s;
+    font-size: 1rem;
+    transition: all 0.2s;
 }
 
 input:focus {
     outline: none;
     border-color: var(--primary);
+    background: rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
 .btn-primary {

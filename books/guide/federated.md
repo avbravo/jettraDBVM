@@ -22,21 +22,59 @@ El proyecto `jettra-federated` implementa este servidor. Es una aplicación Java
 *   **FederatedRaftNode**: Implementación de Raft para que los servidores federados acuerden quién es el "Líder Federado". Solo el Líder Federado toma decisiones sobre el cluster de base de datos.
 *   **FederatedService**: API REST para comunicación con clientes, nodos y otros servidores federados.
 
-### Configuración
+### Configuración del Cluster Federado
 
-El Servidor Federado se configura a través de `cluster.json` en la raíz del proyecto. Las bases de datos continúan utilizando `config.json`.
+Cada servidor federado utiliza un archivo `cluster.json` para definir su identidad y la de sus pares. A continuación, se muestra cómo configurar un cluster de 3 servidores:
 
+**Servidor 1 (`cluster.json`):**
 ```json
 {
   "Mode": "federated",
+  "NodeID": "fed-1",
   "Port": 9000,
   "FederatedServers": [
     "http://192.168.1.10:9000",
-    "http://192.168.1.11:9000",
-    "http://192.168.1.12:9000"
+    "http://192.168.1.11:9001",
+    "http://192.168.1.12:9002"
   ]
 }
 ```
+
+**Servidor 2 (`cluster.json`):**
+```json
+{
+  "Mode": "federated",
+  "NodeID": "fed-2",
+  "Port": 9001,
+  "FederatedServers": [
+    "http://192.168.1.10:9000",
+    "http://192.168.1.11:9001",
+    "http://192.168.1.12:9002"
+  ]
+}
+```
+
+**Servidor 3 (`cluster.json`):**
+```json
+{
+  "Mode": "federated",
+  "NodeID": "fed-3",
+  "Port": 9002,
+  "FederatedServers": [
+    "http://192.168.1.10:9000",
+    "http://192.168.1.11:9001",
+    "http://192.168.1.12:9002"
+  ]
+}
+```
+
+#### Explicación de los Parámetros:
+
+*   **`Mode`**: Debe ser siempre `"federated"` para que el proceso arranque con la lógica de gestión de cluster y no como un nodo de datos.
+*   **`NodeID`**: Identificador único de este servidor federado. Es vital para el algoritmo de votación Raft.
+*   **`Port`**: El puerto de red donde el servidor federado escuchará peticiones.
+*   **`FederatedServers`**: Lista completa de todas las direcciones de los servidores federados que componen el cluster de alta disponibilidad. Todos los servidores del grupo deben tener la misma lista.
+*   **`Bootstrap`** (Opcional): Si se establece en `true`, el servidor asumirá el rol de **LEADER** inmediatamente al iniciar, sin esperar a que otros nodos se unan o a que expire el timeout de elección. Es útil para inicializar clusters nuevos o para entornos de un solo nodo federado.
 
 ### Funcionamiento
 
@@ -58,22 +96,37 @@ Para poner en marcha un cluster gestionado por servidores federados, siga estos 
 
 ### 1. Iniciar el Servidor Federado
 
-El servidor federado se ejecuta de forma independiente. Puede iniciarlo usando Maven desde el directorio del proyecto:
+El servidor federado se ejecuta como una aplicación Java independiente. Asegúrese de tener el archivo JAR compilado (normalmente ubicado en `jettra-federated/target/jettraFederated.jar`).
 
+#### Ejecución con Java:
 ```bash
 # Iniciar Servidor Federado en puerto 9000 con ID "fed-1"
-mvn -pl jettra-federated exec:java \
-    -Dexec.mainClass="io.jettra.federated.FederatedMain" \
-    -Dexec.args="9000 fed-1"
+java -jar jettraFederated.jar 9000 fed-1
+
+# Iniciar forzando el modo Bootstrap (asumir liderazgo inmediatamente)
+java -jar jettraFederated.jar 9000 fed-1 -bootstrap
 ```
 
-Si desea levantar múltiples servidores federados para alta disponibilidad, ejecútelos en puertos distintos (ej. 9000, 9001, 9002) y asegúrese de que sus archivos `cluster.json` o argumentos reflejen sus peers.
+#### Ejecución con Docker:
+Puede ejecutar el servidor federado dentro de un contenedor Docker mapeando el puerto y el archivo de configuración:
+
+```bash
+docker run -d \
+  -p 9000:9000 \
+  -v $(pwd)/cluster.json:/app/cluster.json \
+  --name jettra-fed-1 \
+  jettra/federated:latest
+```
+
+Si desea levantar múltiples servidores federados para alta disponibilidad, ejecútelos en puertos distintos (ej. 9000, 9001, 9002) y asegúrese de que sus archivos `cluster.json` reflejen sus pares.
 
 ### 2. Configurar Nodos de Base de Datos
 
-Cada nodo JettraDB debe configurarse para conocer la dirección del servidor federado. Edite su archivo `config.json` para incluir la entrada `FederatedServers`:
+Cada nodo JettraDB debe configurarse para conocer la dirección del servidor federado. Para garantizar la **Alta Disponibilidad**, se deben incluir **todos** los servidores federados en la lista `FederatedServers`. El nodo intentará contactar con cada uno en orden hasta encontrar el líder actual.
 
-**Configuración para el Nodo Líder (ej. puerto 8080):**
+Edite su archivo `config.json` para incluir la entrada `FederatedServers`:
+
+**Configuración para el Nodo de Base de Datos (ej. node1):**
 ```json
 {
   "NodeID": "node1",
@@ -82,35 +135,36 @@ Cada nodo JettraDB debe configurarse para conocer la dirección del servidor fed
   "distributed": true,
   "Bootstrap": true,
   "FederatedServers": [
-    "http://localhost:9000"
+    "http://192.168.1.10:9000",
+    "http://192.168.1.11:9001",
+    "http://192.168.1.12:9002"
   ]
 }
 ```
 
-**Configuración para Nodos Seguidores (ej. puerto 8081):**
-```json
-{
-  "NodeID": "node2",
-  "Port": 8081,
-  "DataDir": "data2",
-  "distributed": true,
-  "Bootstrap": false,
-  "FederatedServers": [
-    "http://localhost:9000"
-  ]
-}
-```
+*Nota: Se recomienda listar todos los nodos federados. Si uno falla, el sistema de base de datos buscará automáticamente al siguiente servidor disponible.*
 
 ### 3. Iniciar Nodos de Base de Datos
 
-Una vez configurados, inicie los nodos JettraDB normalmente. Ellos se registrarán automáticamente con el servidor federado al arrancar.
+Una vez configurados, inicie los nodos JettraDB usando el archivo JAR compilado. Ellos se registrarán automáticamente con el servidor federado al arrancar.
 
+#### Ejecución con Java:
 ```bash
 # Iniciar Nodo 1
-java -cp jettra-server/target/jettraDBVM.jar:jettra-server/target/libs/* io.jettra.jettraDBVM.Main data1/config.json
+java -jar jettraDBVM.jar data1/config.json
 
 # Iniciar Nodo 2
-java -cp jettra-server/target/jettraDBVM.jar:jettra-server/target/libs/* io.jettra.jettraDBVM.Main data2/config.json
+java -jar jettraDBVM.jar data2/config.json
+```
+
+#### Ejecución con Docker:
+```bash
+# Iniciar Nodo 1 en contenedor
+docker run -d \
+  -p 8080:8080 \
+  -v $(pwd)/data1:/app/data \
+  --name jettra-node-1 \
+  jettra/server:latest /app/data/config.json
 ```
 
 ### 4. Verificación
@@ -150,6 +204,53 @@ El servidor federado supervisa constantemente los nodos de base de datos registr
 *   **Heartbeats**: Los nodos envían señales de vida periódicamente.
 *   **Estado Activo/Inactivo**: Si un nodo no envía un heartbeat en 10 segundos, su estado cambiará a **INACTIVE** en el Dashboard.
 *   **Reelección Automática**: Si el nodo inactivo era el Líder de la base de datos, el Servidor Federado promoverá automáticamente a otro nodo activo como nuevo líder para garantizar la continuidad del servicio.
+
+## Alta Disponibilidad del Servidor Federado (Failover)
+
+Para garantizar que el sistema de gestión sea siempre accesible, JettraDB soporta múltiples servidores federados corriendo en modo de alta disponibilidad (Raft).
+
+### Configuración de Múltiples Federados
+
+Para configurar 3 servidores federados, cada instancia debe conocer la lista completa de sus pares. Esto se puede hacer vía `cluster.json` o mediante argumentos de línea de comandos.
+
+#### Ejemplo con argumentos de línea de comandos:
+
+```bash
+# Servidor Federado 1 (Puerto 9000)
+java -jar jettraFederated.jar 9000 fed-1 http://localhost:9001 http://localhost:9002
+
+# Servidor Federado 2 (Puerto 9001)
+java -jar jettraFederated.jar 9001 fed-2 http://localhost:9000 http://localhost:9002
+
+# Servidor Federado 3 (Puerto 9002)
+java -jar jettraFederated.jar 9002 fed-3 http://localhost:9000 http://localhost:9001
+```
+
+### Proceso de Failover Federado
+
+1.  **Elección de Líder**: Al arrancar, los 3 servidores inician una elección. Solo uno de ellos se convertirá en `LEADER`.
+2.  **Gestión Centralizada**: Solo el servidor federado con estado `LEADER` toma decisiones sobre el cluster de base de datos (promover líderes de DB, registrar nodos, etc.). Los otros servidores actúan como `FOLLOWER`.
+3.  **Detección de Fallo**: Si el servidor federado `LEADER` se detiene o pierde conexión, los servidores `FOLLOWER` restantes detectan la ausencia de latidos tras un timeout (3-5 segundos).
+4.  **Nueva Elección**: Uno de los seguidores iniciará una nueva elección y se convertirá en el nuevo `LEADER`.
+5.  **Continuidad**: El nuevo líder federado asume inmediatamente la gestión del cluster, asegurando que los nodos de base de datos sigan teniendo una autoridad de control activa.
+
+### Resiliencia ante Fallo de Quórum (Solitary Leadership)
+
+En una configuración estándar de Raft, un nodo no puede convertirse en líder si no puede comunicarse con la mayoría de sus pares (quórum). Sin embargo, para mejorar la experiencia de usuario en reinicios manuales o desastres totales, JettraDB incluye un mecanismo de **Liderazgo Solitario Automático**:
+
+1.  **Detección de Aislamiento**: Si un servidor federado arranca y detecta que todos sus pares configurados en `FederatedServers` están caídos (errores de conexión persistentes).
+2.  **Auto-promoción**: Tras fallar 3 ciclos de elección consecutivos sin recibir respuesta de ningún par, el servidor asumirá que es el único superviviente y se auto-promocionará a **LEADER**.
+3.  **Continuidad**: Esto permite que, si reinicias los servidores uno por uno tras una caída total, el primero que inicies retome el control del cluster sin esperar a los demás.
+
+### Verificación del Failover
+
+Puede verificar qué servidor es el líder consultando el endpoint `/federated/status`:
+
+```bash
+curl -s http://localhost:9000/federated/status | grep '"raftState"'
+```
+
+Si detiene el proceso del líder actual y espera unos segundos, verá que uno de los otros nodos cambia su `raftState` de `FOLLOWER` a `LEADER`.
 
 ## Uso con Herramientas Cliente
 
@@ -196,3 +297,103 @@ Puede simular un heartbeat manualmente para depuración:
 ```bash
 curl -X POST "http://localhost:9000/federated/heartbeat?nodeId=node1"
 ```
+
+## Despliegue con Docker Compose
+
+La forma más sencilla de gestionar un cluster completo (servidores federados + nodos de base de datos) es mediante **Docker Compose**. Esto permite levantar toda la infraestructura con un solo comando y gestiona automáticamente la red interna entre contenedores.
+
+### Ejemplo de `docker-compose.yml`
+
+A continuación, un ejemplo para un entorno con 2 servidores federados y 2 nodos de base de datos:
+
+```yaml
+version: '3.8'
+
+services:
+  # Servidor Federado 1
+  fed1:
+    image: jettra/federated:latest
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./cluster1.json:/app/cluster.json
+    networks:
+      - jettra-net
+
+  # Servidor Federado 2
+  fed2:
+    image: jettra/federated:latest
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./cluster2.json:/app/cluster.json
+    networks:
+      - jettra-net
+
+  # Nodo de Base de Datos 1
+  node1:
+    image: jettra/server:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data1:/app/data
+    command: ["/app/data/config.json"]
+    depends_on:
+      - fed1
+      - fed2
+    networks:
+      - jettra-net
+
+  # Nodo de Base de Datos 2
+  node2:
+    image: jettra/server:latest
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data2:/app/data
+    command: ["/app/data/config.json"]
+    depends_on:
+      - fed1
+      - fed2
+    networks:
+      - jettra-net
+
+networks:
+  jettra-net:
+    driver: bridge
+```
+
+### Notas sobre Docker Compose:
+
+1.  **Networking**: Dentro de la red `jettra-net`, los contenedores pueden comunicarse usando sus nombres de servicio (ej: `http://fed1:9000`) en lugar de `localhost`. Asegúrese de actualizar sus archivos `config.json` y `cluster.json` con estos hostnames.
+2.  **Volúmenes**: Es fundamental mapear los archivos de configuración (`cluster.json`, `config.json`) y las carpetas de datos (`data/`) para que la información persista si el contenedor se reinicia.
+3.  **Comando de Arranque**:
+    ```bash
+    # Iniciar el cluster
+    docker-compose up -d
+
+    # Ver logs del cluster
+    docker-compose logs -f
+    ```
+
+## Pruebas de Failover Automático
+
+Para validar que su infraestructura de Servidores Federados es capaz de recuperarse ante fallos, puede utilizar el script de prueba incluido `test_federated_failover.sh`.
+
+### ¿Qué hace esta prueba?
+1.  **Levanta 3 Servidores Federados** en la misma máquina (puertos 9000, 9001 y 9002).
+2.  **Activa el modo Bootstrap** en el primer servidor para garantizar un líder inicial rápido.
+3.  **Simula el registro de un nodo de base de datos** (`node-alfa`) para verificar que el líder federado toma el control de la base de datos.
+4.  **Simula una caída crítica**: Mata el proceso del líder federado actual.
+5.  **Verifica la Reelección**: Comprueba que uno de los 2 seguidores restantes se convierte en `LEADER`.
+6.  **Verifica la Persistencia**: Asegura que el nuevo líder recupera el estado del cluster y sigue reconociendo a `node-alfa` como el líder de la base de datos.
+
+### Ejecución de la prueba:
+Asegúrese de que no haya otros procesos usando los puertos 9000-9002 y ejecute:
+
+```bash
+chmod +x test_federated_failover.sh
+./test_federated_failover.sh
+```
+
+El script mostrará en tiempo real cómo los nodos detectan la caída y cómo el nuevo mando se establece sin intervención manual.

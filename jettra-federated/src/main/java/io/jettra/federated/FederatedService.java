@@ -131,7 +131,9 @@ public class FederatedService implements HttpService {
                 status.put("raftState", raftNode.getState());
                 status.put("raftTerm", raftNode.getCurrentTerm());
                 status.put("raftLeaderId", raftNode.getLeaderId());
+                status.put("raftSelfId", raftNode.getSelfId());
                 status.put("raftPeers", raftNode.getPeers());
+                status.put("raftPeerIds", raftNode.getPeerUrlToId());
             }
             res.send(mapper.writeValueAsString(status));
         } catch (Exception e) {

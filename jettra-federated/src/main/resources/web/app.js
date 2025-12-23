@@ -366,9 +366,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Peers
         const peersUl = document.getElementById('raft-peers');
         peersUl.innerHTML = '';
-        (data.raftPeers || []).forEach(peer => {
+
+        // Render local node ID
+        document.getElementById('self-id').textContent = data.raftSelfId || '--';
+
+        const peerIds = data.raftPeerIds || {};
+        (data.raftPeers || []).forEach(peerUrl => {
             const li = document.createElement('li');
-            li.textContent = peer;
+            const peerId = peerIds[peerUrl] || 'Desconocido';
+            li.innerHTML = `<span class="font-bold text-primary">${peerId}</span><br><small class="text-dim">${peerUrl}</small>`;
             peersUl.appendChild(li);
         });
 

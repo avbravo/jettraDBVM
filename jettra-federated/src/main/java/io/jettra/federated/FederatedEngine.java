@@ -40,7 +40,21 @@ public class FederatedEngine {
     public void onBecomeLeader() {
         this.isFederatedLeader = true;
         LOGGER.info("This node is now the FEDERATED LEADER. Taking control of DB cluster.");
-        checkNodesHealth(); // Immediate check
+        
+        // Reconcile: If we think there is a leader, make sure it's promoted.
+        // If not, elect a new one immediately.
+        if (currentLeaderId != null) {
+            Map<String, Object> node = dbNodes.get(currentLeaderId);
+            if (node != null && "ACTIVE".equals(node.get("status"))) {
+                LOGGER.info("Re-promoting current leader on federated leadership takeover: " + currentLeaderId);
+                assignLeader(currentLeaderId);
+            } else {
+                electNewLeader();
+            }
+        } else {
+            electNewLeader();
+        }
+        checkNodesHealth();
     }
 
     public void onStepDown() {
@@ -62,10 +76,12 @@ public class FederatedEngine {
                 List<Map<String, Object>> nodes = (List<Map<String, Object>>) state.get("nodes");
                 if (nodes != null) {
                     for (Map<String, Object> node : nodes) {
+                        // Mark as UNKNOWN on startup so we don't assume they are active
+                        node.put("status", "UNKNOWN");
                         dbNodes.put((String) node.get("id"), node);
                     }
                 }
-                LOGGER.info("Loaded federated state from " + stateFile.getName());
+                LOGGER.info("Loaded federated state from " + stateFile.getName() + " (Nodes marked UNKNOWN until heartbeat)");
             } catch (IOException e) {
                 LOGGER.warning("Failed to load federated state: " + e.getMessage());
             }
@@ -91,7 +107,8 @@ public class FederatedEngine {
         nodeInfo.put("lastSeen", System.currentTimeMillis());
         dbNodes.put(nodeId, nodeInfo);
         
-        if (currentLeaderId == null) {
+        // If we are federated leader and there is no DB leader, assign one.
+        if (isFederatedLeader && (currentLeaderId == null || "INACTIVE".equals(dbNodes.get(currentLeaderId).get("status")))) {
             assignLeader(nodeId);
         } else {
             saveState();
@@ -111,6 +128,7 @@ public class FederatedEngine {
             HttpRequest req = HttpRequest.newBuilder()
                     .uri(URI.create(url + "/api/cluster/promote"))
                     .POST(HttpRequest.BodyPublishers.noBody())
+                    .timeout(java.time.Duration.ofSeconds(3))
                     .build();
             httpClient.sendAsync(req, HttpResponse.BodyHandlers.discarding())
                     .thenAccept(res -> {
@@ -120,6 +138,10 @@ public class FederatedEngine {
                         } else {
                             LOGGER.warning(() -> String.format("Failed to promote %s (Status: %d)", nodeId, res.statusCode()));
                         }
+                    })
+                    .exceptionally(ex -> {
+                        LOGGER.warning(() -> "Error promoting node " + nodeId + ": " + ex.getMessage());
+                        return null;
                     });
         }
     }

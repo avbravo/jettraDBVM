@@ -20,45 +20,70 @@ public class FederatedMain {
 
     public static void main(String[] args) {
         int port = 9000; // Default federated port
+        String nodeId = null; 
+        boolean bootstrap = false;
         List<String> federatedServers = new ArrayList<>();
         
         // 1. Try loading from cluster.json
         File configFile = new File("cluster.json");
         if (configFile.exists()) {
             try {
+                @SuppressWarnings("unchecked")
                 Map<String, Object> config = mapper.readValue(configFile, Map.class);
                 if (config.containsKey("FederatedServers")) {
-                    federatedServers = (List<String>) config.get("FederatedServers");
+                    @SuppressWarnings("unchecked")
+                    List<String> peers = (List<String>) config.get("FederatedServers");
+                    federatedServers.addAll(peers);
                     LOGGER.info("Loaded FederatedServers from cluster.json: " + federatedServers);
                 }
-                // Optionally read port from config if specified for federated mode, but config usually has client port.
-                // Assuming port 9000 as per previous code unless arg overrides.
+                if (config.containsKey("Port")) {
+                    port = (Integer) config.get("Port");
+                }
+                if (config.containsKey("NodeID")) {
+                    nodeId = (String) config.get("NodeID");
+                }
+                if (config.containsKey("Bootstrap")) {
+                    bootstrap = (Boolean) config.get("Bootstrap");
+                }
             } catch (IOException e) {
                 LOGGER.warning("Failed to read cluster.json: " + e.getMessage());
             }
         }
 
         // 2. Args override
-        if (args.length > 0) {
-            try {
-                port = Integer.parseInt(args[0]);
-            } catch (NumberFormatException e) {
-                LOGGER.warning("Invalid port arg, using " + port);
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("-bootstrap")) {
+                bootstrap = true;
+            } else if (i == 0) {
+                try {
+                    port = Integer.parseInt(args[i]);
+                } catch (NumberFormatException e) {
+                    LOGGER.warning("Invalid port arg, using " + port);
+                }
+            } else if (i == 1) {
+                nodeId = args[i];
+            } else if (i >= 2) {
+                 federatedServers.add(args[i]);
             }
         }
-        
-        if (args.length > 2) {
-             // If manual peers passed
-             for (int i = 2; i < args.length; i++) {
-                 federatedServers.add(args[i]);
-             }
+
+        if (nodeId == null) {
+            nodeId = "fed-" + port;
         }
 
         FederatedEngine engine = new FederatedEngine(port);
         engine.start();
 
-        String nodeId = "fed-" + port; // Simple ID generation
-        FederatedRaftNode raftNode = new FederatedRaftNode(nodeId, federatedServers, engine);
+        String selfUrl = "http://localhost:" + port;
+        // Search in federatedServers for a matching URL to be more precise if possible
+        for (String url : federatedServers) {
+            if (url.contains(":" + port)) {
+                selfUrl = url;
+                break;
+            }
+        }
+
+        FederatedRaftNode raftNode = new FederatedRaftNode(nodeId, selfUrl, federatedServers, engine, bootstrap);
         raftNode.start();
 
         WebServer server = WebServer.builder()

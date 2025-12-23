@@ -78,9 +78,9 @@ deben pasar por el servidor federado.
 
 - [] Crear un shell para el servidor federado que permita administrar los nodos
 
-- [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
-     Documentar en federated.md como debe ser el proceso a nivel de servidor federado y nodos.
+- [] Cuando inicia el servidor fedeerado y el ultimo que fue federado no esta activo debe seleccionar el servidor disponible como lider ya que todos estan como no lideres ya que el ultimo lider esta detenido
 
+- [] En la interface web del servidor federado mostrar el estatus de todos los servidores federados y el valor "NodeID del servidor federado para que se vea mas elegentantaa.
 
 
 
@@ -110,6 +110,20 @@ deben pasar por el servidor federado.
 
 
 # Servidor Federado
+
+- [x]en la ultima ejecucion de test se habilito como lider de servidor federado fed-3, luego se detuvo fed-3, fed-2, fed-1,  pero al iniciar fed-1 es decir no hya mas servidoores federados activos el servidor fed-1 nunca cambia su estatus a lider aunque no esten activos mas servidores, puedes mejorar el algoritmo para que determine que al no existir otro servidor federado el que este activo cambie su rol de maner auotmatica a lider.
+
+
+ -[x] En el formulario web del servidor federado en la lista Estado Raft, añade ademas del ip que se muestra el  "NodeID" para
+que se pueda idenficar apropiadamente el servidor federado. 
+- [] En el login del servidor federado cuando se escribe el user name y el password no se logran ver las letras
+
+- [x ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
+     Documentar en federated.md como debe ser el proceso a nivel de servidor federado y nodos.
+
+
+
+
 
 - [x] Cuando se intenta crear un indice en el lider envia el error 
 Info
