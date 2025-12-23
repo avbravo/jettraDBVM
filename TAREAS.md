@@ -61,7 +61,8 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 # Servidor Federado
 
-- [] No permitir accerder a los nodos si no hay un servidor federado disponible.
+- [] No permitir accerder a los nodos si no hay un servidor federado disponible, por lo tanto los driver, curl, shell deben apuntar al servidor federado en lugar de la base  de datos directamente.
+`r
     
 - [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
 y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los diversos componentes.
@@ -79,18 +80,6 @@ deben pasar por el servidor federado.
 
 - [ ]Ejecutar tres servidores federados y detener el principal y observar si se asigna el segundo federado como principal.
      Documentar en federated.md como debe ser el proceso a nivel de servidor federado y nodos.
-
-
-- [] Cuando se intenta crear un indice en el lider envia el error 
-Info
-Creating index...
-
-×
-❌
-Error
-Failed to create index: Not Leader. Writes must be sent to the cluster leader.
-
-
 
 
 
@@ -121,6 +110,20 @@ Failed to create index: Not Leader. Writes must be sent to the cluster leader.
 
 
 # Servidor Federado
+
+- [x] Cuando se intenta crear un indice en el lider envia el error 
+Info
+Creating index...
+
+×
+❌
+Error
+Failed to create index: Not Leader. Writes must be sent to the cluster leader.
+
+Lo que el lider no sabe que es el lider, es decir, el servidor federado conoce que ese nodo es el lider pero el lider no sabe que fue asignado como lider
+
+
+
 
 - [x] Cuando se intenta crear un backup envia el mensaje Success
 Backup created. Downloading...

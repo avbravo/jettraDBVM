@@ -1,6 +1,5 @@
 package io.jettra.core.raft;
 
-import io.jettra.core.storage.IndexEngine;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
@@ -23,6 +22,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import io.jettra.core.storage.IndexEngine;
 
 /**
  * Simplified Raft implementation for JettraDBVM.
@@ -210,20 +211,26 @@ public class RaftNode {
                                 String fedLeaderId = (String) status.get("leaderId");
                                 List<Map<String, Object>> nodes = (List<Map<String, Object>>) status.get("nodes");
 
-                                if (fedLeaderId != null && !fedLeaderId.equals(leaderId)) {
-                                    if (!fedLeaderId.equals(nodeId)) {
-                                        LOGGER.info("Federated server reports NEW LEADER: " + fedLeaderId
-                                                + ". Updating local view.");
-                                        leaderId = fedLeaderId;
-                                        if (state == State.LEADER) {
-                                            state = State.FOLLOWER;
-                                            updateSelfRoleInDB("FOLLOWER");
+                                if (fedLeaderId != null) {
+                                    if (!fedLeaderId.equals(leaderId)) {
+                                        if (!fedLeaderId.equals(nodeId)) {
+                                            LOGGER.info("Federated server reports NEW LEADER: " + fedLeaderId
+                                                    + ". Updating local view.");
+                                            leaderId = fedLeaderId;
+                                            if (state == State.LEADER) {
+                                                state = State.FOLLOWER;
+                                                updateSelfRoleInDB("FOLLOWER");
+                                            }
+                                        } else {
+                                            if (state != State.LEADER) {
+                                                LOGGER.info("Federated server reports ME as LEADER. Transitioning.");
+                                                becomeLeader();
+                                            }
                                         }
-                                    } else {
-                                        if (state != State.LEADER) {
-                                            LOGGER.info("Federated server reports ME as LEADER. Transitioning.");
-                                            becomeLeader();
-                                        }
+                                    } else if (fedLeaderId.equals(nodeId) && state != State.LEADER) {
+                                        // Case where leaderId matches fedLeaderId (both are nodeId) but state is not LEADER
+                                        LOGGER.info("Federated server reports ME as LEADER and leaderId matches but local state is " + state + ". Recovering leadership.");
+                                        becomeLeader();
                                     }
                                 }
 
@@ -429,8 +436,8 @@ public class RaftNode {
     private synchronized void becomeLeader() {
         if (state == State.LEADER)
             return;
-        LOGGER.log(Level.INFO, "{0} becoming FOLLOWER of {1} for term {2}",
-                new Object[] { nodeId, leaderId, currentTerm });
+        LOGGER.log(Level.INFO, "{0} becoming LEADER for term {1}",
+                new Object[] { nodeId, currentTerm });
         state = State.LEADER;
         leaderId = nodeId;
         lastHeartbeatTime = System.currentTimeMillis();
@@ -613,6 +620,7 @@ public class RaftNode {
                         new Object[] { term, nodeId });
                 state = State.FOLLOWER;
                 votedFor = null;
+                leaderId = null;
                 updateSelfRoleInDB("FOLLOWER");
             }
             lastHeartbeatTime = System.currentTimeMillis();
