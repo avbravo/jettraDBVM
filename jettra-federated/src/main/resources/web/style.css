@@ -354,15 +354,22 @@ td {
     word-break: break-all;
 }
 
-.peer-list {
-    list-style: none;
+/* Peer List Styling */
+.peer-list::-webkit-scrollbar {
+    width: 6px;
 }
 
-.peer-list li {
-    font-size: 0.875rem;
-    padding: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    word-break: break-all;
+.peer-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.peer-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+.peer-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .btn-sm {

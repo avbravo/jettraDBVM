@@ -31,6 +31,8 @@ public class FederatedRaftNode {
     private final String selfUrl;
     private final List<String> federatedPeers;
     private final Map<String, String> peerUrlToId = new HashMap<>();
+    private final Map<String, String> peerStates = new HashMap<>();
+    private final Map<String, Long> peerLastSeen = new HashMap<>();
     private final FederatedEngine engine;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private final HttpClient httpClient;
@@ -153,9 +155,15 @@ public class FederatedRaftNode {
                  int term = (int) res.get("term");
                  boolean voteGranted = (boolean) res.get("voteGranted");
                  String responderId = (String) res.get("responderId");
+                 String responderState = (String) res.get("responderState");
+                 
                  if (responderId != null) {
                      peerUrlToId.put(peerUrl, responderId);
                  }
+                 if (responderState != null) {
+                     peerStates.put(peerUrl, responderState);
+                 }
+                 peerLastSeen.put(peerUrl, System.currentTimeMillis());
                  
                  if (term > currentTerm) {
                      stepDown(term);
@@ -180,9 +188,16 @@ public class FederatedRaftNode {
                  if (res != null) {
                      int term = (int) res.getOrDefault("term", 0);
                      String responderId = (String) res.get("responderId");
+                     String responderState = (String) res.get("responderState");
+                     
                      if (responderId != null) {
                          peerUrlToId.put(peerUrl, responderId);
                      }
+                     if (responderState != null) {
+                         peerStates.put(peerUrl, responderState);
+                     }
+                     peerLastSeen.put(peerUrl, System.currentTimeMillis());
+
                      if (term > currentTerm) {
                          stepDown(term);
                      }
@@ -205,6 +220,7 @@ public class FederatedRaftNode {
         response.put("term", currentTerm);
         response.put("voteGranted", false);
         response.put("responderId", selfId);
+        response.put("responderState", state.name());
 
         if (term < currentTerm) {
             return response;
@@ -212,6 +228,8 @@ public class FederatedRaftNode {
 
         if (term > currentTerm) {
             stepDown(term);
+            response.put("term", currentTerm);
+            response.put("responderState", state.name()); // Reflect state after stepDown
         }
 
         if ((votedFor == null || votedFor.equals(candidateId))) {
@@ -235,6 +253,7 @@ public class FederatedRaftNode {
         response.put("term", currentTerm);
         response.put("success", false);
         response.put("responderId", selfId);
+        response.put("responderState", state.name());
 
         if (term < currentTerm) {
             return response;
@@ -242,8 +261,11 @@ public class FederatedRaftNode {
 
         if (term > currentTerm) {
             stepDown(term);
+            response.put("term", currentTerm);
+            response.put("responderState", state.name());
         } else if (state != State.FOLLOWER) {
              stepDown(term);
+             response.put("responderState", state.name());
         }
 
         this.leaderId = leaderId;
@@ -309,6 +331,14 @@ public class FederatedRaftNode {
 
     public Map<String, String> getPeerUrlToId() {
         return new HashMap<>(peerUrlToId);
+    }
+
+    public Map<String, String> getPeerStates() {
+        return new HashMap<>(peerStates);
+    }
+
+    public Map<String, Long> getPeerLastSeen() {
+        return new HashMap<>(peerLastSeen);
     }
 
     public HttpClient getHttpClient() {

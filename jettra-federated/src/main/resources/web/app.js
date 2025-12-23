@@ -371,10 +371,33 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('self-id').textContent = data.raftSelfId || '--';
 
         const peerIds = data.raftPeerIds || {};
+        const peerStates = data.raftPeerStates || {};
+        const peerLastSeen = data.raftPeerLastSeen || {};
+        const now = Date.now();
+
         (data.raftPeers || []).forEach(peerUrl => {
             const li = document.createElement('li');
+            li.className = 'p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700 mb-2';
+
             const peerId = peerIds[peerUrl] || 'Desconocido';
-            li.innerHTML = `<span class="font-bold text-primary">${peerId}</span><br><small class="text-dim">${peerUrl}</small>`;
+            const state = peerStates[peerUrl] || 'OFFLINE';
+            const lastSeen = peerLastSeen[peerUrl] || 0;
+            const isActive = (now - lastSeen) < 10000;
+
+            const stateClass = isActive ? (state === 'LEADER' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300') : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+            const stateLabel = isActive ? state : 'INACTIVE';
+
+            li.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">${peerId}</span>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${peerUrl}</div>
+                    </div>
+                    <span class="px-2 py-0.5 text-[10px] font-medium rounded-full ${stateClass}">
+                        ${stateLabel}
+                    </span>
+                </div>
+            `;
             peersUl.appendChild(li);
         });
 

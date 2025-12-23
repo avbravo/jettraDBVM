@@ -78,9 +78,17 @@ deben pasar por el servidor federado.
 
 - [] Crear un shell para el servidor federado que permita administrar los nodos
 
-- [] Cuando inicia el servidor fedeerado y el ultimo que fue federado no esta activo debe seleccionar el servidor disponible como lider ya que todos estan como no lideres ya que el ultimo lider esta detenido
+- [] En la interface web del servidor federado muestra los servidores federados pero no marca el mismo servidor que esta funcionando como inactivo-
+Es decir debe colocar a el mismo como activo por ejemplo el lider es fed-1 esta funcionando pero en la lista de servidores federados
+le coloca el estado de INACTIVE y debe ser LIDER de color verde. Para los demas casos de los otros servidores federados funciona perfefecto 
+indicando cual esta inactivo y cual es FOLLOWER e inactivo
 
-- [] En la interface web del servidor federado mostrar el estatus de todos los servidores federados y el valor "NodeID del servidor federado para que se vea mas elegentantaa.
+
+Federados
+Desconocido
+http://localhost:9000
+
+- [x] En la interface web del servidor federado mostrar el estatus de todos los servidores federados y el valor "NodeID del servidor federado para que se vea mas elegentantaa.
 
 
 

@@ -163,23 +163,29 @@
 
                     <!-- Raft Info Side -->
                     <aside class="sidebar-info">
-                        <div class="section glass">
+                        <div class="section glass h-full">
                             <div class="section-header">
-                                <h2><i class="fas fa-shield-alt"></i> Estado Raft</h2>
+                                <h2><i class="fas fa-shield-alt"></i> Estado del Consenso</h2>
                             </div>
-                            <div class="raft-details">
-                                <div class="detail-item">
-                                    <span>ID Local</span>
-                                    <span id="self-id" class="code">--</span>
+                            <div class="raft-details p-4">
+                                <div class="mb-6">
+                                    <div class="flex justify-between items-center mb-1">
+                                        <span class="text-xs text-gray-500 uppercase tracking-wider">Identidad
+                                            Local</span>
+                                        <span id="self-id"
+                                            class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 text-[10px] font-mono rounded">--</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-xs text-gray-500 uppercase tracking-wider">Líder Actual</span>
+                                        <span id="raft-leader" class="text-sm font-semibold text-primary">--</span>
+                                    </div>
                                 </div>
-                                <div class="detail-item">
-                                    <span>Líder Federado</span>
-                                    <span id="raft-leader" class="code">--</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span>Peers Federados</span>
-                                    <ul id="raft-peers" class="peer-list">
-                                        <!-- Peers list -->
+
+                                <div class="mt-4">
+                                    <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                                        Servidores Federados</h3>
+                                    <ul id="raft-peers" class="peer-list space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                                        <!-- Peers list populated by app.js -->
                                     </ul>
                                 </div>
                             </div>
