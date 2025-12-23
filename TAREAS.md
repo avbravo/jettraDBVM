@@ -78,11 +78,6 @@ deben pasar por el servidor federado.
 
 - [] Crear un shell para el servidor federado que permita administrar los nodos
 
-- [] En la interface web del servidor federado muestra los servidores federados pero no marca el mismo servidor que esta funcionando como inactivo-
-Es decir debe colocar a el mismo como activo por ejemplo el lider es fed-1 esta funcionando pero en la lista de servidores federados
-le coloca el estado de INACTIVE y debe ser LIDER de color verde. Para los demas casos de los otros servidores federados funciona perfefecto 
-indicando cual esta inactivo y cual es FOLLOWER e inactivo
-
 
 Federados
 Desconocido

@@ -284,6 +284,30 @@ public class FederatedEngine {
         return status;
     }
 
+    @SuppressWarnings("unchecked")
+    public synchronized void applyClusterState(Map<String, Object> state) {
+        if (state == null) return;
+        
+        String newDbLeader = (String) state.get("leaderId");
+        if (newDbLeader != null) {
+            this.currentLeaderId = newDbLeader;
+        }
+
+        List<Map<String, Object>> nodes = (List<Map<String, Object>>) state.get("nodes");
+        if (nodes != null) {
+            for (Object nodeObj : nodes) {
+                if (nodeObj instanceof Map) {
+                    Map<String, Object> node = (Map<String, Object>) nodeObj;
+                    String id = (String) node.get("id");
+                    if (id != null) {
+                        dbNodes.put(id, new HashMap<>(node));
+                    }
+                }
+            }
+        }
+        saveState();
+    }
+
     public void heartbeat(String nodeId) {
         Map<String, Object> info = dbNodes.get(nodeId);
         if (info != null) {

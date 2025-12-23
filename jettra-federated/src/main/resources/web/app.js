@@ -373,24 +373,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const peerIds = data.raftPeerIds || {};
         const peerStates = data.raftPeerStates || {};
         const peerLastSeen = data.raftPeerLastSeen || {};
+        const selfUrl = data.raftSelfUrl;
         const now = Date.now();
 
         (data.raftPeers || []).forEach(peerUrl => {
             const li = document.createElement('li');
-            li.className = 'p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700 mb-2';
+            const isSelf = (peerUrl === selfUrl);
 
-            const peerId = peerIds[peerUrl] || 'Desconocido';
-            const state = peerStates[peerUrl] || 'OFFLINE';
+            li.className = `p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border mb-2 ${isSelf ? 'border-primary shadow-sm' : 'border-gray-100 dark:border-gray-700'}`;
+
+            const peerId = peerIds[peerUrl] || (isSelf ? data.raftSelfId : 'Desconocido');
+            const state = isSelf ? data.raftState : (peerStates[peerUrl] || 'OFFLINE');
             const lastSeen = peerLastSeen[peerUrl] || 0;
-            const isActive = (now - lastSeen) < 10000;
+            const isActive = isSelf || (now - lastSeen) < 10000;
 
-            const stateClass = isActive ? (state === 'LEADER' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300') : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
-            const stateLabel = isActive ? state : 'INACTIVE';
+            const stateClass = isActive ? (state === 'LEADER' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300') : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+            const stateLabel = isActive ? (state === 'LEADER' ? 'LIDER' : state) : 'INACTIVE';
 
             li.innerHTML = `
                 <div class="flex justify-between items-start">
                     <div>
-                        <span class="text-sm font-semibold text-gray-900 dark:text-white">${peerId}</span>
+                        <span class="text-sm font-semibold text-gray-900 dark:text-white">${peerId} ${isSelf ? '<span class="text-[10px] text-primary ml-1">(Tú)</span>' : ''}</span>
                         <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${peerUrl}</div>
                     </div>
                     <span class="px-2 py-0.5 text-[10px] font-medium rounded-full ${stateClass}">

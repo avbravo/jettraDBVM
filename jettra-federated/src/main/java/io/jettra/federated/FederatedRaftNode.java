@@ -180,10 +180,11 @@ public class FederatedRaftNode {
          Map<String, Object> body = new HashMap<>();
          body.put("term", currentTerm);
          body.put("leaderId", selfId);
-         body.put("url", "http://localhost:" + engine.getPort());
+         body.put("url", selfUrl);
+         body.put("clusterState", engine.getClusterStatus());
          
          for (String peerUrl : federatedPeers) {
-             if (peerUrl.contains("localhost:" + engine.getPort())) continue;
+             if (peerUrl.equals(selfUrl)) continue;
              sendAsync(peerUrl + "/federated/raft/appendEntries", body).thenAccept(res -> {
                  if (res != null) {
                      int term = (int) res.getOrDefault("term", 0);
@@ -214,6 +215,8 @@ public class FederatedRaftNode {
         String candidateUrl = (String) data.get("url");
         if (candidateUrl != null) {
             peerUrlToId.put(candidateUrl, candidateId);
+            peerStates.put(candidateUrl, "CANDIDATE");
+            peerLastSeen.put(candidateUrl, System.currentTimeMillis());
         }
         
         Map<String, Object> response = new HashMap<>();
@@ -247,6 +250,8 @@ public class FederatedRaftNode {
         String leaderUrl = (String) data.get("url");
         if (leaderUrl != null) {
             peerUrlToId.put(leaderUrl, leaderId);
+            peerStates.put(leaderUrl, "LEADER");
+            peerLastSeen.put(leaderUrl, System.currentTimeMillis());
         }
         
         Map<String, Object> response = new HashMap<>();
@@ -270,6 +275,13 @@ public class FederatedRaftNode {
 
         this.leaderId = leaderId;
         this.lastHeartbeatReceived = System.currentTimeMillis();
+        
+        if (data.containsKey("clusterState")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> clusterState = (Map<String, Object>) data.get("clusterState");
+            engine.applyClusterState(clusterState);
+        }
+        
         response.put("success", true);
         
         return response;
@@ -327,6 +339,10 @@ public class FederatedRaftNode {
 
     public String getSelfId() {
         return selfId;
+    }
+
+    public String getSelfUrl() {
+        return selfUrl;
     }
 
     public Map<String, String> getPeerUrlToId() {
