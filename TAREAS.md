@@ -88,9 +88,6 @@ Federados
 Desconocido
 http://localhost:9000
 
-- [x] En la interface web del servidor federado mostrar el estatus de todos los servidores federados y el valor "NodeID del servidor federado para que se vea mas elegentantaa.
-
-
 
 
 
@@ -118,6 +115,12 @@ http://localhost:9000
 
 
 # Servidor Federado
+
+- [x] En la interface web del servidor federado mostrar el estatus de todos los servidores federados y el valor "NodeID del servidor federado para que se vea mas elegentantaa.
+
+
+
+
 
 - [x]en la ultima ejecucion de test se habilito como lider de servidor federado fed-3, luego se detuvo fed-3, fed-2, fed-1,  pero al iniciar fed-1 es decir no hya mas servidoores federados activos el servidor fed-1 nunca cambia su estatus a lider aunque no esten activos mas servidores, puedes mejorar el algoritmo para que determine que al no existir otro servidor federado el que este activo cambie su rol de maner auotmatica a lider.
 
