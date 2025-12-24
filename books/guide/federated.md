@@ -205,6 +205,8 @@ El servidor federado supervisa constantemente los nodos de base de datos registr
 *   **Estado Activo/Inactivo**: Si un nodo no envía un heartbeat en 10 segundos, su estado cambiará a **INACTIVE** en el Dashboard.
 *   **Reelección Automática**: Si el nodo inactivo era el Líder de la base de datos, el Servidor Federado promoverá automáticamente a otro nodo activo como nuevo líder para garantizar la continuidad del servicio.
 
+> **Importante**: Si no existe ningún servidor federado activo o accesible, todos los nodos de base de datos configurados en modo federado permanecerán en estado de espera ("nodos simples"). En esta situación, **no se asignará ningún líder de base de datos** ni se realizarán operaciones de sincronización de topología hasta que un servidor federado sea ejecutado y pueda gestionar las conexiones y el mando del cluster.
+
 ## Alta Disponibilidad del Servidor Federado (Failover)
 
 Para garantizar que el sistema de gestión sea siempre accesible, JettraDB soporta múltiples servidores federados corriendo en modo de alta disponibilidad (Raft).

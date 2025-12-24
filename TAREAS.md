@@ -81,9 +81,10 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 - [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
 y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los diversos componentes.
 
-- [] Que ocurre si no existe un servidor federado para gestionar el lider y los nodos, ya que las operaciones 
-deben pasar por el servidor federado.
 
+# Documentacion
+
+- [] Corregir en el shell, curl y driver que si no hya un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
 
 
 
@@ -93,6 +94,12 @@ deben pasar por el servidor federado.
 # ---------------------------------------------------------
 # Completadas
 # ------------------------------------------------------------
+
+- [x] Documentar que cuando no existe un servidor federado todos los nodos de bases de datos se convierten en nodos y no se asigna ningun lider hasta que el servidor federado sea ejecutado y pueda gestionar las conexions.
+
+- [x] dame un ejemplo de los comandos de jettra-shell y actualiza el archivo shell.md con los ejemplos de cada comando que soporta el shell de la base de datos
+
+
 
 - [x] Cuando se crea un indice el mensaje de confirmacion debe ser en un dialogo estilo flowbiewcss y no de javascript estandar
 
