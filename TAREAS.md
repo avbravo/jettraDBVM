@@ -101,6 +101,8 @@ Crea la documentacion en el archivo driver.md
 - [] Añadir en el formulario Web la opcion de añadir un nuevo servidor federado y este no debe converrtirse en lidee al menos que no exista otro lider.
 - [] Añadir en el shell un nuevo servidor federado y este no debe converrtirse en lidee al menos que no exista otro lider.
 
+- [] Para probarlo añadir un servidor federado 4 que solo contenga los otros servidores federados y el 1 2 y 3 no lo contengan
+para ver si al añadirlo desde consola o interface web este se replica en el archivo config.json a todos los servidores federados.
 
 
 
