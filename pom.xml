@@ -12,7 +12,6 @@
         <module>jettra-server</module>
         <module>jettra-federated</module>
         <module>jettra-shell</module>
-        <module>jettra-federated-shell</module>
         <module>jettra-driver</module>
         <module>jettra-collections</module>
     </modules>

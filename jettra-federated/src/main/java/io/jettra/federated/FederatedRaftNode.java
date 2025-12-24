@@ -64,6 +64,46 @@ public class FederatedRaftNode {
         if (bootstrap) {
             LOGGER.info("Bootstrap enabled. Asserting leadership.");
             becomeLeader();
+        } else {
+            // New node or follower: try to join known peers
+            joinCluster();
+        }
+    }
+
+    public String getLeaderUrl() {
+        if (state == State.LEADER) return selfUrl;
+        if (leaderId == null) return null;
+        for (Map.Entry<String, String> entry : peerUrlToId.entrySet()) {
+            if (entry.getValue().equals(leaderId)) return entry.getKey();
+        }
+        return null;
+    }
+
+    public void joinCluster() {
+        if (federatedPeers.size() <= 1 && !bootstrap) {
+             LOGGER.info("No peers to join. Waiting for someone to find us or for election.");
+             return;
+        }
+        
+        for (String peerUrl : federatedPeers) {
+            if (peerUrl.equals(selfUrl)) continue;
+            
+            Map<String, Object> body = new HashMap<>();
+            body.put("url", selfUrl);
+            body.put("nodeId", selfId);
+            
+            LOGGER.info("Attempting to join cluster via " + peerUrl);
+            sendAsync(peerUrl + "/federated/raft/join", body).thenAccept(res -> {
+                if (res != null) {
+                    if (res.get("redirect") != null) {
+                        String leaderUrl = (String) res.get("redirect");
+                        LOGGER.info("Redirected join to leader: " + leaderUrl);
+                        sendAsync(leaderUrl + "/federated/raft/join", body);
+                    } else if (Boolean.TRUE.equals(res.get("success"))) {
+                        LOGGER.info("Successfully joined cluster via " + peerUrl);
+                    }
+                }
+            });
         }
     }
 
@@ -253,6 +293,32 @@ public class FederatedRaftNode {
             lastHeartbeatReceived = System.currentTimeMillis();
         }
         
+        return response;
+    }
+
+    public synchronized Map<String, Object> handleJoin(Map<String, Object> data) {
+        String peerUrl = (String) data.get("url");
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", false);
+        response.put("responderId", selfId);
+
+        if (state == State.LEADER) {
+            if (peerUrl != null) {
+                addPeer(peerUrl);
+                response.put("success", true);
+                response.put("leaderId", selfId);
+                response.put("allPeers", federatedPeers);
+            }
+        } else {
+            String lUrl = getLeaderUrl();
+            if (lUrl != null) {
+                response.put("redirect", lUrl);
+            } else {
+                // We don't know the leader, but we can add it as a peer to help election
+                if (peerUrl != null) addPeer(peerUrl);
+                response.put("success", true);
+            }
+        }
         return response;
     }
 

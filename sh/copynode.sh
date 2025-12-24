@@ -19,23 +19,14 @@ echo "Copiando servidor federado 3"
 echo "Path /home/avbravo/jettradbvmnodes/federated3/"
 rm -f /home/avbravo/jettradbvmnodes/federated3/jettraFederated.jar
 cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated3/jettraFederated.jar
+
+echo "Copiando servidor federado 4"
+echo "Path /home/avbravo/jettradbvmnodes/federated4/"
+rm -f /home/avbravo/jettradbvmnodes/federated4/jettraFederated.jar
+cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated4/jettraFederated.jar
 echo ":::::::::::::::::::::::::::::::::::::::::::::::"
 
 
-echo "Copiando shell de servidor federado 1"
-echo "Path /home/avbravo/jettradbvmnodes/federated1/"
-rm -f /home/avbravo/jettradbvmnodes/federated1/jettraFederatedShell.jar
-cp jettra-federated-shell/target/jettraFederatedShell.jar /home/avbravo/jettradbvmnodes/federated1/jettraFederatedShell.jar
-
-echo "Copiando shell servidor federado 2"
-echo "Path /home/avbravo/jettradbvmnodes/federated2/"
-rm -f /home/avbravo/jettradbvmnodes/federated2/jettraFederatedShell.jar
-cp jettra-federated-shell/target/jettraFederatedShell.jar /home/avbravo/jettradbvmnodes/federated2/jettraFederatedShell.jar
-
-echo "Copiando shell de servidor federado 3"
-echo "Path /home/avbravo/jettradbvmnodes/federated3/"
-rm -f /home/avbravo/jettradbvmnodes/federated3/jettraFederatedShell.jar
-cp jettra-federated-shell/target/jettraFederatedShell.jar /home/avbravo/jettradbvmnodes/federated3/jettraFederatedShell.jar
 
 
 
@@ -68,7 +59,6 @@ cp jettra-server/target/jettraDBVM.jar /home/avbravo/jettradbvmnodes/node4/jettr
 
 echo "Generating shell..."
 cp jettra-shell/target/jettraDBVMShell.jar .
-cp jettra-federated-shell/target/jettraFederatedShell.jar .
 
 
 echo "Copiando JettraDBVMShell a /jettradbvmnodes/node1/"

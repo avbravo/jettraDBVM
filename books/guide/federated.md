@@ -6,6 +6,140 @@ El Servidor Federado ("Federated Server") es un componente de arquitectura avanz
 
 El objetivo principal del Servidor Federado es desacoplar la lógica de elección de líder y gestión de topología de los nodos de datos individuales, proporcionando una capa de orquestación más robusta y controlable.
 
+
+# Algoritmo de Consenso
+
+
+
+Servidor Federado Implementando ajustes para agregar nuevos servidores
+
+Se cuentan con tres servidores federados puede ver la configuracion del archivo federated.json
+el primero  (fed-1)
+{
+    "Mode": "federated",
+    "Port": 9000,
+    "NodeID": "fed-1",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+el segundo (fed-2)
+{
+    "Mode": "federated",
+    "Port": 9001,
+    "NodeID": "fed-2",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+el tercero(fed-3)
+{
+    "Mode": "federated",
+    "Port": 9002,
+    "NodeID": "fed-3",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+puede observar que todos los servidores estan activos y poseen la misma configuracion en  "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+  
+ 
+ Cuando se va a crear un nuevo servidor llamado fed-4 se cuenta con esta informacion
+ (fed-4)
+ {
+    "Mode": "federated",
+    "Port": 9004,
+    "NodeID": "fed-4",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9004"
+  ]
+}
+
+puede observar que el la configuracion  
+"FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9004"
+    
+ Contiene al menos uno de los servidores federados en este caso "http://localhost:9000", que corresponde a fed-1
+ y contiene su propio  "http://localhost:9004" pero ningun otro servidor fed-1, fed-2, fed-3 lo contienen ya que es un nuevo servidor.
+ La forma de proceder en estos casos con nuevos servidores federados seria la siguiente.
+ 
+1. Se ejecuta el nuevo servidor federado fed-4, este se conecta por almenos uno de los servidores federados a la red. (   "http://localhost:9000")
+2. Se identifica cual es el servidor federado lider de la red en este ejemplo es fed-1.
+3. El lider obtiene el url del nuevo servidor federado fed-4 ("http://localhost:9004")
+4. El lider lo compara con su archivo federated.json
+{
+    "Mode": "federated",
+    "Port": 9000,
+    "NodeID": "fed-1",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+al no estar incluido en "FederatedServers":, lo añade localmente quedando
+
+{
+    "Mode": "federated",
+    "Port": 9000,
+    "NodeID": "fed-1",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002",
+     "http://localhost:9003"
+  ]
+}
+
+Ahora esta configuracion es enviada a todos los nodos de la red federada (fed-2, fed-3) e incluso el nuevo fed-4.
+ "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002",
+     "http://localhost:9003"
+  ]
+  
+ Cada nodo toma en local esta configuracion y actualiza el archivo federated.json de manera que todos los nodos y el lider contengan la misma informacion
+  "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002",
+     "http://localhost:9003"
+  ]
+  
+  Una vez distribuido los nodos realizan un proceso de Hot-Reloaded, es decir se reinician en caliente para obtener la configuracion del nuevo servidor.
+  
+  El lider se mantiene como lider hasta que ocurra un evento que cambie la situacion.
+  
+  # Eliminacion del un servidor Federado
+  
+  Este mecanismo de propagacion ocurre igual cuando se elimina un servidor federado el lider lo elimina de su configuracion en federated.json y distribuye a todos los nodos federados y estos hacen el hot-Reloaded
+  
+  # Arranque de un servidor Federado
+  
+  Para mantener la sincronizacion en todo momento y evitar que un usuario elimine de su configuracion local federated.json o añada uno nuevo sin la autorizacion cuando inicia cada servidor federado
+envia la informacion de  "FederatedServers": al lider este verifica con la configuracion local y si no se trata de un nuevo servidor federado ni de uno que fue removido, el servidor federado envia la configuracion al servidor federado este actualiza en local el archivo federated.json, y ocurre el Hot-Realoded.
+Esto permite mantener la coherencia de la red de servidores federados.
+
+
+
+
 Sus funciones principales son:
 1.  **Enrutador Interno**: Dirige a los clientes y nodos hacia el Líder actual.
 2.  **Consenso y Elección**: Utiliza un algoritmo de consenso (Raft) entre servidores federados para mantener una alta disponibilidad del servicio de gestión.
@@ -24,9 +158,9 @@ El proyecto `jettra-federated` implementa este servidor. Es una aplicación Java
 
 ### Configuración del Cluster Federado
 
-Cada servidor federado utiliza un archivo `cluster.json` para definir su identidad y la de sus pares. A continuación, se muestra cómo configurar un cluster de 3 servidores:
+Cada servidor federado utiliza un archivo `federated.json` para definir su identidad y la de sus pares. A continuación, se muestra cómo configurar un cluster de 3 servidores:
 
-**Servidor 1 (`cluster.json`):**
+**Servidor 1 (`federated.json`):**
 ```json
 {
   "Mode": "federated",
@@ -40,7 +174,7 @@ Cada servidor federado utiliza un archivo `cluster.json` para definir su identid
 }
 ```
 
-**Servidor 2 (`cluster.json`):**
+**Servidor 2 (`federated.json`):**
 ```json
 {
   "Mode": "federated",
@@ -54,7 +188,7 @@ Cada servidor federado utiliza un archivo `cluster.json` para definir su identid
 }
 ```
 
-**Servidor 3 (`cluster.json`):**
+**Servidor 3 (`federated.json`):**
 ```json
 {
   "Mode": "federated",
@@ -113,12 +247,12 @@ Puede ejecutar el servidor federado dentro de un contenedor Docker mapeando el p
 ```bash
 docker run -d \
   -p 9000:9000 \
-  -v $(pwd)/cluster.json:/app/cluster.json \
+  -v $(pwd)/federated.json:/app/federated.json \
   --name jettra-fed-1 \
   jettra/federated:latest
 ```
 
-Si desea levantar múltiples servidores federados para alta disponibilidad, ejecútelos en puertos distintos (ej. 9000, 9001, 9002) y asegúrese de que sus archivos `cluster.json` reflejen sus pares.
+Si desea levantar múltiples servidores federados para alta disponibilidad, ejecútelos en puertos distintos (ej. 9000, 9001, 9002) y asegúrese de que sus archivos `federated.json` reflejen sus pares.
 
 ### 2. Configurar Nodos de Base de Datos
 
@@ -208,13 +342,13 @@ El servidor federado supervisa constantemente los nodos de base de datos registr
 > **Importante**: Si no existe ningún servidor federado activo o accesible, todos los nodos de base de datos configurados en modo federado permanecerán en estado de espera ("nodos simples"). En esta situación, **no se asignará ningún líder de base de datos** ni se realizarán operaciones de sincronización de topología hasta que un servidor federado sea ejecutado y pueda gestionar las conexiones y el mando del cluster. Las operaciones de escritura (Bases de datos, Colecciones, Documentos, Índices y Transacciones) devolverán el siguiente error:
 > `503 Service Unavailable: No federated server available to assign a leader. Write operations are disabled.`
 
-## Alta Disponibilidad del Servidor Federado (Failover)
+### Alta Disponibilidad del Servidor Federado (Failover)
 
 Para garantizar que el sistema de gestión sea siempre accesible, JettraDB soporta múltiples servidores federados corriendo en modo de alta disponibilidad (Raft).
 
 ### Configuración de Múltiples Federados
 
-Para configurar 3 servidores federados, cada instancia debe conocer la lista completa de sus pares. Esto se puede hacer vía `cluster.json` o mediante argumentos de línea de comandos.
+Para configurar 3 servidores federados, cada instancia debe conocer la lista completa de sus pares. Esto se puede hacer vía `federated.json` o mediante argumentos de línea de comandos.
 
 #### Ejemplo con argumentos de línea de comandos:
 
@@ -234,7 +368,7 @@ java -jar jettraFederated.jar 9002 fed-3 http://localhost:9000 http://localhost:
 1.  **Elección de Líder**: Al arrancar, los 3 servidores inician una elección. Solo uno de ellos se convertirá en `LEADER`.
 2.  **Gestión Centralizada**: Solo el servidor federado con estado `LEADER` toma decisiones sobre el cluster de base de datos (promover líderes de DB, registrar nodos, etc.). Los otros servidores actúan como `FOLLOWER`.
 3.  **Detección de Fallo**: Si el servidor federado `LEADER` se detiene o pierde conexión, los servidores `FOLLOWER` restantes detectan la ausencia de latidos tras un timeout (3-5 segundos).
-4.  **Nueva Elección**: Uno de los seguidores iniciará una nueva elección y se convertirá en el nuevo `LEADER`.
+4.  **Nueva Elección**: Uno de los seguidores iniciará una nueva elección y se convertirá en the new `LEADER`.
 5.  **Continuidad**: El nuevo líder federado asume inmediatamente la gestión del cluster, asegurando que los nodos de base de datos sigan teniendo una autoridad de control activa.
 
 ### Resiliencia ante Fallo de Quórum (Solitary Leadership)
@@ -255,74 +389,15 @@ curl -s http://localhost:9000/federated/status | grep '"raftState"'
 
 Si detiene el proceso del líder actual y espera unos segundos, verá que uno de los otros nodos cambia su `raftState` de `FOLLOWER` a `LEADER`.
 
-### Gestión Automática de Configuración (`cluster.json`)
+### Gestión Automática de Configuración (`federated.json`)
 
-Para asegurar la consistencia del cluster ante reinicios, el Servidor Federado actualiza automáticamente el archivo `cluster.json` cuando se detectan cambios en la topología:
+Para asegurar la consistencia del cluster ante reinicios, el Servidor Federado actualiza automáticamente el archivo `federated.json` cuando se detectan cambios en la topología:
 
 1.  **Adición/Eliminación de Nodos**: Cuando se usa `federated add` o `federated remove`, el Líder actualiza su lista de peers y guarda los cambios en disco.
 2.  **Propagación**: El Líder envía la nueva configuración a todos los seguidores a través de los latidos (heartbeats).
-3.  **Sincronización**: Los seguidores (y los nuevos nodos) detectan el cambio, actualizan su memoria y reescriben su propio `cluster.json`.
+3.  **Sincronización**: Los seguidores (y los nuevos nodos) detectan el cambio, actualizan su memoria y reescriben su propio `federated.json`.
 
 Esto garantiza que si un nodo se reinicia, siempre recordará a sus pares válidos más recientes, evitando problemas de "cerebro dividido" (split-brain) o liderazgo solitario accidental.
-
-## Jettra Federated Shell
-
-El Jettra Federated Shell es una herramienta de línea de comandos diseñada específicamente para la administración y monitorización del cluster federado. A diferencia del shell estándar de JettraDB, este enfoca sus capacidades en la salud de la infraestructura y el control de los nodos federados.
-
-### Características Principales
-
-*   **Monitorización en Tiempo Real**: Ver el estado de todos los servidores federados (Líder, Seguidores).
-*   **Gestión de Topología**: Consultar los nodos de base de datos registrados y sus roles actuales.
-*   **Control de Servicio**: Capacidad para detener nodos federados de forma remota (requiere autenticación).
-
-### Instalación y Ejecución
-
-El shell se encuentra en el proyecto `jettra-federated-shell`. Una vez compilado, puede ejecutarse mediante:
-
-```bash
-java -jar target/jettraFederatedShell.jar
-```
-
-### Comandos Disponibles
-
-Una vez dentro del shell, puede utilizar los siguientes comandos:
-
-*   **`connect <url>`**: Establece la dirección del servidor federado al que desea conectarse (por defecto `http://localhost:9000`).
-*   **`login <user> <password>`**: Autentica la sesión para permitir comandos administrativos como el apagado de nodos.
-*   **`federated show`**: Lista los servidores federados configurados en el nodo de base de datos actual.
-*   **`federated leader`**: Muestra la información del actual Líder del cluster federado (Estado Raft y Término).
-*   **`federated nodes`**: Muestra todos los nodos de la red federada y resalta cuál es el Líder de la Base de Datos.
-*   **`federated node-leader`**: Proporciona información detallada (métricas, URL, ID) del nodo líder de la base de datos.
-*   **`help`**: Muestra la lista de comandos disponibles.
-*   **`exit`**: Sale de la aplicación.
-
-### Ejemplo de Uso
-
-1.  **Conexión**:
-    `jettra-fed [http://localhost:9000]> connect http://localhost:9001`
-2.  **Consulta de Estado**:
-    `jettra-fed [http://localhost:9001]> status`
-    ```
-    --- Federated Cluster Status ---
-    Self ID: fed-9001
-    Self URL: http://localhost:9001
-    Raft State: FOLLOWER
-    Raft Term: 12
-    Raft Leader ID: fed-9000
-
-    --- Federated Peers ---
-    * http://localhost:9001     | ID: fed-9001   | Status: FOLLOWER (SELF)
-      http://localhost:9000     | ID: fed-9000   | Status: LEADER
-      http://localhost:9002     | ID: fed-9002   | Status: FOLLOWER
-    ```
-3.  **Verificar Nodos de DB**:
-    `jettra-fed [http://localhost:9001]> nodes`
-    ```
-    Node ID         | URL                       | Status     | Role
-    ----------------------------------------------------------------------
-    node1           | http://localhost:8080     | ACTIVE     | LEADER
-    node2           | http://localhost:8081     | ACTIVE     | FOLLOWER
-    ```
 
 ## Uso con Herramientas Cliente
 
@@ -446,7 +521,7 @@ services:
     ports:
       - "9000:9000"
     volumes:
-      - ./cluster1.json:/app/cluster.json
+      - ./federated1.json:/app/federated.json
     networks:
       - jettra-net
 
@@ -456,7 +531,7 @@ services:
     ports:
       - "9001:9001"
     volumes:
-      - ./cluster2.json:/app/cluster.json
+      - ./federated2.json:/app/federated.json
     networks:
       - jettra-net
 
@@ -495,8 +570,8 @@ networks:
 
 ### Notas sobre Docker Compose:
 
-1.  **Networking**: Dentro de la red `jettra-net`, los contenedores pueden comunicarse usando sus nombres de servicio (ej: `http://fed1:9000`) en lugar de `localhost`. Asegúrese de actualizar sus archivos `config.json` y `cluster.json` con estos hostnames.
-2.  **Volúmenes**: Es fundamental mapear los archivos de configuración (`cluster.json`, `config.json`) y las carpetas de datos (`data/`) para que la información persista si el contenedor se reinicia.
+1.  **Networking**: Dentro de la red `jettra-net`, los contenedores pueden comunicarse usando sus nombres de servicio (ej: `http://fed1:9000`) en lugar de `localhost`. Asegúrese de actualizar sus archivos `config.json` y `federated.json` con estos hostnames.
+2.  **Volúmenes**: Es fundamental mapear los archivos de configuración (`federated.json`, `config.json`) y las carpetas de datos (`data/`) para que la información persista si el contenedor se reinicia.
 3.  **Comando de Arranque**:
     ```bash
     # Iniciar el cluster
@@ -528,41 +603,4 @@ chmod +x sh/testing/test_federated_failover.sh
 
 El script mostrará en tiempo real cómo los nodos detectan la caída y cómo el nuevo mando se establece sin intervención manual.
 
-
-# Shell
-
-Ejecute el proyecto
-
-```shell
-java -jar jettraFederatedShell.jar
-```
-Ingrese el comando help para ver la ayuda
-
-```shell
-help
-```
-
-Listado de comandos:
-
-  connect <url>    - Set federated server URL (default: http://localhost:9000)
-  login <u? <p>    - Login to federated server
-  status           - View federated cluster and raft status
-  leader           - View current leaders (Federated and DB)
-  node-leader      - Get the current DB leader node details
-  nodes            - View managed DB nodes and their status
-  help             - Show this help
-  exit/quit        - Exit shell
-
-
-Conectarse el servidor federado
-
-connect http://localhost:9000
-
-
-Hacer el login
-
-login admin adminadmin
-
-
-Ejecute los comandos que considere oportunos.
 

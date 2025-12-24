@@ -1213,7 +1213,7 @@ public class RaftNode {
             if (dataDir == null)
                 dataDir = "data";
             File snapshotFile = File.createTempFile("snapshot", ".zip");
-            List<String> excludes = List.of("cluster.json", "config.json", "raft", "temp", "tmp");
+            List<String> excludes = List.of("federated.json", "config.json", "raft", "temp", "tmp");
             io.jettra.core.util.ZipUtils.zipDirectory(new File(dataDir).toPath(), snapshotFile.toPath(), excludes);
             return snapshotFile;
         } catch (IOException e) {

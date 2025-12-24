@@ -7,7 +7,6 @@ java -XX:+UseCompactObjectHeaders -jar jettraDBVM.jar
 
 java -XX:+UseCompactObjectHeaders -jar jettraDBVMShell.jar
 
-java -XX:+UseCompactObjectHeaders -jar jettraFederatedShell.jar
 
 # Benchmarking
 
@@ -73,7 +72,7 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 
 # Servidor Federado
-- [] En el driver la conexion se debe indicar los servidores federados ya sea leyendo el archivo cluster.json o pasandolos directamente
+- [] En el driver la conexion se debe indicar los servidores federados ya sea leyendo el archivo federated.json o pasandolos directamente
 en el codigo del driver para abrir la conexion.
 El driver internamente verifica el lider de los servidores federados e identifica el lider de los nodos de base de datos
 e intermanete se va a comunicar con el lider de los nodos de bases de datos. 
@@ -82,7 +81,7 @@ Tambien puede obteber la lista y el estado de todos los nodos federados.
 Crea la documentacion en el archivo driver.md
 
 
-- [] Elimina el proyecto jettra-federated-shell y la documentacion de ese proyecto.
+
 
 - [] Anadir los comandos nuevos al help del shell y documentar el archivo shell.md con todos los cambios y ejemplos.
 
@@ -91,18 +90,137 @@ Crea la documentacion en el archivo driver.md
 - [] En el shell añadir la opcion de detener un servidor federado
 - [] En el shell añadir la opcion de remover un servidor federado
 
+documenta la logica que te  indique en el archivo federated.md para que sirvsa de guia para otros desarrolladores eplica todo como lo coloque en el prompt, la impliemantacion funciona perfecta.
 
-- [] Eliminar el proyecto jettra-federated-shell ya no se necesita.
 
-- [] Cuando un nuevo servidor federado inicia y este solo tiene configurado el ip de los otros servidores federados
-     no debe convertirse en lider, el proceso seria que el lider añade el nuevo servidor federado a su archivo config.json
-    y este se distribuya a los demas servidores federados de manera que todos tengan la misma cantidad de registros de servidores 
-    federados. El proceo ocurre igual cuando se remueve un servidor federado.
-- [] Añadir en el formulario Web la opcion de añadir un nuevo servidor federado y este no debe converrtirse en lidee al menos que no exista otro lider.
-- [] Añadir en el shell un nuevo servidor federado y este no debe converrtirse en lidee al menos que no exista otro lider.
 
-- [] Para probarlo añadir un servidor federado 4 que solo contenga los otros servidores federados y el 1 2 y 3 no lo contengan
-para ver si al añadirlo desde consola o interface web este se replica en el archivo config.json a todos los servidores federados.
+Servidor Federado Implementando ajustes para agregar nuevos servidores
+
+Se cuentan con tres servidores federados puede ver la configuracion del archivo federated.json
+el primero  (fed-1)
+{
+    "Mode": "federated",
+    "Port": 9000,
+    "NodeID": "fed-1",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+el segundo (fed-2)
+{
+    "Mode": "federated",
+    "Port": 9001,
+    "NodeID": "fed-2",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+el tercero(fed-3)
+{
+    "Mode": "federated",
+    "Port": 9002,
+    "NodeID": "fed-3",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+puede observar que todos los servidores estan activos y poseen la misma configuracion en  "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+  
+ 
+ Cuando se va a crear un nuevo servidor llamado fed-4 se cuenta con esta informacion
+ (fed-4)
+ {
+    "Mode": "federated",
+    "Port": 9004,
+    "NodeID": "fed-4",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9004"
+  ]
+}
+
+puede observar que el la configuracion  
+"FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9004"
+    
+ Contiene al menos uno de los servidores federados en este caso "http://localhost:9000", que corresponde a fed-1
+ y contiene su propio  "http://localhost:9004" pero ningun otro servidor fed-1, fed-2, fed-3 lo contienen ya que es un nuevo servidor.
+ La forma de proceder en estos casos con nuevos servidores federados seria la siguiente.
+ 
+1. Se ejecuta el nuevo servidor federado fed-4, este se conecta por almenos uno de los servidores federados a la red. (   "http://localhost:9000")
+2. Se identifica cual es el servidor federado lider de la red en este ejemplo es fed-1.
+3. El lider obtiene el url del nuevo servidor federado fed-4 ("http://localhost:9004")
+4. El lider lo compara con su archivo federated.json
+{
+    "Mode": "federated",
+    "Port": 9000,
+    "NodeID": "fed-1",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002"
+  ]
+}
+
+al no estar incluido en "FederatedServers":, lo añade localmente quedando
+
+{
+    "Mode": "federated",
+    "Port": 9000,
+    "NodeID": "fed-1",
+     "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002",
+     "http://localhost:9003"
+  ]
+}
+
+Ahora esta configuracion es enviada a todos los nodos de la red federada (fed-2, fed-3) e incluso el nuevo fed-4.
+ "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002",
+     "http://localhost:9003"
+  ]
+  
+ Cada nodo toma en local esta configuracion y actualiza el archivo federated.json de manera que todos los nodos y el lider contengan la misma informacion
+  "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001",
+    "http://localhost:9002",
+     "http://localhost:9003"
+  ]
+  
+  Una vez distribuido los nodos realizan un proceso de Hot-Reloaded, es decir se reinician en caliente para obtener la configuracion del nuevo servidor.
+  
+  El lider se mantiene como lider hasta que ocurra un evento que cambie la situacion.
+  
+  # Eliminacion del un servidor Federado
+  
+  Este mecanismo de propagacion ocurre igual cuando se elimina un servidor federado el lider lo elimina de su configuracion en federated.json y distribuye a todos los nodos federados y estos hacen el hot-Reloaded
+  
+  # Arranque de un servidor Federado
+  
+  Para mantener la sincronizacion en todo momento y evitar que un usuario elimine de su configuracion local federated.json o añada uno nuevo sin la autorizacion cuando inicia cada servidor federado
+envia la informacion de  "FederatedServers": al lider este verifica con la configuracion local y si no se trata de un nuevo servidor federado ni de uno que fue removido, el servidor federado envia la configuracion al servidor federado este actualiza en local el archivo federated.json, y ocurre el Hot-Realoded.
+Esto permite mantener la coherencia de la red de servidores federados.
+
+- [x] Eliminar el proyecto jettra-federated-shell ya no se necesita.
 
 
 
@@ -120,15 +238,16 @@ y documentarlo
 # ---------------------------------------------------------
 # Completadas
 # ------------------------------------------------------------
+- [x] Elimina el proyecto jettra-federated-shell y la documentacion de ese proyecto.
 
 - [x] Corregir en el shell, curl y driver que si no hay un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
 
 
-- [x] Cuando se añade un nuevo servidor federado,  no se deba asignar como lider si ya hay un servidor federado lider y este debe actualizar el archivo cluster.json del servidor lider y de todos los servidores 
-federados si uno o mas servidores federados esta inactivo al activarse debe sincronizar el archivo cluster.json con la lista de servidores federados.
+- [x] Cuando se añade un nuevo servidor federado,  no se deba asignar como lider si ya hay un servidor federado lider y este debe actualizar el archivo federated.json del servidor lider y de todos los servidores 
+federados si uno o mas servidores federados esta inactivo al activarse debe sincronizar el archivo federated.json con la lista de servidores federados.
  -[x] Este proceso ocurre cuando se remueve un servidor federado
- -[x] Si un servidor federado inicia y tiene configurado los otros servidores federados en el archico cluster.json, debe añadirlo pero no como lider 
-si existe un lider activo. Y el algoritmo compara los servidores federados con los establecidos en el archivo cluster.json de cada servidor
+ -[x] Si un servidor federado inicia y tiene configurado los otros servidores federados en el archico federated.json, debe añadirlo pero no como lider 
+si existe un lider activo. Y el algoritmo compara los servidores federados con los establecidos en el archivo federated.json de cada servidor
 federado y actualiza el archivo con el nuevo servidor federado para que garantize la integracion.
  -[x] en la interface web debe añadir la opcion de añadir un nuevo servidor federado pero siempre debe ser FOLLOWER o la menos
 que no exista un lider añadirlo como lider.
@@ -394,7 +513,7 @@ gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionale
 - [x] porque en la interface web cuando selecciono una bae de datos en el menu izquierdo y veo una coleccion y sus docmentos, congela las otras opciones del menu , tengo actualiar la pagina en el navegador para poder usar las opciones
 
 -[x] Debes corregir la situacion que si se incian los nodos y todos aparecen como lider, al añadirlo a un lider se convierte en nodo y deja de ser lider, ademas en el ainterace formulñario Cluster al añadirlo  no lo muestra en la lista de nodos y su estado.
-- [x] En el formulario Cluster de la interface web no muestra los nodos agregados  estos se pueden almacenar en la base de datos _:system  y la coleccion _clusternodes que se debe actualizar y distribuir a todos los nodos. En este caso elimine el uso de cluster.json y administre todo en la coleccion _clusternodes
+- [x] En el formulario Cluster de la interface web no muestra los nodos agregados  estos se pueden almacenar en la base de datos _:system  y la coleccion _clusternodes que se debe actualizar y distribuir a todos los nodos. En este caso elimine el uso de federated.json y administre todo en la coleccion _clusternodes
      de la misma manera ajuste shell, curl, driver para que los nodos del cluster se administren con esta nueva coleccion y la coleccion es la que se distribuye a los nodos.
 
 - [x] No permite añadir un nuevo nodo en el lider ni mostrar el estado de cada nodo
@@ -402,14 +521,14 @@ gRPC es perfecto para Raft porque usa HTTP/2, lo que permite RPCs bidireccionale
 
 
 - [x] Al iniciar se verifica el estado de los nodos para ver cuales estan activos e inactivos.
-- [x] Una vez que el nodo este activo se envia el archivo cluster.json y se compara con el que tiene el nodo para actualizarlo
+- [x] Una vez que el nodo este activo se envia el archivo federated.json y se compara con el que tiene el nodo para actualizarlo
 - [x] Debe mostrar el estado de cada nodo del cluster
 - [x] Debe distribuir la  base de datos del lider a los nodos para que esten sincronizados incluyendo indices, rules y user.
-- [x] Recuerda que solo el lider puede añadir nodos o remover, detener un nodo y notificar a todos los nodos mediante el archivo cluster.json
+- [x] Recuerda que solo el lider puede añadir nodos o remover, detener un nodo y notificar a todos los nodos mediante el archivo federated.json
 
 
 
-- [x] Puedes usar una estrategia diferente con "peers": en lugar de usar el archivo config.json, use el archivo cluster.json
+- [x] Puedes usar una estrategia diferente con "peers": en lugar de usar el archivo config.json, use el archivo federated.json
 Este archivo contendra los nodos y su rol (lider, candidato, nodo) el unico nodo que puede hacer modificaciones en el es el lider
 y este archivo se replicada a cada nodo. Pero ellos no pueden hacer cambios en el archivo, y cuando se añade o remueve un nodo
 este es administrado por el lider y distribuido a cada nodo del cluster, de manera que cuando el lider deje de funcionar
@@ -418,7 +537,7 @@ Tenga presente que ningun nodo que no sea lider podra añadir o remover nodos.
 Para añadir o remover nodos se hara desde la interface Web del lider o mediante Shell , curl, driver todos ellos desde el lider.
 Y actualiza la documentacion en /books/guide/distributed.md
 
-Por lo tanto el archivo cluster.json se crea la primera vez en el lider.
+Por lo tanto el archivo federated.json se crea la primera vez en el lider.
 
 
 
@@ -426,7 +545,7 @@ Por lo tanto el archivo cluster.json se crea la primera vez en el lider.
 
 
 ya que al añadir un nuevo nodo no sabria cuales son los demas. En este caso se debe actualizar con todos los nodos registrados.
-Es decir al crear uno nuevo o eliminar un nodo, el archivo cluster.json se actualiza automaticamente con los nodos que lo componen
+Es decir al crear uno nuevo o eliminar un nodo, el archivo federated.json se actualiza automaticamente con los nodos que lo componen
 
 . Cuando se ejecuta una instanncia nueva no es necesario 
 registrar los peers, ya que la actualizacion se hace desde la interface grafica donde se registran los nodos.

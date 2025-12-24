@@ -58,6 +58,7 @@ public class FederatedService implements HttpService {
         rules.post("/register", this::register);
         rules.post("/heartbeat", this::heartbeat);
         rules.post("/raft/vote", this::handleVote);
+        rules.post("/raft/join", this::handleJoin);
         rules.post("/raft/appendEntries", this::handleAppendEntries);
         rules.get("/config", this::getConfig);
         rules.post("/config", this::saveConfig);
@@ -121,8 +122,20 @@ public class FederatedService implements HttpService {
 
     private void handleAppendEntries(ServerRequest req, ServerResponse res) {
         try {
+            @SuppressWarnings("unchecked")
             Map<String, Object> data = mapper.readValue(req.content().as(byte[].class), Map.class);
             Map<String, Object> result = raftNode.handleAppendEntries(data);
+            res.send(mapper.writeValueAsString(result));
+        } catch (Exception e) {
+            res.status(500).send(e.getMessage());
+        }
+    }
+
+    private void handleJoin(ServerRequest req, ServerResponse res) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+            Map<String, Object> result = raftNode.handleJoin(data);
             res.send(mapper.writeValueAsString(result));
         } catch (Exception e) {
             res.status(500).send(e.getMessage());
@@ -190,7 +203,7 @@ public class FederatedService implements HttpService {
         try {
             File configFile = new File("config.json");
             if (!configFile.exists()) {
-                configFile = new File("cluster.json");
+                configFile = new File("federated.json");
             }
             if (configFile.exists()) {
                 Map<String, Object> config = mapper.readValue(configFile, Map.class);
@@ -384,8 +397,20 @@ public class FederatedService implements HttpService {
             String url = data.get("url");
             if (url != null) {
                 if (!url.startsWith("http")) url = "http://" + url;
-                raftNode.addPeer(url);
-                res.send(mapper.writeValueAsString(Map.of("status", "success", "peerAdded", url)));
+                
+                if (raftNode.isLeader()) {
+                    raftNode.addPeer(url);
+                    res.send(mapper.writeValueAsString(Map.of("status", "success", "peerAdded", url)));
+                } else {
+                    String leaderUrl = raftNode.getLeaderUrl();
+                    if (leaderUrl != null) {
+                        res.status(307).header("Location", leaderUrl + "/federated/raft/addPeer").send();
+                    } else {
+                        // If no leader known, just add locally to help cluster form
+                        raftNode.addPeer(url);
+                        res.send(mapper.writeValueAsString(Map.of("status", "success", "peerAddedLocally", url)));
+                    }
+                }
             } else {
                 res.status(400).send("Missing url");
             }

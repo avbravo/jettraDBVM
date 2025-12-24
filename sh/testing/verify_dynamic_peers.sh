@@ -83,13 +83,13 @@ echo "Checking Node 1 Config..."
 # Verify via API
 curl -s -u admin:admin http://localhost:8081/api/cluster | grep "http://localhost:8082" && echo "SUCCESS: Node 1 has Node 2 (API)" || echo "FAIL: Node 1 missing Node 2 (API)"
 
-# Verify cluster.json content
-echo "Checking cluster.json on Node 1..."
-if grep -q "http://localhost:8082" cluster_test/node1/data/cluster.json; then
-    echo "SUCCESS: cluster.json on Node 1 contains Node 2"
+# Verify federated.json content
+echo "Checking federated.json on Node 1..."
+if grep -q "http://localhost:8082" cluster_test/node1/data/federated.json; then
+    echo "SUCCESS: federated.json on Node 1 contains Node 2"
 else
-    echo "FAIL: cluster.json on Node 1 missing Node 2"
-    cat cluster_test/node1/data/cluster.json
+    echo "FAIL: federated.json on Node 1 missing Node 2"
+    cat cluster_test/node1/data/federated.json
     exit 1
 fi
 
@@ -98,13 +98,13 @@ echo "Checking Node 2 Config..."
 # Verify via API
 curl -s -u admin:admin http://localhost:8082/api/cluster | grep "http://localhost:8081" && echo "SUCCESS: Node 2 has Node 1 (API)" || echo "FAIL: Node 2 missing Node 1 (API)"
 
-# Verify cluster.json on Node 2
-echo "Checking cluster.json on Node 2..."
-if grep -q "http://localhost:8081" cluster_test/node2/data/cluster.json; then
-    echo "SUCCESS: cluster.json on Node 2 contains Node 1"
+# Verify federated.json on Node 2
+echo "Checking federated.json on Node 2..."
+if grep -q "http://localhost:8081" cluster_test/node2/data/federated.json; then
+    echo "SUCCESS: federated.json on Node 2 contains Node 1"
 else
-    echo "FAIL: cluster.json on Node 2 missing Node 1"
-    cat cluster_test/node2/data/cluster.json
+    echo "FAIL: federated.json on Node 2 missing Node 1"
+    cat cluster_test/node2/data/federated.json
     exit 1
 fi
 

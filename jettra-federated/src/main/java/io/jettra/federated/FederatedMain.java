@@ -2,7 +2,6 @@ package io.jettra.federated;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -22,10 +21,10 @@ public class FederatedMain {
         int port = 9000; // Default federated port
         String nodeId = null; 
         boolean bootstrap = false;
-        List<String> federatedServers = new ArrayList<>();
+        List<String> federatedServers = new java.util.concurrent.CopyOnWriteArrayList<>();
         
-        // 1. Try loading from cluster.json
-        File configFile = new File("cluster.json");
+        // 1. Try loading from federated.json
+        File configFile = new File("federated.json");
         if (configFile.exists()) {
             try {
                 @SuppressWarnings("unchecked")
@@ -34,7 +33,7 @@ public class FederatedMain {
                     @SuppressWarnings("unchecked")
                     List<String> peers = (List<String>) config.get("FederatedServers");
                     federatedServers.addAll(peers);
-                    LOGGER.info("Loaded FederatedServers from cluster.json: " + federatedServers);
+                    LOGGER.info("Loaded FederatedServers from federated.json: " + federatedServers);
                 }
                 if (config.containsKey("Port")) {
                     port = (Integer) config.get("Port");
@@ -46,7 +45,7 @@ public class FederatedMain {
                     bootstrap = (Boolean) config.get("Bootstrap");
                 }
             } catch (IOException e) {
-                LOGGER.warning("Failed to read cluster.json: " + e.getMessage());
+                LOGGER.warning("Failed to read federated.json: " + e.getMessage());
             }
         }
 
@@ -89,7 +88,7 @@ public class FederatedMain {
         // Config saver
         java.util.function.Consumer<List<String>> configSaver = (peers) -> {
             try {
-                File cfgFile = new File("cluster.json");
+                File cfgFile = new File("federated.json");
                 Map<String, Object> config = new java.util.HashMap<>();
                 if (cfgFile.exists()) {
                     config = mapper.readValue(cfgFile, Map.class);
@@ -102,9 +101,9 @@ public class FederatedMain {
                 if (!config.containsKey("Mode")) config.put("Mode", "federated");
                 
                 mapper.writerWithDefaultPrettyPrinter().writeValue(cfgFile, config);
-                LOGGER.info("Updated cluster.json with new peers: " + peers);
+                LOGGER.info("Updated federated.json with new peers: " + peers);
             } catch (IOException e) {
-                LOGGER.severe("Failed to save cluster.json: " + e.getMessage());
+                LOGGER.severe("Failed to save federated.json: " + e.getMessage());
             }
         };
 
