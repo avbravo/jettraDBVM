@@ -505,9 +505,21 @@ public class WebServices {
     }
 
     private void checkLeader(ServerResponse res) throws Exception {
-        if (engine.getRaftNode() != null && !engine.getRaftNode().isLeader()) {
-            res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader. Writes must be sent to the cluster leader.");
-            throw new RuntimeException("Not Leader");
+        io.jettra.core.raft.RaftNode raft = engine.getRaftNode();
+        if (raft != null) {
+            if (raft.isFederatedMode() && !raft.hasLeader()) {
+                res.status(Status.SERVICE_UNAVAILABLE_503).send("No federated server available to assign a leader. Write operations are disabled.");
+                throw new RuntimeException("No Federated Leader");
+            }
+            if (!raft.isLeader()) {
+                String leader = raft.getLeaderId();
+                String msg = "Not Leader. Writes must be sent to the cluster leader.";
+                if (leader != null) {
+                    msg += " Connect to: " + leader;
+                }
+                res.status(Status.SERVICE_UNAVAILABLE_503).send(msg);
+                throw new RuntimeException("Not Leader");
+            }
         }
     }
 
@@ -644,13 +656,9 @@ public class WebServices {
             if (txID != null && !txID.isEmpty()) {
                 engine.getStore().saveTx(db, col, doc, txID);
             } else {
+                checkLeader(res);
                 // Distributed Write Logic
                 if (engine.getRaftNode() != null) {
-                    if (!engine.getRaftNode().isLeader()) {
-                        res.status(Status.SERVICE_UNAVAILABLE_503)
-                                .send("Not Leader. Connect to: " + engine.getRaftNode().getLeaderId());
-                        return;
-                    }
                     Map<String, Object> cmd = new java.util.HashMap<>();
                     cmd.put("op", "save");
                     cmd.put("db", db);
@@ -728,11 +736,9 @@ public class WebServices {
             // doc should have _id, if not use id param
             doc.put("_id", id);
 
+            checkLeader(res);
+
             if (engine.getRaftNode() != null) {
-                if (!engine.getRaftNode().isLeader()) {
-                    res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
-                    return;
-                }
                 Map<String, Object> cmd = new java.util.HashMap<>();
                 cmd.put("op", "update");
                 cmd.put("db", db);
@@ -760,11 +766,8 @@ public class WebServices {
             if (txID != null && !txID.isEmpty()) {
                 engine.getStore().deleteTx(db, col, id, txID);
             } else {
+                checkLeader(res);
                 if (engine.getRaftNode() != null) {
-                    if (!engine.getRaftNode().isLeader()) {
-                        res.status(Status.SERVICE_UNAVAILABLE_503).send("Not Leader");
-                        return;
-                    }
                     Map<String, Object> cmd = new java.util.HashMap<>();
                     cmd.put("op", "delete");
                     cmd.put("db", db);

@@ -205,7 +205,8 @@ El servidor federado supervisa constantemente los nodos de base de datos registr
 *   **Estado Activo/Inactivo**: Si un nodo no envía un heartbeat en 10 segundos, su estado cambiará a **INACTIVE** en el Dashboard.
 *   **Reelección Automática**: Si el nodo inactivo era el Líder de la base de datos, el Servidor Federado promoverá automáticamente a otro nodo activo como nuevo líder para garantizar la continuidad del servicio.
 
-> **Importante**: Si no existe ningún servidor federado activo o accesible, todos los nodos de base de datos configurados en modo federado permanecerán en estado de espera ("nodos simples"). En esta situación, **no se asignará ningún líder de base de datos** ni se realizarán operaciones de sincronización de topología hasta que un servidor federado sea ejecutado y pueda gestionar las conexiones y el mando del cluster.
+> **Importante**: Si no existe ningún servidor federado activo o accesible, todos los nodos de base de datos configurados en modo federado permanecerán en estado de espera ("nodos simples"). En esta situación, **no se asignará ningún líder de base de datos** ni se realizarán operaciones de sincronización de topología hasta que un servidor federado sea ejecutado y pueda gestionar las conexiones y el mando del cluster. Las operaciones de escritura (insert, update, delete) devolverán el siguiente error:
+> `503 Service Unavailable: No federated server available to assign a leader. Write operations are disabled.`
 
 ## Alta Disponibilidad del Servidor Federado (Failover)
 

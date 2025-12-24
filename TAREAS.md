@@ -84,8 +84,6 @@ y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los di
 
 # Documentacion
 
-- [] Corregir en el shell, curl y driver que si no hya un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
-
 
 
 
@@ -94,6 +92,11 @@ y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los di
 # ---------------------------------------------------------
 # Completadas
 # ------------------------------------------------------------
+
+- [x] Corregir en el shell, curl y driver que si no hay un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
+
+
+
 
 - [x] Documentar que cuando no existe un servidor federado todos los nodos de bases de datos se convierten en nodos y no se asigna ningun lider hasta que el servidor federado sea ejecutado y pueda gestionar las conexions.
 

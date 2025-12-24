@@ -1239,6 +1239,15 @@ public class RaftNode {
         }
     }
 
+    public boolean isFederatedMode() {
+        List<String> fedServers = (List<String>) configManager.getOrDefault("FederatedServers", Collections.emptyList());
+        return !fedServers.isEmpty();
+    }
+
+    public synchronized boolean hasLeader() {
+        return leaderId != null;
+    }
+
     public static class LogEntry {
         public int term;
         public Map<String, Object> command;
