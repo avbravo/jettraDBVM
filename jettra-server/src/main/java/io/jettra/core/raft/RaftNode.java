@@ -215,6 +215,12 @@ public class RaftNode {
             data.put("nodeId", nodeId);
             data.put("url", "http://localhost:" + configManager.get("Port"));
             data.put("FederatedServers", fedServers);
+            try {
+                String dataDir = (String) configManager.getOrDefault("DataDir", "data");
+                data.put("metrics", io.jettra.core.util.MetricsUtils.getSystemMetrics(dataDir));
+            } catch (Exception e) {
+                // Ignore metrics errors
+            }
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(fedUrl + "/federated/register"))

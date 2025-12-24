@@ -154,17 +154,6 @@
                                     <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
                                 </a>
                             </li>
-                            <li id="menu-federated">
-                                <a href="#" class="sidebar-link group" onclick="app.showSection('federated')">
-                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
-                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                                    </svg>
-                                    <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
-                                </a>
-                            </li>
                             <li id="menu-config" class="hidden">
                                 <a href="#" class="sidebar-link group" onclick="app.showSection('config')">
                                     <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
@@ -736,6 +725,9 @@
                                                         <th>Node ID</th>
                                                         <th>URL</th>
                                                         <th>Status</th>
+                                                        <th>CPU</th>
+                                                        <th>RAM</th>
+                                                        <th>Disk</th>
                                                         <th>Last Seen</th>
                                                     </tr>
                                                 </thead>
@@ -794,10 +786,9 @@
             const originalShowSection = app.showSection;
             app.showSection = function (section) {
                 if (originalShowSection) originalShowSection.apply(this, arguments);
+                // The app.showSection already handles initFederatedView() for 'federated' section
                 if (section === 'config') {
                     loadNodeConfig();
-                } else if (section === 'federated') {
-                    loadFederatedStatus();
                 }
             };
 
@@ -889,87 +880,6 @@
                     statusDiv.classList.remove('hidden');
                 }
             };
-
-            function loadFederatedStatus() {
-                const statusDiv = document.getElementById('federated-status-content');
-                statusDiv.innerHTML = 'Loading...';
-
-                fetch('/api/federated', {
-                    headers: { 'Authorization': localStorage.getItem('jettra_token') || '' }
-                })
-                    .then(res => {
-                        if (!res.ok) throw new Error(res.statusText);
-                        return res.json();
-                    })
-                    .then(data => {
-                        let html = `
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
-                            <div class="stat-card">
-                                <div class="stat-title">DB Cluster Leader</div>
-                                <div class="stat-value text-primary">${data.leaderId || 'None'}</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-title">Federated Role</div>
-                                <div class="stat-value ${data.isFederatedLeader ? 'text-success' : 'text-warning'}">
-                                    ${data.isFederatedLeader ? 'LEADER' : 'FOLLOWER'}
-                                </div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-title">Raft State</div>
-                                <div class="stat-value">${data.raftState || 'Unknown'}</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-title">Raft Term</div>
-                                <div class="stat-value">${data.raftTerm || 0}</div>
-                            </div>
-                        </div>
-                    `;
-                        statusDiv.innerHTML = html;
-
-                        // Managed Nodes table
-                        const tbody = document.getElementById('federated-managed-nodes-tbody');
-                        if (tbody) {
-                            tbody.innerHTML = '';
-                            if (data.nodes) {
-                                data.nodes.forEach(node => {
-                                    const tr = document.createElement('tr');
-                                    tr.innerHTML = `
-                                    <td>${node.id || 'N/A'}</td>
-                                    <td>${node.url}</td>
-                                    <td><span class="badge badge-${node.status === 'ACTIVE' ? 'success' : 'danger'}">${node.status}</span></td>
-                                    <td>${node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : '-'}</td>
-                                `;
-                                    tbody.appendChild(tr);
-                                });
-                            }
-                        }
-
-                        // Federated Peers table
-                        const serverTbody = document.getElementById('federated-servers-tbody');
-                        if (serverTbody) {
-                            serverTbody.innerHTML = '';
-                            if (data.raftPeers) {
-                                data.raftPeers.forEach(peer => {
-                                    const tr = document.createElement('tr');
-                                    // Determine role based on ID if possible, otherwise guess
-                                    let role = 'PEER';
-                                    if (data.raftLeaderId && peer.includes(data.raftLeaderId)) role = 'LEADER'; // Simple heuristic
-
-                                    tr.innerHTML = `
-                                   <td>-</td>
-                                   <td>${peer}</td>
-                                   <td>${role}</td>
-                                   <td>Active</td>
-                                `;
-                                    serverTbody.appendChild(tr);
-                                });
-                            }
-                        }
-                    })
-                    .catch(err => {
-                        statusDiv.innerHTML = `<div class="text-danger">Error loading status: ${err.message}</div>`;
-                    });
-            }
 
             app.showAddFederatedModal = function () {
                 const html = `

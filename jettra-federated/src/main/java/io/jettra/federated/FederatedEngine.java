@@ -99,12 +99,15 @@ public class FederatedEngine {
         }
     }
 
-    public synchronized void registerNode(String nodeId, String url) {
+    public synchronized void registerNode(String nodeId, String url, Map<String, Object> additionalInfo) {
         Map<String, Object> nodeInfo = dbNodes.getOrDefault(nodeId, new HashMap<>());
         nodeInfo.put("id", nodeId);
         nodeInfo.put("url", url);
         nodeInfo.put("status", "ACTIVE");
         nodeInfo.put("lastSeen", System.currentTimeMillis());
+        if (additionalInfo != null) {
+            nodeInfo.putAll(additionalInfo);
+        }
         dbNodes.put(nodeId, nodeInfo);
         
         // If we are federated leader and there is no DB leader, assign one.
@@ -320,10 +323,13 @@ public class FederatedEngine {
         saveState();
     }
 
-    public void heartbeat(String nodeId) {
+    public void heartbeat(String nodeId, Map<String, Object> additionalInfo) {
         Map<String, Object> info = dbNodes.get(nodeId);
         if (info != null) {
             info.put("lastSeen", System.currentTimeMillis());
+            if (additionalInfo != null) {
+                info.putAll(additionalInfo);
+            }
             if ("INACTIVE".equals(info.get("status"))) {
                  info.put("status", "ACTIVE");
                  saveState();

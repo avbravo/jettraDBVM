@@ -251,6 +251,31 @@ GET http://localhost:9000/federated/status
 
 O desde la interfaz web de JettraDB accediendo a la sección "Federated" en la barra lateral.
 
+## Interfaz de Gestión Federativa Avanzada
+
+JettraDB proporciona una interfaz visual rica para la gestión de clusters federados, disponible tanto en el servidor federado (Dashboard directo) como integrada en cada nodo de base de datos.
+
+### Características del Dashboard
+
+1.  **Monitoreo de Salud en Tiempo Real**: Visualice el estado (ACTIVE/INACTIVE) de cada nodo. Los nodos inactivos se marcan claramente y sus métricas se reinician para reflejar la pérdida de conexión.
+2.  **Identificación de Liderazgo**: 
+    *   **DB Cluster Leader**: El nodo de base de datos que actualmente gestiona las operaciones de escritura.
+    *   **Federated Leader**: El servidor federado que actualmente tiene el mando del cluster Raft.
+3.  **Métricas de Rendimiento (Real-Time Metrics)**: Cada nodo envía automáticamente sus estadísticas vitales al servidor federado, permitiendo monitorear:
+    *   **CPU Usage**: Porcentaje de uso de CPU en el nodo.
+    *   **RAM Usage**: Memoria RAM consumida por la instancia de JettraDB.
+    *   **Disk Usage**: Espacio en disco utilizado en el directorio de datos.
+4.  **Navegación Intuitiva**: Las URLs de los nodos y servidores son **hipervínculos clicleables** que permiten abrir rápidamente la interfaz web de cualquier nodo de la red en una nueva pestaña del navegador.
+5.  **Gestión de Topología**: Permite añadir nuevos servidores federados mediante diálogos estilizados con **Flowbite CSS**, así como detener o reiniciar nodos de datos de manera remota.
+
+### Visualización de Métricas
+
+La tabla de "Managed DB Nodes" incluye columnas dedicadas para CPU, RAM y Disco. Estos datos se actualizan dinámicamente cada vez que el nodo envía un latido al servidor federado (cada 5 segundos).
+
+| Node ID | URL | Status | CPU | RAM | Disk | Last Seen |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| node-1 | http://localhost:8080 | ACTIVE | 12% | 245MB | 1.2GB | 16:52:10 |
+
 ## Interfaz Web de Gestión
 
 El Servidor Federado incluye un panel de control avanzado para supervisar el estado del cluster en tiempo real.

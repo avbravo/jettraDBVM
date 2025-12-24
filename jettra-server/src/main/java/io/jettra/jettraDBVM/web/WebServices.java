@@ -1680,23 +1680,35 @@ public class WebServices {
                 return;
             }
 
-            String fedUrl = fedServers.get(0);
-            LOGGER.fine("Proxying status request to: " + fedUrl);
+            Exception lastException = null;
+            for (String fedUrl : fedServers) {
+                try {
+                    LOGGER.fine("Proxying status request to: " + fedUrl);
 
-            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(fedUrl + "/federated/status"))
-                    .GET()
-                    .timeout(java.time.Duration.ofMillis(3000))
-                    .build();
+                    java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                            .uri(java.net.URI.create(fedUrl + "/federated/status"))
+                            .GET()
+                            .timeout(java.time.Duration.ofMillis(3000))
+                            .build();
 
-            java.net.http.HttpResponse<String> response = engine.getRaftNode().getHttpClientProxy()
-                    .send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+                    java.net.http.HttpResponse<String> response = engine.getRaftNode().getHttpClientProxy()
+                            .send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
 
-            if (response.statusCode() == 200) {
-                res.send(response.body());
-            } else {
-                res.status(Status.create(response.statusCode())).send(response.body());
+                    if (response.statusCode() == 200) {
+                        res.send(response.body());
+                        return; // Success
+                    } else {
+                        LOGGER.warning("Federated server " + fedUrl + " returned status " + response.statusCode());
+                    }
+                } catch (Exception e) {
+                    LOGGER.warning("Failed to connect to federated server " + fedUrl + ": " + e.getMessage());
+                    lastException = e;
+                }
             }
+
+            res.status(Status.SERVICE_UNAVAILABLE_503)
+               .send("None of the federated servers are responding. Last error: " + (lastException != null ? lastException.getMessage() : "Unknown"));
+            
         } catch (Exception e) {
             LOGGER.log(java.util.logging.Level.SEVERE, "Unexpected error in getFederatedStatus", e);
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
@@ -1776,34 +1788,58 @@ public class WebServices {
                 return;
             }
 
-            String fedUrl = fedServers.get(0);
             String path = req.path().path();
             // Transform /api/federated/... to /federated/...
             String targetPath = path.replace("/api/federated", "/federated");
-
             byte[] body = req.content().as(byte[].class);
 
-            java.net.http.HttpRequest.Builder builder = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(fedUrl + targetPath))
-                    .header("Content-Type", "application/json")
-                    .timeout(java.time.Duration.ofMillis(3000));
+            Exception lastException = null;
+            for (String fedUrl : fedServers) {
+                try {
+                    LOGGER.fine("Proxying request to: " + fedUrl + targetPath);
 
-            if (body != null && body.length > 0) {
-                builder.POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(body));
-            } else {
-                builder.POST(java.net.http.HttpRequest.BodyPublishers.noBody());
+                    java.net.http.HttpRequest.Builder builder = java.net.http.HttpRequest.newBuilder()
+                            .uri(java.net.URI.create(fedUrl + targetPath))
+                            .header("Content-Type", "application/json")
+                            .timeout(java.time.Duration.ofMillis(3000));
+
+                    String method = req.prologue().method().text();
+                    switch (method) {
+                        case "POST":
+                            builder.POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(body));
+                            break;
+                        case "DELETE":
+                            builder.DELETE();
+                            break;
+                        case "GET":
+                        default:
+                            builder.GET();
+                            break;
+                    }
+
+                    java.net.http.HttpResponse<String> response = engine.getRaftNode().getHttpClientProxy()
+                            .send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+
+                    if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                        res.send(response.body());
+                        return; // Success
+                    } else {
+                        LOGGER.warning("Federated server " + fedUrl + " returned status " + response.statusCode());
+                        if (response.statusCode() != 404) { // If it's 404, maybe it's just missing on this node
+                           lastException = new Exception("Server " + fedUrl + " returned " + response.statusCode());
+                        }
+                    }
+                } catch (Exception e) {
+                    LOGGER.warning("Failed to connect to federated server " + fedUrl + ": " + e.getMessage());
+                    lastException = e;
+                }
             }
 
-            java.net.http.HttpResponse<String> response = engine.getRaftNode().getHttpClientProxy()
-                    .send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() / 100 == 2) {
-                res.send(response.body());
-            } else {
-                res.status(Status.create(response.statusCode())).send(response.body());
-            }
+            res.status(Status.SERVICE_UNAVAILABLE_503)
+               .send("None of the federated servers are responding. Last error: " + (lastException != null ? lastException.getMessage() : "Unknown"));
+            
         } catch (Exception e) {
-            LOGGER.log(java.util.logging.Level.SEVERE, "Error proxying to federated server", e);
+            LOGGER.log(java.util.logging.Level.SEVERE, "Unexpected error in proxyFederatedRequest", e);
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }

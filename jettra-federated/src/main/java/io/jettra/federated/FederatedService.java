@@ -197,7 +197,15 @@ public class FederatedService implements HttpService {
                 }
             }
             
-            engine.registerNode(id, url);
+            Map<String, Object> additionalInfo = new HashMap<>();
+            if (data.containsKey("metrics")) {
+                additionalInfo.put("metrics", data.get("metrics"));
+            }
+            if (data.containsKey("description")) {
+                additionalInfo.put("description", data.get("description"));
+            }
+            
+            engine.registerNode(id, url, additionalInfo);
             
             Map<String, Object> status = engine.getClusterStatus();
             if (clientFedServers != null && raftNode != null) {
@@ -223,7 +231,31 @@ public class FederatedService implements HttpService {
                 }
             }
             
-            engine.heartbeat(nodeId);
+            Map<String, Object> additionalInfo = null;
+            if (req.headers().contentLength().orElse(0L) > 0) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+                    additionalInfo = new HashMap<>();
+                    if (data.containsKey("metrics")) {
+                        additionalInfo.put("metrics", data.get("metrics"));
+                    }
+                    
+                    // Body processing for FederatedServers sync already exists below, but we can reuse data here
+                    @SuppressWarnings("unchecked")
+                    List<String> clientFedServers = (List<String>) data.get("FederatedServers");
+                    if (clientFedServers != null && raftNode != null) {
+                        List<String> serverFedServers = raftNode.getPeers();
+                        if (!serverFedServers.equals(clientFedServers)) {
+                            // We will add this to the status returned later
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore body errors
+                }
+            }
+            
+            engine.heartbeat(nodeId, additionalInfo);
             
             Map<String, Object> status = engine.getClusterStatus();
             

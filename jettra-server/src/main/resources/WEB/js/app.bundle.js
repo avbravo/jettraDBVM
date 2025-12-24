@@ -122,14 +122,17 @@ const App = {
     },
 
     updateUsersMenuVisibility() {
-        const usersMenu = document.getElementById('menu-users');
-        if (usersMenu) {
-            if (this.state.role === 'admin') {
-                usersMenu.classList.remove('hidden');
-            } else {
-                usersMenu.classList.add('hidden');
+        const adminMenus = ['menu-users', 'menu-config', 'menu-federated'];
+        adminMenus.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                if (this.state.role === 'admin') {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
             }
-        }
+        });
     },
 
     refresh() {
@@ -3151,33 +3154,101 @@ const App = {
 
     renderFederatedStatus(data) {
         const statusContent = document.getElementById('federated-status-content');
+        if (!statusContent) return;
+
         const leaderId = data.leaderId || 'None';
+        const isFederatedLeader = data.isFederatedLeader;
+
         statusContent.innerHTML = `
-            <div class="flex justify-between items-center">
-                <div>
-                    <span class="text-gray-400">Current Federated Leader:</span> 
-                    <span class="ml-2 font-bold text-blue-400">${leaderId}</span>
+            <div class="stat-group">
+                <div class="stat-card">
+                    <div class="stat-title">DB Cluster Leader</div>
+                    <div class="stat-value text-primary">${leaderId}</div>
                 </div>
-                <div class="text-sm opacity-70">
-                    Last sync: ${new Date().toLocaleTimeString()}
+                <div class="stat-card">
+                    <div class="stat-title">Federated Role</div>
+                    <div class="stat-value ${isFederatedLeader ? 'text-success' : 'text-warning'}">
+                        ${isFederatedLeader ? 'LEADER' : 'FOLLOWER'}
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Raft State</div>
+                    <div class="stat-value">${data.raftState || 'Unknown'}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-title">Raft Term</div>
+                    <div class="stat-value">${data.raftTerm || 0}</div>
                 </div>
             </div>
         `;
 
+        // Managed Nodes Table
         const nodesTbody = document.getElementById('federated-managed-nodes-tbody');
-        nodesTbody.innerHTML = '';
-        if (data.nodes) {
-            data.nodes.forEach(node => {
+        if (nodesTbody) {
+            nodesTbody.innerHTML = '';
+            if (data.nodes) {
+                data.nodes.forEach(node => {
+                    const tr = document.createElement('tr');
+                    const isLeader = node.id === data.leaderId;
+                    const metrics = node.metrics || {};
+                    const cpu = (metrics.cpuUsage !== undefined) ? metrics.cpuUsage + '%' : '0%';
+                    const ram = (metrics.ramUsage !== undefined) ? metrics.ramUsage + '%' : '0%';
+                    const disk = (metrics.diskUsage !== undefined) ? metrics.diskUsage + '%' : '0%';
+                    const lastSeen = node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A';
+
+                    tr.innerHTML = `
+                        <td>
+                            ${node.id || 'N/A'} 
+                            ${isLeader ? '<span class="badge badge-warning" title="Leader" style="font-size: 10px; margin-left: 5px;">LEADER</span>' : ''}
+                        </td>
+                        <td><a href="${node.url}" target="_blank" class="text-primary hover:underline">${node.url}</a></td>
+                        <td><span class="badge badge-${node.status === 'ACTIVE' ? 'success' : 'danger'}">${node.status}</span></td>
+                        <td>${cpu}</td>
+                        <td>${ram}</td>
+                        <td>${disk}</td>
+                        <td>${lastSeen}</td>
+                    `;
+                    nodesTbody.appendChild(tr);
+                });
+            }
+        }
+
+        // Federated Peers Table
+        const serverTbody = document.getElementById('federated-servers-tbody');
+        if (serverTbody) {
+            serverTbody.innerHTML = '';
+            const peers = data.raftPeers || [];
+            const selfId = data.raftSelfId;
+            const selfUrl = data.raftSelfUrl;
+            const raftLeaderId = data.raftLeaderId;
+            const raftLeaderUrl = data.raftLeaderUrl;
+
+            const allPeers = [];
+            if (selfUrl) allPeers.push({ url: selfUrl, id: selfId, isSelf: true });
+
+            if (peers) {
+                peers.forEach(peerUrl => {
+                    const pid = data.raftPeerIds ? data.raftPeerIds[peerUrl] : 'unknown';
+                    allPeers.push({ url: peerUrl, id: pid, isSelf: false });
+                });
+            }
+
+            allPeers.forEach(peer => {
                 const tr = document.createElement('tr');
-                const lastSeen = node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A';
-                const statusClass = node.status === 'ACTIVE' ? 'status-active' : 'status-inactive';
+                const isLeader = (peer.id && peer.id === raftLeaderId) || (peer.url && peer.url === raftLeaderUrl);
+                const state = data.raftPeerStates ? (data.raftPeerStates[peer.url] || 'ACTIVE') : 'ACTIVE';
+
                 tr.innerHTML = `
-                    <td>${node.id}</td>
-                    <td>${node.url}</td>
-                    <td><span class="status-badge ${statusClass}">${node.status}</span></td>
-                    <td>${lastSeen}</td>
+                   <td>${peer.id || '-'} ${peer.isSelf ? '<span class="text-muted">(You)</span>' : ''}</td>
+                   <td><a href="${peer.url}" target="_blank" class="text-primary hover:underline">${peer.url}</a></td>
+                   <td>
+                        <span class="badge badge-${isLeader ? 'warning' : 'info'}">
+                            ${isLeader ? 'LEADER' : 'FOLLOWER'}
+                        </span>
+                   </td>
+                   <td><span class="badge badge-success">${state}</span></td>
                 `;
-                nodesTbody.appendChild(tr);
+                serverTbody.appendChild(tr);
             });
         }
     }

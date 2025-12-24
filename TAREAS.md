@@ -72,6 +72,20 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 
 # Servidor Federado
+
+
+
+- [] El lider de servidor federado funciona como balanceador es decir los driver y el shell o curl se van a conectar al servidor federado
+     y este internamente redirige cada peticion al nodo lider de bases de datos procesa las operaciones y devuelve el resultado
+al cliente (driver, shell, curl)
+El servidor federado debe conversar la sesion de que cliente hace que solicitud para devolver la respuesta correcta al cliente especifico
+de manera que ningun cliente se conecta directamente a la base  de datos.
+
+Tener en cuenta que se va a crear una base de datos en memoria llamada JettraMemoryDB mas adelante 
+
+
+
+
 - [] En el driver la conexion se debe indicar los servidores federados ya sea leyendo el archivo federated.json o pasandolos directamente
 en el codigo del driver para abrir la conexion.
 El driver internamente verifica el lider de los servidores federados e identifica el lider de los nodos de base de datos
@@ -90,7 +104,10 @@ Crea la documentacion en el archivo driver.md
 - [] En el shell añadir la opcion de detener un servidor federado
 - [] En el shell añadir la opcion de remover un servidor federado
 
- la interface web Dashboard del Cluster del servidor federado la columna url es un hipervinculo y colocar el url como un link de manera que lo abra en otra pagina nueva en el navegador al dar click
+
+-  [] No muestra nada en el formulario  Federated de la interface web de jetrra-server y esta duplicado la opcion del menu dos veces
+
+
 
 # Documentacion
 
@@ -106,7 +123,12 @@ y documentarlo
 # ---------------------------------------------------------
 # Completadas
 # ------------------------------------------------------------
+- [x] actualiza la documentacion de todos el proyecto con los ultimos cambios,. y en el proyecto jettra-server en la interface web en el formulario  Federated no se muestra, alli debe mostrar los nodos con sus estatus quien es el nodo lider, y los servidores federados y quien es el servidor federado y la informacion metrixs de cada node
+- [x] Cuando no hay ningun servidor federado activo, no se pemiten realizar operaciones de insercion, eliminacion o actualizacion
+     de ningun tipo sobre el nodo lider de la base de datos, recuerde que los nodos que no son lideres  no deben realizar estas operaciones
+     por lo tanto  se debe indicar que no hay un servidor federado lider y no se pueden realizar operaciones.
 
+- [x] La interface web Dashboard del Cluster del servidor federado la columna url es un hipervinculo y colocar el url como un link de manera que lo abra en otra pagina nueva en el navegador al dar click
 - [x] Permite reiniciar los servidores 
 - [x] Garantiza la replicacion de la base de datos indices y reglas a los nodos
 
