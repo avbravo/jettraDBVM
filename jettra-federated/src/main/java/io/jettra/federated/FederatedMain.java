@@ -18,6 +18,18 @@ public class FederatedMain {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     public static void main(String[] args) {
+        // Check for -sleep argument (used for hot-reloads)
+        for (int i = 0; i < args.length; i++) {
+            if ("-sleep".equals(args[i]) && i + 1 < args.length) {
+                try {
+                    long ms = Long.parseLong(args[i + 1]);
+                    LOGGER.info("Sleeping for " + ms + "ms before startup...");
+                    Thread.sleep(ms);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
         int port = 9000; // Default federated port
         String nodeId = null; 
         boolean bootstrap = false;
@@ -50,20 +62,29 @@ public class FederatedMain {
         }
 
         // 2. Args override
+        int positionalIndex = 0;
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-bootstrap")) {
                 bootstrap = true;
-            } else if (i == 0) {
+                continue;
+            } else if (args[i].equals("-sleep")) {
+                i++; // Skip sleep value
+                continue;
+            }
+
+            // Use positionalIndex for non-flag arguments
+            if (positionalIndex == 0) {
                 try {
                     port = Integer.parseInt(args[i]);
                 } catch (NumberFormatException e) {
                     LOGGER.warning("Invalid port arg, using " + port);
                 }
-            } else if (i == 1) {
+            } else if (positionalIndex == 1) {
                 nodeId = args[i];
-            } else if (i >= 2) {
+            } else if (positionalIndex >= 2) {
                  federatedServers.add(args[i]);
             }
+            positionalIndex++;
         }
 
         if (nodeId == null) {

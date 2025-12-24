@@ -17,6 +17,18 @@ public class Main {
     private static io.jettra.core.Engine engine;
 
     public static void main(String[] args) {
+        // Check for -sleep argument (used for hot-reloads)
+        for (int i = 0; i < args.length; i++) {
+            if ("-sleep".equals(args[i]) && i + 1 < args.length) {
+                try {
+                    long ms = Long.parseLong(args[i + 1]);
+                    System.out.println("Sleeping for " + ms + "ms before startup...");
+                    Thread.sleep(ms);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
         System.out.println("""
                _      _   _            ____  ______      ____  __
               | |    | | | |          |  _ \\|  _ \\ \\    / /  \\/  |
@@ -34,8 +46,14 @@ public class Main {
             // Load custom config.json
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             String configPath = "config.json";
-            if (args.length > 0) {
-                configPath = args[0];
+            // Find the first argument that is NOT a flag
+            for (int i = 0; i < args.length; i++) {
+                if (args[i].startsWith("-")) {
+                    if (args[i].equals("-sleep")) i++; // Skip the sleep value
+                    continue;
+                }
+                configPath = args[i];
+                break;
             }
             java.io.File configFile = new java.io.File(configPath);
             LOGGER.info("Using config file: " + configFile.getAbsolutePath());
@@ -68,12 +86,10 @@ public class Main {
 
             // Initialize Engine with the Map config and File reference
             engine = new io.jettra.core.Engine(jettraConfig, configFile);
-            engine.start();
-
             int port = (int) jettraConfig.getOrDefault("Port", 8080);
             String host = (String) jettraConfig.getOrDefault("Host", "0.0.0.0");
 
-            // Build WebServer
+            // Build and Start WebServer
             WebServer server = WebServer.builder()
                     .port(port)
                     .host(host)
@@ -82,6 +98,9 @@ public class Main {
                     .start();
 
             LOGGER.info("Server started at http://" + host + ":" + server.port());
+            
+            // Start Engine (which starts Raft/Federated registration) AFTER server is ready
+            engine.start();
         } catch (Exception e) {
             LOGGER.severe("Failed to start server: " + e.getMessage());
             e.printStackTrace();

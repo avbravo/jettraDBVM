@@ -1,9 +1,4 @@
-cd "$(dirname "$0")/.." || exit
-echo "compilando proyecto"
-
-mvn package -DskipTests
-
-echo "ejecutando "
+echo "Iniciando servidor JettraDB..."
 
 while true; do
   # Intentar encontrar el JAR autodetectando el nombre (jettraDBVM o jettraFederated)
@@ -20,7 +15,7 @@ while true; do
 
   if [ -n "$JAR_FILE" ]; then
     echo "$(date '+%Y-%m-%d %H:%M:%S') - Iniciando $JAR_FILE..."
-    java -XX:+UseCompactObjectHeaders -jar "$JAR_FILE" "$@"
+    JETTRAMODE=SUPERVISED java -XX:+UseCompactObjectHeaders -Djettra.mode=supervised -jar "$JAR_FILE" "$@"
     EXIT_CODE=$?
   else
     echo "Error: No se encontró el archivo JAR en target/ ni en el directorio actual."

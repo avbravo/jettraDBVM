@@ -7,140 +7,80 @@ El Servidor Federado ("Federated Server") es un componente de arquitectura avanz
 El objetivo principal del Servidor Federado es desacoplar la lógica de elección de líder y gestión de topología de los nodos de datos individuales, proporcionando una capa de orquestación más robusta y controlable.
 
 
-# Algoritmo de Consenso
+## Gestión Dinámica de Servidores Federados
 
+JettraDB soporta la expansión y contracción dinámica del cluster de servidores federados sin necesidad de detenciones manuales complejas. La red utiliza un mecanismo de **Auto-Descubrimiento y Propagación de Configuración**.
 
+### Adición de un Nuevo Servidor (Ejemplo fed-4)
 
-Servidor Federado Implementando ajustes para agregar nuevos servidores
+Supongamos que tenemos una red activa con tres servidores (`fed-1`, `fed-2`, `fed-3`) configurados en los puertos 9000, 9001 y 9002. Para añadir un cuarto servidor (`fed-4`) en el puerto 9003:
 
-Se cuentan con tres servidores federados puede ver la configuracion del archivo federated.json
-el primero  (fed-1)
+1.  **Configuración Inicial del Nuevo Nodo**: El nuevo servidor `fed-4` se inicia con una configuración mínima de peers que incluya al menos un servidor activo conocido:
+    ```json
+    {
+        "NodeID": "fed-4",
+        "Port": 9003,
+        "FederatedServers": [
+            "http://localhost:9000",
+            "http://localhost:9003"
+        ]
+    }
+    ```
+2.  **Solicitud de Unión (Join Cluster)**: Al arrancar, `fed-4` contacta a `fed-1` enviando una solicitud de unión.
+3.  **Redirección al Líder**: Si `fed-1` no es el líder actual del cluster federado, responderá con una redirección indicando quién es el líder actual. `fed-4` realizará entonces la petición al líder.
+4.  **Validación y Registro en el Líder**: El Líder Federado recibe la URL de `fed-4`, verifica que no exista en su lista actual e inserta el nuevo nodo en su archivo `federated.json` local.
+5.  **Propagación Global (Sync)**: El líder propaga la nueva lista completa de servidores (`fed-1, fed-2, fed-3, fed-4`) a todos los seguidores mediante los latidos (*heartbeats*) de Raft.
+6.  **Hot-Reload**: Cada nodo receptor (seguidores y el nuevo integrante) detecta el cambio en la lista de pares, actualiza su archivo `federated.json` en caliente y reinicia sus conexiones internas para reconocer al nuevo miembro.
+
+### Eliminación de un Servidor
+
+El proceso de eliminación sigue una lógica inversa:
+*   Se solicita al Líder Federado la eliminación de un peer mediante el comando `federated remove <url>`.
+*   El líder actualiza su configuración local, excluyendo la URL indicada.
+*   La nueva lista reducida se propaga automáticamente a todos los demás servidores.
+*   Los servidores restantes actualizan su configuración local y dejan de intentar conectar con el nodo eliminado.
+
+### Sincronización en Nodos de Base de Datos
+
+Los nodos de base de datos también participan en la red de sincronización para asegurar que siempre puedan contactar con los servidores federados disponibles, incluso si la topología de estos últimos cambia.
+
+#### Ejemplo de Flujo de Sincronización:
+
+Supongamos que un nodo de base de datos (`node-1`) tiene en su `config.json`:
+```json
 {
-    "Mode": "federated",
-    "Port": 9000,
-    "NodeID": "fed-1",
-     "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002"
-  ]
-}
-
-el segundo (fed-2)
-{
-    "Mode": "federated",
-    "Port": 9001,
-    "NodeID": "fed-2",
-     "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002"
-  ]
-}
-
-el tercero(fed-3)
-{
-    "Mode": "federated",
-    "Port": 9002,
-    "NodeID": "fed-3",
-     "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002"
-  ]
-}
-
-puede observar que todos los servidores estan activos y poseen la misma configuracion en  "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002"
-  ]
-  
- 
- Cuando se va a crear un nuevo servidor llamado fed-4 se cuenta con esta informacion
- (fed-4)
- {
-    "Mode": "federated",
-    "Port": 9004,
-    "NodeID": "fed-4",
-     "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9004"
-  ]
-}
-
-puede observar que el la configuracion  
-"FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9004"
-    
- Contiene al menos uno de los servidores federados en este caso "http://localhost:9000", que corresponde a fed-1
- y contiene su propio  "http://localhost:9004" pero ningun otro servidor fed-1, fed-2, fed-3 lo contienen ya que es un nuevo servidor.
- La forma de proceder en estos casos con nuevos servidores federados seria la siguiente.
- 
-1. Se ejecuta el nuevo servidor federado fed-4, este se conecta por almenos uno de los servidores federados a la red. (   "http://localhost:9000")
-2. Se identifica cual es el servidor federado lider de la red en este ejemplo es fed-1.
-3. El lider obtiene el url del nuevo servidor federado fed-4 ("http://localhost:9004")
-4. El lider lo compara con su archivo federated.json
-{
-    "Mode": "federated",
-    "Port": 9000,
-    "NodeID": "fed-1",
-     "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002"
-  ]
-}
-
-al no estar incluido en "FederatedServers":, lo añade localmente quedando
-
-{
-    "Mode": "federated",
-    "Port": 9000,
-    "NodeID": "fed-1",
-     "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002",
-     "http://localhost:9003"
-  ]
-}
-
-Ahora esta configuracion es enviada a todos los nodos de la red federada (fed-2, fed-3) e incluso el nuevo fed-4.
- "FederatedServers": [
-    "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002",
-     "http://localhost:9003"
-  ]
-  
- Cada nodo toma en local esta configuracion y actualiza el archivo federated.json de manera que todos los nodos y el lider contengan la misma informacion
+  "NodeID": "node-1",
   "FederatedServers": [
     "http://localhost:9000",
-    "http://localhost:9001",
-    "http://localhost:9002",
-     "http://localhost:9003"
+    "http://localhost:9001"
   ]
-  
-  Una vez distribuido los nodos realizan un proceso de Hot-Reloaded, es decir se reinician en caliente para obtener la configuracion del nuevo servidor.
-  
-  El lider se mantiene como lider hasta que ocurra un evento que cambie la situacion.
-  
-  # Eliminacion del un servidor Federado
-  
-  Este mecanismo de propagacion ocurre igual cuando se elimina un servidor federado el lider lo elimina de su configuracion en federated.json y distribuye a todos los nodos federados y estos hacen el hot-Reloaded
-  
-  # Arranque de un servidor Federado
-  
-  Para mantener la sincronizacion en todo momento y evitar que un usuario elimine de su configuracion local federated.json o añada uno nuevo sin la autorizacion cuando inicia cada servidor federado
-envia la informacion de  "FederatedServers": al lider este verifica con la configuracion local y si no se trata de un nuevo servidor federado ni de uno que fue removido, el servidor federado envia la configuracion al servidor federado este actualiza en local el archivo federated.json, y ocurre el Hot-Realoded.
-Esto permite mantener la coherencia de la red de servidores federados.
+}
+```
 
+Si el cluster federado se expande para incluir un tercer servidor (`http://localhost:9002`), el proceso es el siguiente:
 
+1.  **Reporte**: En el siguiente latido (*heartbeat*), `node-1` envía su lista de 2 servidores al servidor federado.
+2.  **Verificación**: El servidor federado detecta que la lista de `node-1` es incompleta (faltan servidores).
+3.  **Respuesta Autorativa**: El servidor federado devuelve la lista completa de 3 servidores en la respuesta de registro/heartbeat.
+4.  **Persistencia y Reinicio**: 
+    *   `node-1` recibe la lista y actualiza su archivo `config.json` local.
+    *   `node-1` gatilla un **Hot-Reloaded** (reinicio automático con código de salida 3).
+    *   Al reiniciarse, `node-1` ya conoce a los 3 servidores federados y tiene mayor redundancia.
 
+Este mecanismo garantiza la coherencia total de la infraestructura sin que el administrador tenga que editar manualmente el archivo `config.json` de cada nodo de datos cuando la capa federada cambia.
 
-Sus funciones principales son:
+#### Estrategias de Hot-Reload por Entorno:
+
+El nodo de base de datos implementa una lógica inteligente de reinicio según dónde se esté ejecutando:
+
+*   **Script de Supervisión (`run.sh`)**: El script incluido en el proyecto contiene un bucle `while true`. Si el nodo detecta que está corriendo bajo este script (vía la variable `JETTRAMODE=SUPERVISED`), sale con el código `3` y el script lo reinicia automáticamente tras 2 segundos.
+*   **Contenedores (Docker / Kubernetes)**: El nodo detecta el entorno de contenedor y sale con el código `3`. Se espera que la política de reinicio del orquestador (`restart: always` en Docker o `RestartPolicy` en K8s) levante la nueva instancia.
+*   **Modo Standalone (JAR)**: Si se ejecuta manualmente con `java -jar` sin supervisor, el nodo intenta realizar un **Self-Relaunch** (auto-lanzamiento) de un nuevo proceso idéntico antes de cerrar el actual.
+*   **Imagen Nativa**: Se comporta igual que en contenedores, saliendo con código `3` para que un supervisor externo gestione el ciclo de vida.
+
+---
+
+## Funciones Principales
 1.  **Enrutador Interno**: Dirige a los clientes y nodos hacia el Líder actual.
 2.  **Consenso y Elección**: Utiliza un algoritmo de consenso (Raft) entre servidores federados para mantener una alta disponibilidad del servicio de gestión.
 3.  **Gestión de Nodos**: Supervisa la salud de los nodos de base de datos (heartbeats) y asigna roles (Líder/Seguidor).

@@ -205,6 +205,30 @@ const App = {
         this.updateUsersMenuVisibility(); // Update menu visibility after logout
     },
 
+    async restartInternalNode() {
+        if (!confirm('¿Está seguro de que desea REINICIAR este nodo?')) return;
+
+        this.showNotification('Iniciando reinicio del nodo...', 'warning');
+        try {
+            const res = await fetch('/api/cluster/restart', {
+                method: 'POST',
+                headers: { 'Authorization': this.state.token }
+            });
+            if (res.ok) {
+                this.showNotification('Comando de reinicio aceptado. El servidor se reiniciará en breve.', 'success');
+                // Optional: Logout or redirect after some time
+                setTimeout(() => {
+                    window.location.reload();
+                }, 5000);
+            } else {
+                const text = await res.text();
+                this.showNotification('Error al reiniciar: ' + text, 'error');
+            }
+        } catch (e) {
+            this.showNotification('Error de conexión al solicitar reinicio', 'error');
+        }
+    },
+
     showLogin() {
         document.getElementById('login-view').classList.add('active');
         document.getElementById('dashboard-view').classList.remove('active');

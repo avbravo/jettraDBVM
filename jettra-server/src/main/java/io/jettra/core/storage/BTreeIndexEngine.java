@@ -29,6 +29,11 @@ public class BTreeIndexEngine implements IndexEngine {
         this.dataDirectory = dataDirectory;
     }
 
+    @Override
+    public void reload() {
+        loadIndexes();
+    }
+
     public void loadIndexes() {
         // In a real implementation, we would scan all DBs/Cols and load _indexes.jdb
         // For simplicity/parity with Go prototype, we can lazily load or scan here.

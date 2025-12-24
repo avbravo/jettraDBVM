@@ -65,6 +65,7 @@ public class RaftNode {
     private final ObjectMapper mapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(java.time.Duration.ofMillis(2000))
+            .followRedirects(HttpClient.Redirect.ALWAYS)
             .build();
 
     // Simplified timeouts (in ms)
@@ -210,9 +211,10 @@ public class RaftNode {
 
         String fedUrl = fedServers.get(index);
         try {
-            Map<String, String> data = new HashMap<>();
+            Map<String, Object> data = new HashMap<>();
             data.put("nodeId", nodeId);
             data.put("url", "http://localhost:" + configManager.get("Port"));
+            data.put("FederatedServers", fedServers);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(fedUrl + "/federated/register"))
@@ -243,8 +245,24 @@ public class RaftNode {
 
     private void processFederatedResponse(String body) {
         try {
+            @SuppressWarnings("unchecked")
             Map<String, Object> status = mapper.readValue(body, Map.class);
+
+            // Sync FederatedServers list if provided
+            if (status.containsKey("FederatedServers")) {
+                @SuppressWarnings("unchecked")
+                List<String> updatedFedServers = (List<String>) status.get("FederatedServers");
+                if (updatedFedServers != null) {
+                    LOGGER.info("Federated server sent updated FederatedServers list. Updating configuration and restarting.");
+                    configManager.set("FederatedServers", updatedFedServers);
+                    // Hot-reload: Use specialized manager to handle restarts in different environments
+                    io.jettra.core.util.HotReloadManager.restart();
+                    return; // Stop further processing as we are shutting down
+                }
+            }
+
             String fedLeaderId = (String) status.get("leaderId");
+            @SuppressWarnings("unchecked")
             List<Map<String, Object>> nodes = (List<Map<String, Object>>) status.get("nodes");
 
             if (fedLeaderId != null) {
@@ -284,12 +302,22 @@ public class RaftNode {
                     doc.put("role", id.equals(fedLeaderId) ? "LEADER" : "FOLLOWER");
 
                     try {
-                        if (store.findByID("_system", "_clusternodes", id) != null) {
+                        List<Map<String, Object>> existingNodes = store.query("_system", "_clusternodes", 
+                            Map.of("url", url), 1, 0);
+                        
+                        if (!existingNodes.isEmpty()) {
                             store.update("_system", "_clusternodes", id, doc);
                         } else {
                             store.save("_system", "_clusternodes", doc);
+                            // It's a NEW node discovered via federated server. 
+                            // If we are leader, we need to bring it into our Raft loop and sync state.
+                            if (state == State.LEADER) {
+                                LOGGER.info("Discovering new node via Federated Server: " + url + " (ID: " + id + "). Triggering registration.");
+                                registerNode(url, id, null); 
+                            }
                         }
                     } catch (Exception e) {
+                        LOGGER.warning("Error syncing node " + id + " from federated: " + e.getMessage());
                     }
                 }
                 loadPeersFromStore();
@@ -457,8 +485,8 @@ public class RaftNode {
                                 if (json.contains("\"voteGranted\":true") || json.contains("\"voteGranted\": true")) {
                                     int v = votes.incrementAndGet();
                                     if (v > (currentPeers.size() + 1) / 2) {
-                                        if (isFederatedMode() && !federatedSyncStatus) {
-                                            LOGGER.warning("Majority reached but federated sync not yet achieved. Postponing leadership.");
+                                        if (isFederatedMode() && !federatedSyncStatus && !configManager.isBootstrap()) {
+                                            LOGGER.warning("Majority reached but federated sync not yet achieved. Postponing leadership (Node is not Bootstrap).");
                                         } else {
                                             becomeLeader();
                                         }
@@ -978,7 +1006,11 @@ public class RaftNode {
 
     // --- Cluster Management API ---
 
-    public void registerNode(String url, String description) {
+    public void registerNode(String url) throws Exception {
+        registerNode(url, null, null);
+    }
+
+    public void registerNode(String url, String preferredId, String description) throws Exception {
         synchronized (this) {
             if (state != State.LEADER) {
                 throw new IllegalStateException("Not Leader");
@@ -1018,9 +1050,9 @@ public class RaftNode {
             }
 
             // New Node
-            String nodeId = "node-" + Math.abs(url.hashCode());
+            String nodeIdToUse = (preferredId != null) ? preferredId : "node-" + Math.abs(url.hashCode());
             Map<String, Object> nodeDoc = new HashMap<>();
-            nodeDoc.put("_id", nodeId);
+            nodeDoc.put("_id", nodeIdToUse);
             nodeDoc.put("url", url);
             nodeDoc.put("role", "FOLLOWER");
             nodeDoc.put("status", "ACTIVE");
@@ -1212,9 +1244,20 @@ public class RaftNode {
             String dataDir = (String) configManager.get("DataDir");
             if (dataDir == null)
                 dataDir = "data";
+            
+            File dataDirFile = new File(dataDir);
+            if (!dataDirFile.exists()) {
+                LOGGER.severe("Data directory does not exist: " + dataDirFile.getAbsolutePath());
+                return null;
+            }
+
             File snapshotFile = File.createTempFile("snapshot", ".zip");
             List<String> excludes = List.of("federated.json", "config.json", "raft", "temp", "tmp");
-            io.jettra.core.util.ZipUtils.zipDirectory(new File(dataDir).toPath(), snapshotFile.toPath(), excludes);
+            
+            LOGGER.info("Zipping data directory: " + dataDirFile.getAbsolutePath() + " to " + snapshotFile.getAbsolutePath());
+            io.jettra.core.util.ZipUtils.zipDirectory(dataDirFile.toPath(), snapshotFile.toPath(), excludes);
+            
+            LOGGER.info("Snapshot compression complete. Final size: " + snapshotFile.length() + " bytes.");
             return snapshotFile;
         } catch (IOException e) {
             LOGGER.severe("Failed to create snapshot: " + e.getMessage());
@@ -1238,9 +1281,12 @@ public class RaftNode {
 
         try {
             store.reload();
+            if (indexer != null) {
+                indexer.reload();
+            }
             loadPeersFromStore(); // Refresh peers from new data
         } catch (Exception e) {
-            LOGGER.severe("Failed to reload store after snapshot: " + e.getMessage());
+            LOGGER.severe("Failed to reload store/indexer after snapshot: " + e.getMessage());
         }
         LOGGER.info("Snapshot installed successfully.");
         this.lastHeartbeatTime = System.currentTimeMillis();

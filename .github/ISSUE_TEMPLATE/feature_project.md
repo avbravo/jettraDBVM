@@ -56,6 +56,7 @@ Implementation and tracking of all tasks from the `TAREAS.md` file, organized by
 - [x] Permitir login en modo federado.
 - [x] Implementar redirecciones automáticas al nodo líder desde el proxy.
 - [x] Documentar que sin servidor federado los nodos operan en modo simple (solo lectura).
+- [x] Implementar sincronización de `FederatedServers` en nodos de base de datos con Hot-Reload automático al detectar cambios.
 - [x] Actualizar `shell.md` con ejemplos de todos los comandos.
 - [x] Usar diálogos Flowbite para confirmaciones (índices, backups, borrar DB).
 - [x] Crear e integrar la interfaz web del servidor federado.
@@ -76,7 +77,7 @@ Implementation and tracking of all tasks from the `TAREAS.md` file, organized by
 ### 🔧 Automation & Startup
 - [ ] Crear `config.json` automáticamente si no existe.
 - [ ] Crear directorio `data` y base de datos `_system` al iniciar.
-- [ ] Implementar un loop de reinicio automático en `run.sh` (exit code 3).
+- [x] Implementar un loop de reinicio automático en `run.sh` (exit code 3).
 - [ ] Verificar estado de consistencia multicapa al arrancar.
 
 **Describe alternatives you've considered**

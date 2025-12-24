@@ -16,6 +16,8 @@ public interface IndexEngine {
 
     void deleteIndex(String database, String collection, List<String> fields) throws Exception;
 
+    void reload() throws Exception;
+
     record IndexDefinition(List<String> fields, boolean unique, boolean sequential) {
     }
 }

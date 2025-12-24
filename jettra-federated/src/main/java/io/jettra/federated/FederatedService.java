@@ -12,6 +12,7 @@ import io.helidon.webserver.http.HttpRules;
 import io.helidon.webserver.http.HttpService;
 import io.helidon.webserver.http.ServerRequest;
 import io.helidon.webserver.http.ServerResponse;
+import io.jettra.federated.util.HotReloadManager;
 
 public class FederatedService implements HttpService {
     private final FederatedEngine engine;
@@ -65,10 +66,12 @@ public class FederatedService implements HttpService {
         rules.get("/node-config/{nodeId}", this::getNodeConfig);
         rules.post("/node-config/{nodeId}", this::saveNodeConfig);
         rules.post("/node/stop/{nodeId}", this::handleStopNode);
+        rules.post("/node/restart/{nodeId}", this::handleRestartNode);
         rules.post("/node/remove/{nodeId}", this::handleRemoveNode);
         rules.get("/node-leader", this::getNodeLeader);
         rules.post("/raft/removePeer", this::handleRemovePeer);
         rules.post("/raft/addPeer", this::handleAddPeer);
+        rules.post("/restart", this::handleRestart);
         rules.post("/stop", (req, res) -> this.handleStopFederated(req, res));
     }
 
@@ -179,11 +182,31 @@ public class FederatedService implements HttpService {
 
     private void register(ServerRequest req, ServerResponse res) {
         try {
+            @SuppressWarnings("unchecked")
             Map<String, Object> data = mapper.readValue(req.content().as(byte[].class), Map.class);
             String id = (String) data.get("nodeId");
             String url = (String) data.get("url");
+            @SuppressWarnings("unchecked")
+            List<String> clientFedServers = (List<String>) data.get("FederatedServers");
+            
+            if (!raftNode.isLeader()) {
+                String leaderUrl = raftNode.getLeaderUrl();
+                if (leaderUrl != null) {
+                    res.status(307).header("Location", leaderUrl + "/federated/register").send();
+                    return;
+                }
+            }
+            
             engine.registerNode(id, url);
-            res.send(mapper.writeValueAsString(engine.getClusterStatus()));
+            
+            Map<String, Object> status = engine.getClusterStatus();
+            if (clientFedServers != null && raftNode != null) {
+                List<String> serverFedServers = raftNode.getPeers();
+                if (!serverFedServers.equals(clientFedServers)) {
+                    status.put("FederatedServers", serverFedServers);
+                }
+            }
+            res.send(mapper.writeValueAsString(status));
         } catch (Exception e) {
             res.status(400).send(e.getMessage());
         }
@@ -192,8 +215,37 @@ public class FederatedService implements HttpService {
     private void heartbeat(ServerRequest req, ServerResponse res) {
         try {
             String nodeId = req.query().get("nodeId");
+            if (!raftNode.isLeader()) {
+                String leaderUrl = raftNode.getLeaderUrl();
+                if (leaderUrl != null) {
+                    res.status(307).header("Location", leaderUrl + "/federated/heartbeat?nodeId=" + nodeId).send();
+                    return;
+                }
+            }
+            
             engine.heartbeat(nodeId);
-            res.send(mapper.writeValueAsString(engine.getClusterStatus()));
+            
+            Map<String, Object> status = engine.getClusterStatus();
+            
+            // Check if client sent FederatedServers in body for synchronization
+            if (req.headers().contentLength().orElse(0L) > 0) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+                    @SuppressWarnings("unchecked")
+                    List<String> clientFedServers = (List<String>) data.get("FederatedServers");
+                    if (clientFedServers != null && raftNode != null) {
+                        List<String> serverFedServers = raftNode.getPeers();
+                        if (!serverFedServers.equals(clientFedServers)) {
+                            status.put("FederatedServers", serverFedServers);
+                        }
+                    }
+                } catch (Exception e) {
+                    // Ignore body errors in heartbeat
+                }
+            }
+            
+            res.send(mapper.writeValueAsString(status));
         } catch (Exception e) {
             res.status(400).send(e.getMessage());
         }
@@ -228,7 +280,7 @@ public class FederatedService implements HttpService {
                 new Thread(() -> {
                     try {
                         Thread.sleep(1000);
-                        System.exit(3);
+                        HotReloadManager.restart();
                     } catch (Exception e) {}
                 }).start();
             }
@@ -321,10 +373,31 @@ public class FederatedService implements HttpService {
         res.send(Map.of("status", "stop_sent").toString());
     }
 
+    private void handleRestartNode(ServerRequest req, ServerResponse res) {
+        String nodeId = req.path().pathParameters().get("nodeId");
+        engine.restartNode(nodeId);
+        res.send(Map.of("status", "restart_sent").toString());
+    }
+
     private void handleRemoveNode(ServerRequest req, ServerResponse res) {
         String nodeId = req.path().pathParameters().get("nodeId");
         engine.removeNode(nodeId);
         res.send(Map.of("status", "removed").toString());
+    }
+
+    private void handleRestart(ServerRequest req, ServerResponse res) {
+        try {
+            res.send(mapper.writeValueAsString(Map.of("status", "restarting")));
+            new Thread(() -> {
+                try {
+                    Thread.sleep(1000);
+                    HotReloadManager.restart();
+                } catch (Exception e) {
+                }
+            }).start();
+        } catch (Exception e) {
+            res.status(500).send(e.getMessage());
+        }
     }
 
     private void handleStopFederated(ServerRequest req, ServerResponse res) {

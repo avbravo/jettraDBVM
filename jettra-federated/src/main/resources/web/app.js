@@ -237,6 +237,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     saveConfigBtn.addEventListener('click', () => handleSave(false));
 
+    const restartServerBtn = document.getElementById('restart-server-btn');
+    if (restartServerBtn) {
+        restartServerBtn.addEventListener('click', () => {
+            showConfirmGeneric('¿Está seguro de que desea <span class="text-warning font-bold">reiniciar</span> el servidor federado?', async () => {
+                try {
+                    const res = await fetch('/federated/restart', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('fed_token') }
+                    });
+                    if (res.ok) {
+                        showSuccess('Comando de reinicio enviado. El servidor estará disponible en unos segundos.', false);
+                        setTimeout(() => window.location.reload(), 5000);
+                    } else {
+                        showConfigMsg('Error al reiniciar: ' + await res.text(), 'error');
+                    }
+                } catch (error) {
+                    showConfigMsg('Error de conexión', 'error');
+                }
+            });
+        });
+    }
+
     async function handleSave(restart) {
         const configText = configEditorArea.value;
         try {
@@ -339,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
             row.innerHTML = `
                 <td><span class="status-dot ${node.status}"></span> ${node.status}</td>
                 <td class="code">${node.id} ${isLeader ? '<i class="fas fa-crown text-warning" title="Leader"></i>' : ''}</td>
-                <td>${node.url}</td>
+                <td><a href="${node.url}" target="_blank" class="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">${node.url}</a></td>
                 <td><span class="node-role">${isLeader ? 'LEADER' : 'FOLLOWER'}</span></td>
                 <td>${cpuUsage}</td>
                 <td>${ramUsage}</td>
@@ -353,6 +375,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 title="${isActive ? 'Detener Nodo' : 'Nodo ya inactivo'}"
                                 ${!isActive ? 'disabled' : ''}>
                             <i class="fas fa-stop-circle"></i>
+                        </button>
+                        <button class="btn-icon text-primary ${!isActive ? 'opacity-50 cursor-not-allowed' : ''}" 
+                                onclick="${isActive ? `restartNode('${node.id}')` : ''}" 
+                                title="${isActive ? 'Reiniciar Nodo' : 'Nodo inactivo'}"
+                                ${!isActive ? 'disabled' : ''}>
+                            <i class="fas fa-redo-alt"></i>
                         </button>
                         <button class="btn-icon text-danger" onclick="removeNode('${node.id}')" title="Remover del Cluster">
                             <i class="fas fa-trash-alt"></i>
@@ -394,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="flex justify-between items-start">
                     <div>
                         <span class="text-sm font-semibold text-gray-900 dark:text-white">${peerId} ${isSelf ? '<span class="text-[10px] text-primary ml-1">(Tú)</span>' : ''}</span>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">${peerUrl}</div>
+                        <div class="text-xs text-indigo-400 hover:text-indigo-300 hover:underline transition-colors mt-1"><a href="${peerUrl}" target="_blank">${peerUrl}</a></div>
                     </div>
                     <span class="px-2 py-0.5 text-[10px] font-medium rounded-full ${stateClass}">
                         ${stateLabel}
@@ -421,6 +449,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (e) {
                 console.error('Error sending stop command:', e);
+            }
+        });
+    };
+
+    window.restartNode = async (nodeId) => {
+        const msg = `¿Está seguro de que desea <span class="text-primary font-bold">REINICIAR</span> el nodo <span class="font-bold text-primary">${nodeId}</span>?`;
+        showConfirmGeneric(msg, async () => {
+            try {
+                const res = await fetch(`/federated/node/restart/${nodeId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('fed_token') }
+                });
+                if (res.ok) {
+                    showSuccess(`Comando de reinicio enviado al nodo ${nodeId}`);
+                    updateStatus();
+                }
+            } catch (e) {
+                console.error('Error sending restart command:', e);
             }
         });
     };

@@ -322,6 +322,7 @@ public class Shell {
         System.out.println("  federated node-leader  Show DB leader info");
         System.out.println("  federated add <url>    Add a federated server to the cluster");
         System.out.println("  federated stop <url>   Stop a federated server");
+        System.out.println("  federated restart <url> Restart a federated server");
         System.out.println("  federated remove <url> Remove a federated server from the cluster");
         System.out.println("  cls / clear            Clear screen");
         System.out.println("  help                   Show this help");
@@ -999,6 +1000,9 @@ public class Shell {
                 case "remove":
                     handleFederatedRemove(subArg);
                     break;
+                case "restart":
+                    handleFederatedRestart(subArg);
+                    break;
                 case "add":
                     handleFederatedAdd(subArg);
                     break;
@@ -1172,6 +1176,36 @@ public class Shell {
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         if (response.statusCode() == 200) {
             System.out.println("Stop command sent successfully.");
+        } else {
+            System.out.println("Error (" + response.statusCode() + "): " + response.body());
+        }
+    }
+
+    private static void handleFederatedRestart(String targetUrl) throws Exception {
+        if (targetUrl.isEmpty()) {
+            targetUrl = baseUrl;
+        } else if (!targetUrl.startsWith("http")) {
+            targetUrl = "http://" + targetUrl;
+        }
+
+        String confirm = reader.readLine("Are you sure you want to RESTART federated server at " + targetUrl + "? (y/n): ").trim().toLowerCase();
+        if (!confirm.equals("y") && !confirm.equals("yes")) {
+            System.out.println("Canceled.");
+            return;
+        }
+
+        String restartUrl = targetUrl.endsWith("/federated/restart") ? targetUrl : 
+                         (targetUrl.endsWith("/") ? targetUrl + "federated/restart" : targetUrl + "/federated/restart");
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(restartUrl))
+                .header("Authorization", token != null ? token : "")
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            System.out.println("Restart command sent successfully.");
         } else {
             System.out.println("Error (" + response.statusCode() + "): " + response.body());
         }

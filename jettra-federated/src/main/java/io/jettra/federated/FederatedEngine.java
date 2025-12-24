@@ -254,6 +254,18 @@ public class FederatedEngine {
         }
     }
 
+    public void restartNode(String nodeId) {
+        Map<String, Object> node = dbNodes.get(nodeId);
+        if (node != null) {
+            String url = (String) node.get("url");
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(url + "/api/cluster/restart"))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build();
+            httpClient.sendAsync(req, HttpResponse.BodyHandlers.discarding());
+        }
+    }
+
     public void removeNode(String nodeId) {
         if (dbNodes.remove(nodeId) != null) {
             if (nodeId.equals(currentLeaderId)) {

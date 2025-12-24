@@ -544,7 +544,7 @@ public class WebServices {
             // Enforce leader for registration too
             checkLeader(res);
 
-            engine.getRaftNode().registerNode(url, description);
+            engine.getRaftNode().registerNode(url, null, description);
             res.send("Node registered");
         } catch (Exception e) {
             if (!"Not Leader".equals(e.getMessage())) {
@@ -1710,9 +1710,10 @@ public class WebServices {
             new Thread(() -> {
                 try {
                     Thread.sleep(1000);
-                    LOGGER.info("Restart command received. Exiting JVM...");
-                    System.exit(3);
+                    LOGGER.info("Restart command received. Triggering Hot-Reload...");
+                    io.jettra.core.util.HotReloadManager.restart();
                 } catch (Exception e) {
+                    LOGGER.severe("Error during restart: " + e.getMessage());
                 }
             }).start();
         } catch (Exception e) {
@@ -1751,9 +1752,10 @@ public class WebServices {
                 new Thread(() -> {
                     try {
                         Thread.sleep(1000);
-                        LOGGER.info("Config saved with restart. Exiting JVM...");
-                        System.exit(3);
+                        LOGGER.info("Config saved with restart. Triggering Hot-Reload...");
+                        io.jettra.core.util.HotReloadManager.restart();
                     } catch (Exception e) {
+                        LOGGER.severe("Error during restart: " + e.getMessage());
                     }
                 }).start();
             } else {

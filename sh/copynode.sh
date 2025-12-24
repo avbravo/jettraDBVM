@@ -5,81 +5,47 @@ mvn clean package -DskipTests
 
 echo ":::::::::::::::::::::::::::::::::::::::::::::::"
 
-echo "Copiando servidor federado 1"
-echo "Path /home/avbravo/jettradbvmnodes/federated1/"
-rm -f /home/avbravo/jettradbvmnodes/federated1/jettraFederated.jar
-cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated1/jettraFederated.jar
+echo "Copiando servidores federados y base de datos..."
 
-echo "Copiando servidor federado 2"
-echo "Path /home/avbravo/jettradbvmnodes/federated2/"
-rm -f /home/avbravo/jettradbvmnodes/federated2/jettraFederated.jar
-cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated2/jettraFederated.jar
+# Función para copiar JAR y el script de ejecución robusto
+deploy_node() {
+    DEST=$1
+    JAR_SOURCE=$2
+    JAR_NAME=$3
+    
+    echo "Deploying to $DEST..."
+    mkdir -p "$DEST"
+    rm -f "$DEST/$JAR_NAME"
+    cp "$JAR_SOURCE" "$DEST/$JAR_NAME"
+    
+    # Copiar el script run.sh y ajustar permisos
+    cp sh/run.sh "$DEST/run.sh"
+    chmod +x "$DEST/run.sh"
+}
 
-echo "Copiando servidor federado 3"
-echo "Path /home/avbravo/jettradbvmnodes/federated3/"
-rm -f /home/avbravo/jettradbvmnodes/federated3/jettraFederated.jar
-cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated3/jettraFederated.jar
+# Servidores Federados
+deploy_node "/home/avbravo/jettradbvmnodes/federated1" "jettra-federated/target/jettraFederated.jar" "jettraFederated.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/federated2" "jettra-federated/target/jettraFederated.jar" "jettraFederated.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/federated3" "jettra-federated/target/jettraFederated.jar" "jettraFederated.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/federated4" "jettra-federated/target/jettraFederated.jar" "jettraFederated.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/federated5" "jettra-federated/target/jettraFederated.jar" "jettraFederated.jar"
 
-echo "Copiando servidor federado 4"
-echo "Path /home/avbravo/jettradbvmnodes/federated4/"
-rm -f /home/avbravo/jettradbvmnodes/federated4/jettraFederated.jar
-cp jettra-federated/target/jettraFederated.jar /home/avbravo/jettradbvmnodes/federated4/jettraFederated.jar
-echo ":::::::::::::::::::::::::::::::::::::::::::::::"
-
-
-
-
-
-
-
-
-
-
-
-
-
-echo "Copiando jettraDBVM.jar a /node1"
-rm -f /home/avbravo/jettradbvmnodes/node1/jettraDBVM.jar
-cp jettra-server/target/jettraDBVM.jar /home/avbravo/jettradbvmnodes/node1/jettraDBVM.jar
-
-echo "Copiando jettraDBVM.jar a /node2"
-rm -f /home/avbravo/jettradbvmnodes/node2/jettraDBVM.jar
-cp jettra-server/target/jettraDBVM.jar /home/avbravo/jettradbvmnodes/node2/jettraDBVM.jar
-
-echo "Copiando jettraDBVM.jar a /node3"
-rm -f /home/avbravo/jettradbvmnodes/node3/jettraDBVM.jar
-cp jettra-server/target/jettraDBVM.jar /home/avbravo/jettradbvmnodes/node3/jettraDBVM.jar
-
-echo "Copiando jettraDBVM.jar a /node4"
-rm -f /home/avbravo/jettradbvmnodes/node4/jettraDBVM.jar
-cp jettra-server/target/jettraDBVM.jar /home/avbravo/jettradbvmnodes/node4/jettraDBVM.jar
-
-
-
+# Nodos de Base de Datos
+deploy_node "/home/avbravo/jettradbvmnodes/node1" "jettra-server/target/jettraDBVM.jar" "jettraDBVM.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/node2" "jettra-server/target/jettraDBVM.jar" "jettraDBVM.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/node3" "jettra-server/target/jettraDBVM.jar" "jettraDBVM.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/node4" "jettra-server/target/jettraDBVM.jar" "jettraDBVM.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/node5" "jettra-server/target/jettraDBVM.jar" "jettraDBVM.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/node6" "jettra-server/target/jettraDBVM.jar" "jettraDBVM.jar"
+deploy_node "/home/avbravo/jettradbvmnodes/node7" "jettra-server/target/jettraDBVM.jar" "jettraDBVM.jar"
 
 echo "Generating shell..."
-cp jettra-shell/target/jettraDBVMShell.jar .
-
-
-echo "Copiando JettraDBVMShell a /jettradbvmnodes/node1/"
-rm -f /home/avbravo/jettradbvmnodes/node1/jettraDBVMShell.jar
-cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node1/jettraDBVMShell.jar
-
-
-echo "Copiando JettraDBVMShell a /jettradbvmnodes/node2/"
-rm -f /home/avbravo/jettradbvmnodes/node2/jettraDBVMShell.jar
-cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node2/jettraDBVMShell.jar
-
-echo "Copiando JettraDBVMShell a /jettradbvmnodes/node3/"
-rm -f /home/avbravo/jettradbvmnodes/node3/jettraDBVMShell.jar
-cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node3/jettraDBVMShell.jar
-
-echo "Copiando JettraDBVMShell a /jettradbvmnodes/node4/"
-rm -f /home/avbravo/jettradbvmnodes/node4/jettraDBVMShell.jar
-cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node4/jettraDBVMShell.jar
-
-
-
-
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node1/
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node2/
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node3/
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node4/
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node5/
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node6/
+cp jettra-shell/target/jettraDBVMShell.jar /home/avbravo/jettradbvmnodes/node7/
 
 echo "Proceso finalizado"
