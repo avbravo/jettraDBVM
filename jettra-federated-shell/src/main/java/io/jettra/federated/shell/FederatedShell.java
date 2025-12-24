@@ -77,14 +77,14 @@ public class FederatedShell {
             case "status":
                 handleStatus();
                 break;
-            case "stop":
-                handleStop(parts);
-                break;
             case "nodes":
                 handleNodes();
                 break;
             case "leader":
                 handleLeader();
+                break;
+            case "node-leader":
+                handleNodeLeader();
                 break;
             default:
                 System.out.println("Unknown command: " + cmd);
@@ -97,8 +97,8 @@ public class FederatedShell {
         System.out.println("  login <u? <p>    - Login to federated server");
         System.out.println("  status           - View federated cluster and raft status");
         System.out.println("  leader           - View current leaders (Federated and DB)");
+        System.out.println("  node-leader      - Get the current DB leader node details");
         System.out.println("  nodes            - View managed DB nodes and their status");
-        System.out.println("  stop <url|self>  - Stop a federated node (Requires login)");
         System.out.println("  help             - Show this help");
         System.out.println("  exit/quit        - Exit shell");
     }
@@ -213,6 +213,28 @@ public class FederatedShell {
          }
     }
 
+    private void handleNodeLeader() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(baseUrl + "/federated/node-leader"))
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                Map<String, Object> node = mapper.readValue(response.body(), Map.class);
+                System.out.println("Current Database Leader:");
+                System.out.println("  ID:  " + node.get("id"));
+                System.out.println("  URL: " + node.get("url"));
+            } else {
+                System.out.println("Error: " + response.body());
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
     private void handleNodes() {
         try {
             HttpRequest request = HttpRequest.newBuilder()
@@ -247,40 +269,4 @@ public class FederatedShell {
         }
     }
 
-    private void handleStop(String[] parts) {
-        if (parts.length < 2) {
-            System.out.println("Usage: stop <url|self>");
-            return;
-        }
-
-        if (token == null) {
-            System.out.println("Error: You must login first.");
-            return;
-        }
-        
-        String target = parts[1];
-        String stopUrl = baseUrl + "/federated/stop";
-        if (!target.equalsIgnoreCase("self")) {
-            if (!target.startsWith("http")) target = "http://" + target;
-            stopUrl = target + "/federated/stop";
-        }
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(stopUrl))
-                    .header("Authorization", "Bearer " + token)
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-
-            if (response.statusCode() == 200) {
-                System.out.println("Stop command sent successfully to " + target);
-            } else {
-                System.out.println("Error: " + response.body());
-            }
-        } catch (Exception e) {
-            System.out.println("Error: " + e.getMessage());
-        }
-    }
 }

@@ -71,6 +71,9 @@ public class FederatedMain {
             nodeId = "fed-" + port;
         }
 
+        final int finalPort = port;
+        final String finalNodeId = nodeId;
+
         FederatedEngine engine = new FederatedEngine(port);
         engine.start();
 
@@ -83,7 +86,29 @@ public class FederatedMain {
             }
         }
 
-        FederatedRaftNode raftNode = new FederatedRaftNode(nodeId, selfUrl, federatedServers, engine, bootstrap);
+        // Config saver
+        java.util.function.Consumer<List<String>> configSaver = (peers) -> {
+            try {
+                File cfgFile = new File("cluster.json");
+                Map<String, Object> config = new java.util.HashMap<>();
+                if (cfgFile.exists()) {
+                    config = mapper.readValue(cfgFile, Map.class);
+                }
+                config.put("FederatedServers", peers);
+                // Also ensures other fields are present if file didn't exist or was empty?
+                // Minimal config preservation
+                if (!config.containsKey("Port")) config.put("Port", finalPort);
+                if (!config.containsKey("NodeID")) config.put("NodeID", finalNodeId);
+                if (!config.containsKey("Mode")) config.put("Mode", "federated");
+                
+                mapper.writerWithDefaultPrettyPrinter().writeValue(cfgFile, config);
+                LOGGER.info("Updated cluster.json with new peers: " + peers);
+            } catch (IOException e) {
+                LOGGER.severe("Failed to save cluster.json: " + e.getMessage());
+            }
+        };
+
+        FederatedRaftNode raftNode = new FederatedRaftNode(nodeId, selfUrl, federatedServers, engine, bootstrap, configSaver);
         raftNode.start();
 
         WebServer server = WebServer.builder()

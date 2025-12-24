@@ -10,6 +10,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.util.Map;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Base64;
 import java.util.Optional;
 
@@ -116,6 +117,11 @@ public class WebServices {
                 .get("/api/cluster", this::getClusterStatus)
                 .get("/api/metrics", this::getMetrics)
                 .get("/api/federated", this::getFederatedStatus)
+                .get("/api/federated/config", this::getFederatedConfig)
+                .get("/api/federated/node-leader", this::getFederatedNodeLeader)
+                .post("/api/federated/raft/addPeer", this::proxyFederatedRequest)
+                .post("/api/federated/raft/removePeer", this::proxyFederatedRequest)
+                .post("/api/federated/stop", this::proxyFederatedRequest)
                 .post("/api/cluster/register", this::registerNode)
                 .post("/api/cluster/promote", this::promoteNode)
                 .post("/api/cluster/deregister", this::deregisterNode)
@@ -155,7 +161,7 @@ public class WebServices {
         // Skip login and metrics endpoints
         String path = req.path().path();
         if (path.equals("/api/login") || path.equals("/api/metrics") ||
-                path.startsWith("/api/cluster/") || path.equals("/api/config")) {
+                path.startsWith("/api/cluster/") || path.startsWith("/api/federated") || path.equals("/api/config")) {
             res.next();
             return;
         }
@@ -507,7 +513,7 @@ public class WebServices {
     private void checkLeader(ServerResponse res) throws Exception {
         io.jettra.core.raft.RaftNode raft = engine.getRaftNode();
         if (raft != null) {
-            if (raft.isFederatedMode() && !raft.hasLeader()) {
+            if (raft.isFederatedMode() && !raft.isFederatedSynced()) {
                 res.status(Status.SERVICE_UNAVAILABLE_503).send("No federated server available to assign a leader. Write operations are disabled.");
                 throw new RuntimeException("No Federated Leader");
             }
@@ -873,6 +879,7 @@ public class WebServices {
 
     private void createIndex(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             byte[] content = req.content().as(byte[].class);
             Map<String, Object> body = jsonMapper.readValue(content, new TypeReference<Map<String, Object>>() {
             });
@@ -917,6 +924,7 @@ public class WebServices {
 
     private void deleteIndex(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             String db = req.query().get("db");
             String col = req.query().get("col");
             String field = req.query().get("field");
@@ -949,6 +957,7 @@ public class WebServices {
 
     private void beginTransaction(ServerRequest req, ServerResponse res) {
         try {
+            checkLeader(res);
             String txID = engine.getStore().beginTransaction();
             res.send(jsonMapper.createObjectNode().put("txID", txID).toString());
         } catch (Exception e) {
@@ -1604,8 +1613,22 @@ public class WebServices {
         }
     }
 
-    private void getFederatedStatus(ServerRequest req, ServerResponse res) {
+    private void getFederatedConfig(ServerRequest req, ServerResponse res) {
         try {
+            @SuppressWarnings("unchecked")
+            List<String> fedServers = (List<String>) engine.getConfigManager().getOrDefault("FederatedServers",
+                    java.util.Collections.emptyList());
+            Map<String, Object> response = new HashMap<>();
+            response.put("federatedServers", fedServers);
+            res.send(jsonMapper.writeValueAsString(response));
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getFederatedNodeLeader(ServerRequest req, ServerResponse res) {
+        try {
+            @SuppressWarnings("unchecked")
             List<String> fedServers = (List<String>) engine.getConfigManager().getOrDefault("FederatedServers",
                     java.util.Collections.emptyList());
             if (fedServers.isEmpty()) {
@@ -1613,20 +1636,69 @@ public class WebServices {
                 return;
             }
 
-            // Simple proxy to the first federated server for now
+            if (engine.getRaftNode() == null) {
+                res.status(Status.SERVICE_UNAVAILABLE_503).send("Raft node not initialized");
+                return;
+            }
+
             String fedUrl = fedServers.get(0);
+            LOGGER.fine("Proxying node-leader request to: " + fedUrl);
+            
+            java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(fedUrl + "/federated/node-leader"))
+                    .GET()
+                    .timeout(java.time.Duration.ofMillis(3000))
+                    .build();
+
+            java.net.http.HttpResponse<String> response = engine.getRaftNode().getHttpClientProxy()
+                    .send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                res.send(response.body());
+            } else {
+                res.status(Status.create(response.statusCode())).send(response.body());
+            }
+
+        } catch (Exception e) {
+            LOGGER.log(java.util.logging.Level.SEVERE, "Unexpected error in getFederatedNodeLeader", e);
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getFederatedStatus(ServerRequest req, ServerResponse res) {
+        try {
+            @SuppressWarnings("unchecked")
+            List<String> fedServers = (List<String>) engine.getConfigManager().getOrDefault("FederatedServers",
+                    java.util.Collections.emptyList());
+            if (fedServers.isEmpty()) {
+                res.status(Status.NOT_FOUND_404).send("Federated mode not configured");
+                return;
+            }
+
+            if (engine.getRaftNode() == null) {
+                res.status(Status.SERVICE_UNAVAILABLE_503).send("Raft node not initialized");
+                return;
+            }
+
+            String fedUrl = fedServers.get(0);
+            LOGGER.fine("Proxying status request to: " + fedUrl);
+
             java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
                     .uri(java.net.URI.create(fedUrl + "/federated/status"))
                     .GET()
-                    .timeout(java.time.Duration.ofMillis(2000))
+                    .timeout(java.time.Duration.ofMillis(3000))
                     .build();
 
-            engine.getRaftNode().getHttpClientProxy()
-                    .sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
-                    .thenAccept(response -> {
-                        res.send(response.body());
-                    });
+            java.net.http.HttpResponse<String> response = engine.getRaftNode().getHttpClientProxy()
+                    .send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                res.send(response.body());
+            } else {
+                res.status(Status.create(response.statusCode())).send(response.body());
+            }
         } catch (Exception e) {
+            LOGGER.log(java.util.logging.Level.SEVERE, "Unexpected error in getFederatedStatus", e);
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }
@@ -1688,6 +1760,48 @@ public class WebServices {
                 res.send(jsonMapper.createObjectNode().put("status", "success").toString());
             }
         } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void proxyFederatedRequest(ServerRequest req, ServerResponse res) {
+        try {
+            @SuppressWarnings("unchecked")
+            java.util.List<String> fedServers = (java.util.List<String>) engine.getConfigManager().getOrDefault("FederatedServers",
+                    java.util.Collections.emptyList());
+            if (fedServers == null || fedServers.isEmpty()) {
+                res.status(Status.NOT_FOUND_404).send("Federated mode not configured");
+                return;
+            }
+
+            String fedUrl = fedServers.get(0);
+            String path = req.path().path();
+            // Transform /api/federated/... to /federated/...
+            String targetPath = path.replace("/api/federated", "/federated");
+
+            byte[] body = req.content().as(byte[].class);
+
+            java.net.http.HttpRequest.Builder builder = java.net.http.HttpRequest.newBuilder()
+                    .uri(java.net.URI.create(fedUrl + targetPath))
+                    .header("Content-Type", "application/json")
+                    .timeout(java.time.Duration.ofMillis(3000));
+
+            if (body != null && body.length > 0) {
+                builder.POST(java.net.http.HttpRequest.BodyPublishers.ofByteArray(body));
+            } else {
+                builder.POST(java.net.http.HttpRequest.BodyPublishers.noBody());
+            }
+
+            java.net.http.HttpResponse<String> response = engine.getRaftNode().getHttpClientProxy()
+                    .send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() / 100 == 2) {
+                res.send(response.body());
+            } else {
+                res.status(Status.create(response.statusCode())).send(response.body());
+            }
+        } catch (Exception e) {
+            LOGGER.log(java.util.logging.Level.SEVERE, "Error proxying to federated server", e);
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }

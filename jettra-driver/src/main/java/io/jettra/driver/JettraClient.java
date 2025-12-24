@@ -323,48 +323,44 @@ public class JettraClient {
         }
     }
 
-    // Cluster Management
-    public Map<String, Object> getClusterStatus() {
+    // Cluster Management - REMOVED. Use federated methods.
+
+    public Map<String, Object> getNodeLeader() {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/cluster"))
-                // Authorization might not be needed for status, but consistency is good.
-                // WebServices doesn't enforce auth on /api/cluster? Check logic.
-                // WebServices: .get("/api/cluster", this::getClusterStatus) -> no explicit authMiddleware guard in rules?
-                // Actually rules .any("/api/*", this::authMiddleware) protects it.
-                .header("Authorization", getAuthHeader()) 
+                .uri(URI.create(baseUrl + "/federated/node-leader"))
+                .header("Authorization", getAuthHeader())
                 .GET()
                 .build();
         return sendRequest(request, new TypeReference<Map<String, Object>>() {});
     }
 
-    public void registerNode(String url) {
-        try {
-            String body = mapper.writeValueAsString(Collections.singletonMap("url", url));
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/cluster/register"))
-                    .header("Authorization", getAuthHeader())
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-            sendRequest(request, null);
-        } catch (Exception e) {
-            throw new DriverException("Failed to register node", e);
-        }
+    public List<String> getFederatedServers() {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/federated/config"))
+                .header("Authorization", getAuthHeader())
+                .GET()
+                .build();
+        Map<String, Object> config = sendRequest(request, new TypeReference<Map<String, Object>>() {});
+        return (List<String>) config.get("federatedServers");
     }
 
-    public void deregisterNode(String url) {
-        try {
-            String body = mapper.writeValueAsString(Collections.singletonMap("url", url));
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/cluster/deregister"))
-                    .header("Authorization", getAuthHeader())
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body))
-                    .build();
-            sendRequest(request, null);
-        } catch (Exception e) {
-            throw new DriverException("Failed to deregister node", e);
-        }
+    public Map<String, Object> getFederatedStatus() {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + "/federated"))
+                .header("Authorization", getAuthHeader())
+                .GET()
+                .build();
+        return sendRequest(request, new TypeReference<Map<String, Object>>() {});
+    }
+
+    public String getFederatedLeader() {
+        Map<String, Object> status = getFederatedStatus();
+        return (String) status.get("leaderId");
+    }
+
+    public List<Map<String, Object>> getFederatedNodes() {
+        Map<String, Object> status = getFederatedStatus();
+        return (List<Map<String, Object>>) status.get("nodes");
     }
 }
 

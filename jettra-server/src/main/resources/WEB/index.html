@@ -143,6 +143,28 @@
                                     <span class="flex-1 ml-3 whitespace-nowrap">Invoices</span>
                                 </a>
                             </li>
+                            <li id="menu-federated">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('federated')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
+                                </a>
+                            </li>
+                            <li id="menu-federated">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('federated')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
+                                </a>
+                            </li>
                             <li id="menu-config" class="hidden">
                                 <a href="#" class="sidebar-link group" onclick="app.showSection('config')">
                                     <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
@@ -666,12 +688,64 @@
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div> <!-- content-area -->
-                <footer class="app-footer">
-                    &copy; 2025 JettraDB. All Rights Reserved.
-                </footer>
+
+                            <!-- Federated Section -->
+                            <div id="federated-section" class="section-content hidden">
+                                <div class="p-4" style="padding: 2rem;">
+                                    <div class="section-header">
+                                        <h2 class="section-title">Federated Cluster Management</h2>
+                                        <button class="btn btn-primary" onclick="app.showAddFederatedModal()">+ Add
+                                            Federated Server</button>
+                                    </div>
+
+                                    <div id="federated-status-content" class="mb-8">
+                                        <!-- Populated by JS -->
+                                    </div>
+
+                                    <div class="glass-panel mb-8">
+                                        <h3 class="text-xl font-semibold mb-4">Federated Cluster (Peers)</h3>
+                                        <div class="table-container">
+                                            <table class="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Node ID</th>
+                                                        <th>URL</th>
+                                                        <th>Role</th>
+                                                        <th>Status</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="federated-servers-tbody">
+                                                    <!-- JS populated -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-4">Managed DB Nodes</h3>
+                                        <div class="table-container">
+                                            <table class="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Node ID</th>
+                                                        <th>URL</th>
+                                                        <th>Status</th>
+                                                        <th>Last Seen</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="federated-managed-nodes-tbody">
+                                                    <!-- JS populated -->
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div> <!-- content-area -->
+                        <footer class="app-footer">
+                            &copy; 2025 JettraDB. All Rights Reserved.
+                        </footer>
             </main>
         </div> <!-- dashboard-view -->
     </div> <!-- app -->
@@ -717,6 +791,8 @@
                 if (originalShowSection) originalShowSection.apply(this, arguments);
                 if (section === 'config') {
                     loadNodeConfig();
+                } else if (section === 'federated') {
+                    loadFederatedStatus();
                 }
             };
 
@@ -725,12 +801,13 @@
             app.updateUsersMenuVisibility = function () {
                 if (originalUpdateMenuVisibility) originalUpdateMenuVisibility.apply(this, arguments);
                 const configMenu = document.getElementById('menu-config');
-                if (configMenu) {
-                    if (this.state.role === 'admin') {
-                        configMenu.classList.remove('hidden');
-                    } else {
-                        configMenu.classList.add('hidden');
-                    }
+                const fedMenu = document.getElementById('menu-federated');
+                if (this.state.role === 'admin') {
+                    if (configMenu) configMenu.classList.remove('hidden');
+                    if (fedMenu) fedMenu.classList.remove('hidden');
+                } else {
+                    if (configMenu) configMenu.classList.add('hidden');
+                    if (fedMenu) fedMenu.classList.add('hidden');
                 }
             };
 
@@ -888,6 +965,57 @@
                         statusDiv.innerHTML = `<div class="text-danger">Error loading status: ${err.message}</div>`;
                     });
             }
+
+            app.showAddFederatedModal = function () {
+                const html = `
+                    <div class="form-group">
+                        <label>Server Name</label>
+                        <input type="text" id="fed-name" class="form-control" placeholder="fed-node-X">
+                    </div>
+                    <div class="form-group">
+                        <label>IP or URL</label>
+                        <input type="text" id="fed-url" class="form-control" placeholder="http://localhost:9003">
+                    </div>
+                    <div class="form-group">
+                        <label>Administrative Token / Password</label>
+                        <input type="password" id="fed-token" class="form-control" placeholder="••••••••">
+                    </div>
+                `;
+
+                app.showInputModal("Add Federated Server", html, async () => {
+                    let url = document.getElementById('fed-url').value.trim();
+                    const name = document.getElementById('fed-name').value.trim();
+                    const token = document.getElementById('fed-token').value.trim();
+
+                    if (!url) {
+                        alert("URL is required");
+                        return;
+                    }
+
+                    if (!url.startsWith('http')) url = 'http://' + url;
+
+                    try {
+                        const response = await fetch('/api/federated/raft/addPeer', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': localStorage.getItem('jettra_token') || ''
+                            },
+                            body: JSON.stringify({ url: url, name: name, token: token })
+                        });
+
+                        const result = await response.json();
+                        if (response.ok) {
+                            app.notify("Federated server addition initiated", "success");
+                            loadFederatedStatus();
+                        } else {
+                            app.notify("Error: " + (result.error || result), "danger");
+                        }
+                    } catch (err) {
+                        app.notify("Error: " + err.message, "danger");
+                    }
+                }, "Add Peer");
+            };
         })();
     </script>
 </body>

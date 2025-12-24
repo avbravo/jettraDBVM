@@ -58,6 +58,7 @@ public class RaftNode {
     private final String nodeId;
     private final List<String> peers = new ArrayList<>();
     private String leaderId;
+    private boolean federatedSyncStatus = false;
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private long lastHeartbeatTime;
@@ -114,8 +115,12 @@ public class RaftNode {
 
                     loadPeersFromStore();
 
-                    LOGGER.info("Bootstrap node initialized in _clusternodes. Becoming LEADER.");
-                    becomeLeader();
+                    if (!isFederatedMode()) {
+                        LOGGER.info("Bootstrap node initialized in _clusternodes. Becoming LEADER.");
+                        becomeLeader();
+                    } else {
+                        LOGGER.info("Bootstrap node initialized in _clusternodes. Waiting for Federated Server for role.");
+                    }
                 }
             } else if (this.peers.isEmpty() && peers != null && !peers.isEmpty()) {
                 // Fallback: if provided peers args but DB empty, maybe we should seed?
@@ -127,7 +132,7 @@ public class RaftNode {
         }
 
         // Logic to enforce Bootstrap behavior on restart
-        if (isBootstrap) {
+        if (isBootstrap && !isFederatedMode()) {
             if (this.peers.isEmpty()) {
                 LOGGER.info("Bootstrap node with no peers (or single node). Forcing LEADER role.");
                 becomeLeader();
@@ -158,6 +163,8 @@ public class RaftNode {
                     }
                 }, delay, TimeUnit.MILLISECONDS);
             }
+        } else if (isFederatedMode()) {
+            LOGGER.info("Federated mode active. Waiting for Federated Server for initial role assignment.");
         }
 
         this.currentTerm = 0;
@@ -217,6 +224,7 @@ public class RaftNode {
             httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                     .thenAccept(res -> {
                         if (res.statusCode() == 200) {
+                            this.federatedSyncStatus = true;
                             processFederatedResponse(res.body());
                         } else {
                             LOGGER.warning("Failed to sync with Federated Server " + fedUrl + ". Trying next...");
@@ -396,6 +404,10 @@ public class RaftNode {
         long now = System.currentTimeMillis();
         long timeout = ELECTION_TIMEOUT_MIN + (long) (Math.random() * (ELECTION_TIMEOUT_MAX - ELECTION_TIMEOUT_MIN));
         if (now - last > timeout) {
+            if (isFederatedMode() && !federatedSyncStatus) {
+                LOGGER.fine("Waiting for Federated Server before starting election.");
+                return;
+            }
             startElection();
         }
     }
@@ -445,7 +457,11 @@ public class RaftNode {
                                 if (json.contains("\"voteGranted\":true") || json.contains("\"voteGranted\": true")) {
                                     int v = votes.incrementAndGet();
                                     if (v > (currentPeers.size() + 1) / 2) {
-                                        becomeLeader();
+                                        if (isFederatedMode() && !federatedSyncStatus) {
+                                            LOGGER.warning("Majority reached but federated sync not yet achieved. Postponing leadership.");
+                                        } else {
+                                            becomeLeader();
+                                        }
                                     }
                                 }
                             } catch (Exception e) {
@@ -1246,6 +1262,10 @@ public class RaftNode {
 
     public synchronized boolean hasLeader() {
         return leaderId != null;
+    }
+
+    public synchronized boolean isFederatedSynced() {
+        return federatedSyncStatus;
     }
 
     public static class LogEntry {

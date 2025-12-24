@@ -205,7 +205,7 @@ El servidor federado supervisa constantemente los nodos de base de datos registr
 *   **Estado Activo/Inactivo**: Si un nodo no envía un heartbeat en 10 segundos, su estado cambiará a **INACTIVE** en el Dashboard.
 *   **Reelección Automática**: Si el nodo inactivo era el Líder de la base de datos, el Servidor Federado promoverá automáticamente a otro nodo activo como nuevo líder para garantizar la continuidad del servicio.
 
-> **Importante**: Si no existe ningún servidor federado activo o accesible, todos los nodos de base de datos configurados en modo federado permanecerán en estado de espera ("nodos simples"). En esta situación, **no se asignará ningún líder de base de datos** ni se realizarán operaciones de sincronización de topología hasta que un servidor federado sea ejecutado y pueda gestionar las conexiones y el mando del cluster. Las operaciones de escritura (insert, update, delete) devolverán el siguiente error:
+> **Importante**: Si no existe ningún servidor federado activo o accesible, todos los nodos de base de datos configurados en modo federado permanecerán en estado de espera ("nodos simples"). En esta situación, **no se asignará ningún líder de base de datos** ni se realizarán operaciones de sincronización de topología hasta que un servidor federado sea ejecutado y pueda gestionar las conexiones y el mando del cluster. Las operaciones de escritura (Bases de datos, Colecciones, Documentos, Índices y Transacciones) devolverán el siguiente error:
 > `503 Service Unavailable: No federated server available to assign a leader. Write operations are disabled.`
 
 ## Alta Disponibilidad del Servidor Federado (Failover)
@@ -255,6 +255,16 @@ curl -s http://localhost:9000/federated/status | grep '"raftState"'
 
 Si detiene el proceso del líder actual y espera unos segundos, verá que uno de los otros nodos cambia su `raftState` de `FOLLOWER` a `LEADER`.
 
+### Gestión Automática de Configuración (`cluster.json`)
+
+Para asegurar la consistencia del cluster ante reinicios, el Servidor Federado actualiza automáticamente el archivo `cluster.json` cuando se detectan cambios en la topología:
+
+1.  **Adición/Eliminación de Nodos**: Cuando se usa `federated add` o `federated remove`, el Líder actualiza su lista de peers y guarda los cambios en disco.
+2.  **Propagación**: El Líder envía la nueva configuración a todos los seguidores a través de los latidos (heartbeats).
+3.  **Sincronización**: Los seguidores (y los nuevos nodos) detectan el cambio, actualizan su memoria y reescriben su propio `cluster.json`.
+
+Esto garantiza que si un nodo se reinicia, siempre recordará a sus pares válidos más recientes, evitando problemas de "cerebro dividido" (split-brain) o liderazgo solitario accidental.
+
 ## Jettra Federated Shell
 
 El Jettra Federated Shell es una herramienta de línea de comandos diseñada específicamente para la administración y monitorización del cluster federado. A diferencia del shell estándar de JettraDB, este enfoca sus capacidades en la salud de la infraestructura y el control de los nodos federados.
@@ -279,10 +289,10 @@ Una vez dentro del shell, puede utilizar los siguientes comandos:
 
 *   **`connect <url>`**: Establece la dirección del servidor federado al que desea conectarse (por defecto `http://localhost:9000`).
 *   **`login <user> <password>`**: Autentica la sesión para permitir comandos administrativos como el apagado de nodos.
-*   **`status`**: Muestra una tabla detallada con todos los servidores federados, sus IDs, estados Raft y URLs.
-*   **`leader`**: Identifica de un vistazo quién es el Líder Federado y quién es el Líder de la Base de Datos.
-*   **`nodes`**: Lista todos los nodos de base de datos registrados, su estado de salud (ACTIVE/INACTIVE) y su rol (LEADER/FOLLOWER).
-*   **`stop <url|self>`**: Envía un comando de apagado ordenado al servidor federado especificado o al actual.
+*   **`federated show`**: Lista los servidores federados configurados en el nodo de base de datos actual.
+*   **`federated leader`**: Muestra la información del actual Líder del cluster federado (Estado Raft y Término).
+*   **`federated nodes`**: Muestra todos los nodos de la red federada y resalta cuál es el Líder de la Base de Datos.
+*   **`federated node-leader`**: Proporciona información detallada (métricas, URL, ID) del nodo líder de la base de datos.
 *   **`help`**: Muestra la lista de comandos disponibles.
 *   **`exit`**: Sale de la aplicación.
 
@@ -324,6 +334,28 @@ El Shell se conecta a los nodos de JettraDB (ej. puerto 8080). El nodo gestionar
 ```bash
 # Conectar al nodo local o balanceador
 java -jar jettra-shell.jar --url http://localhost:8080
+
+# Ver servidores federados asociados
+jettra> federated show
+
+# Ver líder de la infraestructura federada
+jettra> federated leader
+
+# Ver topología de nodos y líder de datos
+jettra> federated nodes
+
+# Ver detalles del líder de datos
+# Ver detalles del líder de datos
+jettra> federated node-leader
+
+# Agregar servidor federado
+jettra> federated add http://new-federated:9000
+
+# Detener un servidor federado
+jettra> federated stop http://fed-node:9000
+
+# Remover un peer federado (Raft)
+jettra> federated remove http://old-fed-node:9000
 ```
 
 ### 2. Jettra Driver (Java)
@@ -331,9 +363,23 @@ El driver debe inicializarse apuntando a uno o varios nodos del cluster JettraDB
 
 ```java
 // Conexión estándar al cluster
-JettraDriver driver = new JettraDriver("http://localhost:8080");
-JettraConnection conn = driver.connect("admin", "admin");
-// El driver interactúa con el cluster de forma transparente
+JettraClient client = new JettraClient("localhost", 8080, "admin", "password");
+
+// Obtener servidores federados asociados
+List<String> fedServers = client.getFederatedServers();
+
+// Obtener estado completo del cluster federado
+Map<String, Object> status = client.getFederatedStatus();
+
+// Obtener ID del líder federado
+String fedLeader = client.getFederatedLeader();
+
+// Obtener lista de nodos de datos
+List<Map<String, Object>> nodes = client.getFederatedNodes();
+
+// Obtener detalles del líder actual de base de datos
+Map<String, Object> leader = client.getNodeLeader();
+System.out.println("El líder de datos es: " + leader.get("url"));
 ```
 
 ### 3. Curl
@@ -358,6 +404,28 @@ curl http://localhost:9000/federated/status
 Puede simular un heartbeat manualmente para depuración:
 ```bash
 curl -X POST "http://localhost:9000/federated/heartbeat?nodeId=node1"
+```
+
+**Obtener Líder de Base de Datos (vía Servidor Federado):**
+Este endpoint devuelve exclusivamente los detalles del nodo líder actual.
+```bash
+curl http://localhost:9000/federated/node-leader
+```
+
+**Obtener Configuración Federada (vía Nodo de Datos):**
+Muestra los servidores federados a los que el nodo está reportando.
+```bash
+curl http://localhost:8080/api/federated/config
+```
+
+**Obtener Estado Completo (vía Proxy del Nodo):**
+```bash
+curl http://localhost:8080/api/federated
+```
+
+**Obtener Líder de Datos (vía Proxy del Nodo):**
+```bash
+curl http://localhost:8080/api/federated/node-leader
 ```
 
 ## Despliegue con Docker Compose
@@ -480,8 +548,8 @@ Listado de comandos:
   login <u? <p>    - Login to federated server
   status           - View federated cluster and raft status
   leader           - View current leaders (Federated and DB)
+  node-leader      - Get the current DB leader node details
   nodes            - View managed DB nodes and their status
-  stop <url|self>  - Stop a federated node (Requires login)
   help             - Show this help
   exit/quit        - Exit shell
 

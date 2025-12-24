@@ -29,6 +29,7 @@ public class Shell {
 
     private static String currentTx = null;
     private static LineReader reader = null;
+    private static boolean federatedMode = false;
 
     public static void main(String[] args) {
         System.out.println("""
@@ -54,7 +55,7 @@ public class Shell {
             Completer commandCompleter = new StringsCompleter(
                 "connect", "login", "use", "show", "create", "insert", 
                 "find", "count", "delete", "backup", "restore", "export", "import", 
-                "history", "revert", "cluster", "exit", "quit", "help", "clear", "cls", 
+                "history", "revert", "federated", "exit", "quit", "help", "clear", "cls", 
                 "begin", "commit", "rollback"
             );
             
@@ -68,9 +69,15 @@ public class Shell {
                 new StringsCompleter("db", "col", "user")
             );
             
+             Completer connectCompleter = new ArgumentCompleter(
+                new StringsCompleter("connect"),
+                new StringsCompleter("node", "federated")
+            );
+
              Completer aggCompleter = new AggregateCompleter(
                 showCompleter,
                 createCompleter,
+                connectCompleter,
                 commandCompleter 
             );
 
@@ -103,6 +110,12 @@ public class Shell {
             String cmd = parts[0].toLowerCase();
             String arg = parts.length > 1 ? parts[1] : "";
 
+            if (federatedMode && !cmd.equals("federated") && !cmd.equals("connect") && !cmd.equals("help") && 
+                !cmd.equals("login") && !cmd.equals("exit") && !cmd.equals("quit") && !cmd.equals("cls") && !cmd.equals("clear")) {
+                System.out.println("Command not available in Federated Mode. Only 'federated' commands are allowed.");
+                continue;
+            }
+
             try {
                 switch (cmd) {
                     case "exit":
@@ -113,8 +126,7 @@ public class Shell {
                         printHelp();
                         break;
                     case "connect":
-                        baseUrl = arg.isEmpty() ? "http://localhost:8080" : arg;
-                        System.out.println("Connected to " + baseUrl);
+                        handleConnectCommand(arg);
                         break;
                     case "login":
                         handleLogin(arg);
@@ -197,7 +209,6 @@ public class Shell {
                     case "federated":
                         handleFederated(arg);
                         break;
-
                     default:
                         // Treat as raw command (JQL/SQL/Mongo)
                         // Use original 'line' to preserve casing of arguments, but 'cmd' is lowercase.
@@ -283,27 +294,37 @@ public class Shell {
 
     private static void printHelp() {
         System.out.println("Commands:");
-        System.out.println("  connect <url>          Connect to server (default http://localhost:8080)");
-        System.out.println("  login <user> <pass>    Login to get token");
-        System.out.println("  use <db>               Select database");
-        System.out.println("  show dbs               List databases");
-        System.out.println("  show collections       List collections in current db");
-        System.out.println("  create user <name>     Create new user (interactive)");
-        System.out.println("  create db <name>       Create database");
-        System.out.println("  create col <name>      Create collection in current db");
-        System.out.println("  insert <col> <json>    Insert document");
-        System.out.println("  find <col>             Find all documents (paginated)");
-        System.out.println("  backup [db]            Create backup of current or specified db");
-        System.out.println("  restore <file> <db>    Restore database from zip file");
-        System.out.println("  export <col> <fmt> <file> Export collection to file (fmt: json/csv)");
-        System.out.println("  import <col> <fmt> <file> Import collection from file");
+        System.out.println("  connect node <url>      Connect to a database node (default http://localhost:8080)");
+        System.out.println("  connect federated <url> Connect to a federated server");
+        
+        if (!federatedMode) {
+            System.out.println("  login <user> <pass>    Login to get token");
+            System.out.println("  use <db>               Select database");
+            System.out.println("  show dbs               List databases");
+            System.out.println("  show collections       List collections in current db");
+            System.out.println("  create user <name>     Create new user (interactive)");
+            System.out.println("  create db <name>       Create database");
+            System.out.println("  create col <name>      Create collection in current db");
+            System.out.println("  insert <col> <json>    Insert document");
+            System.out.println("  find <col>             Find all documents (paginated)");
+            System.out.println("  backup [db]            Create backup of current or specified db");
+            System.out.println("  restore <file> <db>    Restore database from zip file");
+            System.out.println("  export <col> <fmt> <file> Export collection to file (fmt: json/csv)");
+            System.out.println("  import <col> <fmt> <file> Import collection from file");
+            System.out.println("  history <col> <id>     Show version history of a document");
+            System.out.println("  show version <col> <id> <ver> Show content of a specific version");
+            System.out.println("  revert <col> <id> <ver> Revert document to a specific version");
+        }
 
-        System.out.println("  history <col> <id>     Show version history of a document");
-        System.out.println("  show version <col> <id> <ver> Show content of a specific version");
-        System.out.println("  revert <col> <id> <ver> Revert document to a specific version");
-        System.out.println("  cluster status         Show cluster status");
-        System.out.println("  cluster add <url>      Add a new node to the cluster");
-        System.out.println("  cluster remove <url>   Remove a node from the cluster");
+        System.out.println("  federated show         List federated servers and cluster status");
+        System.out.println("  federated leader       Show federated leader info");
+        System.out.println("  federated nodes        Show DB nodes and DB leader");
+        System.out.println("  federated node-leader  Show DB leader info");
+        System.out.println("  federated add <url>    Add a federated server to the cluster");
+        System.out.println("  federated stop <url>   Stop a federated server");
+        System.out.println("  federated remove <url> Remove a federated server from the cluster");
+        System.out.println("  cls / clear            Clear screen");
+        System.out.println("  help                   Show this help");
         System.out.println("  exit                   Exit shell");
     }
 
@@ -427,8 +448,10 @@ public class Shell {
         }
         String json = mapper.writeValueAsString(Map.of("username", creds[0], "password", creds[1]));
         
+        String loginUrl = federatedMode ? baseUrl + "/federated/login" : baseUrl + "/api/login";
+        
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/api/login"))
+                .uri(URI.create(loginUrl))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
@@ -443,14 +466,35 @@ public class Shell {
         }
     }
 
-    private static void handleConnect(String url) {
+    private static void handleConnectCommand(String arg) {
+        String[] parts = arg.trim().split("\\s+");
+        if (parts.length < 2) {
+            System.out.println("Usage: connect <node|federated> <url>");
+            return;
+        }
+        String type = parts[0].toLowerCase();
+        String url = parts[1];
+        
         if (!url.startsWith("http://") && !url.startsWith("https://")) {
             url = "http://" + url;
         }
+        
         baseUrl = url;
+        token = null;
+        currentDb = null;
+        
+        if (type.equals("federated")) {
+            federatedMode = true;
+            System.out.println("Connected to Federated Server at " + baseUrl);
+            System.out.println("Only 'federated' commands are available in this mode.");
+        } else if (type.equals("node")) {
+            federatedMode = false;
+            System.out.println("Connected to Database Node at " + baseUrl);
+        } else {
+            System.out.println("Invalid connection type. Use 'node' or 'federated'.");
+        }
         // Reset client
         client = HttpClient.newHttpClient();
-        System.out.println("Connected to " + baseUrl);
     }
 
     private static void handleShow(String arg) throws Exception {
@@ -889,43 +933,11 @@ public class Shell {
          String subCmd = parts[0].toLowerCase();
          
          if (subCmd.equals("status")) {
-             HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/api/cluster"))
-                .header("Authorization", token != null ? token : "") // Status might allow public or require auth
-                .GET()
-                .build();
-             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-             if (res.statusCode() == 200) {
-                 System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(mapper.readValue(res.body(), Object.class)));
-             } else {
-                 System.out.println("Error: " + res.body());
-             }
+             System.out.println("Command removed. Use federated commands for cluster info.");
          } else if (subCmd.equals("add")) {
-             if (parts.length < 2) { System.out.println("Usage: cluster add <url>"); return; }
-             String url = parts[1];
-             String json = mapper.writeValueAsString(Map.of("url", url));
-             
-             HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/api/cluster/register"))
-                .header("Authorization", token != null ? token : "")
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
-             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-             System.out.println(res.statusCode() == 200 ? "Node added: " + res.body() : "Error: " + res.body());
+             System.out.println("Command removed. Use federated commands.");
          } else if (subCmd.equals("remove")) {
-             if (parts.length < 2) { System.out.println("Usage: cluster remove <url>"); return; }
-             String url = parts[1];
-             String json = mapper.writeValueAsString(Map.of("url", url));
-             
-             HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl + "/api/cluster/deregister"))
-                .header("Authorization", token != null ? token : "")
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
-             HttpResponse<String> res = client.send(req, HttpResponse.BodyHandlers.ofString());
-             System.out.println(res.statusCode() == 200 ? "Node removed: " + res.body() : "Error: " + res.body());
+             System.out.println("Command removed. Use federated commands.");
          } else if (subCmd.equals("pause")) {
              if (parts.length < 2) { System.out.println("Usage: cluster pause <nodeNameOrUrl>"); return; }
              String node = parts[1];
@@ -958,34 +970,270 @@ public class Shell {
     }
 
     private static void handleFederated(String arg) {
+        if (arg == null || arg.trim().isEmpty()) {
+            System.out.println("Usage: federated <show|leader|nodes|node-leader>");
+            return;
+        }
+
+        String[] parts = arg.trim().split("\\s+");
+        String subCmd = parts[0].toLowerCase();
+        String subArg = parts.length > 1 ? parts[1] : "";
+
         try {
+            switch (subCmd) {
+                case "show":
+                    handleFederatedShow();
+                    break;
+                case "leader":
+                    handleFederatedLeader();
+                    break;
+                case "nodes":
+                    handleFederatedNodes();
+                    break;
+                case "node-leader":
+                    handleNodeLeader();
+                    break;
+                case "stop":
+                    handleFederatedStop(subArg);
+                    break;
+                case "remove":
+                    handleFederatedRemove(subArg);
+                    break;
+                case "add":
+                    handleFederatedAdd(subArg);
+                    break;
+                default:
+                    System.out.println("Unknown federated command: " + subCmd);
+            }
+        } catch (Exception e) {
+            System.out.println("Error: " + e.getMessage());
+        }
+    }
+
+    private static void handleFederatedShow() throws Exception {
+        String url = federatedMode ? baseUrl + "/federated/status" : baseUrl + "/api/federated";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", token != null ? token : "")
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            Map<String, Object> status = mapper.readValue(response.body(), Map.class);
+            String leaderId = (String) status.get("raftLeaderId");
+            System.out.println("Federated Cluster Status:");
+            System.out.println("Leader: " + (leaderId != null ? leaderId : "None"));
+            System.out.println("Term:   " + status.get("raftTerm"));
+            System.out.println("----------------------------------------------------------------------");
+            System.out.printf("%-15s | %-25s | %-10s | %-15s\n", "Server ID", "URL", "Raft State", "Last Seen");
+            
+            @SuppressWarnings("unchecked")
+            java.util.List<String> peers = (java.util.List<String>) status.get("raftPeers");
+            @SuppressWarnings("unchecked")
+            Map<String, String> peerIds = (Map<String, String>) status.get("raftPeerIds");
+            @SuppressWarnings("unchecked")
+            Map<String, String> peerStates = (Map<String, String>) status.get("raftPeerStates");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> peerSeen = (Map<String, Object>) status.get("raftPeerLastSeen");
+
+            // Self info
+            System.out.printf("%-15s | %-25s | %-10s | %-15s (Self)\n", 
+                status.get("raftSelfId"), status.get("raftSelfUrl"), status.get("raftState"), "Now");
+
+            if (peers != null) {
+                for (String pUrl : peers) {
+                    if (pUrl.equals(status.get("raftSelfUrl"))) continue;
+                    String id = peerIds != null ? peerIds.get(pUrl) : "unknown";
+                    String state = peerStates != null ? peerStates.get(pUrl) : "unknown";
+                    Object seen = peerSeen != null ? peerSeen.get(pUrl) : "-";
+                    System.out.printf("%-15s | %-25s | %-10s | %-15s\n", id, pUrl, state, seen);
+                }
+            }
+        } else {
+            System.out.println("Error: " + response.body());
+        }
+    }
+
+    private static void handleFederatedLeader() throws Exception {
+        String url = federatedMode ? baseUrl + "/federated/status" : baseUrl + "/api/federated";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", token != null ? token : "")
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            Map<String, Object> status = mapper.readValue(response.body(), Map.class);
+            System.out.println("Federated Leader Information:");
+            System.out.println("  Leader ID: " + status.get("leaderId"));
+            String leaderUrl = (String) status.get("raftLeaderUrl");
+            if (leaderUrl != null) {
+                try {
+                    URI uri = new URI(leaderUrl);
+                    System.out.println("  Leader IP: " + uri.getHost());
+                    System.out.println("  Leader Port: " + uri.getPort());
+                } catch (Exception e) {
+                    System.out.println("  Leader URL: " + leaderUrl);
+                }
+            }
+            System.out.println("  Raft State: " + status.get("raftState"));
+            System.out.println("  Raft Term: " + status.get("raftTerm"));
+        } else {
+            System.out.println("Error: " + response.body());
+        }
+    }
+
+    private static void handleFederatedNodes() throws Exception {
+        String url = federatedMode ? baseUrl + "/federated/status" : baseUrl + "/api/federated";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", token != null ? token : "")
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            Map<String, Object> status = mapper.readValue(response.body(), Map.class);
+            String dbLeaderId = (String) status.get("leaderId"); 
+            
+            System.out.println("Federated Network Nodes (DB Cluster):");
+            System.out.println("DB Leader ID: " + dbLeaderId);
+            System.out.println("----------------------------------------------------------------------");
+            @SuppressWarnings("unchecked")
+            java.util.List<Map<String, Object>> nodes = (java.util.List<Map<String, Object>>) status.get("nodes");
+            if (nodes != null) {
+                System.out.printf("%-15s | %-25s | %-10s | %-10s\n", "Node ID", "URL", "Status", "Role");
+                for (Map<String, Object> node : nodes) {
+                    String id = (String) node.get("id");
+                    String nodeUrl = (String) node.get("url");
+                    String nStatus = (String) node.get("status");
+                    String role = id.equals(dbLeaderId) ? "LEADER" : "FOLLOWER";
+                    System.out.printf("%-15s | %-25s | %-10s | %-10s\n", id, nodeUrl, nStatus, role);
+                }
+            }
+        } else {
+            System.out.println("Error: " + response.body());
+        }
+    }
+
+    private static void handleNodeLeader() {
+        try {
+            String url = federatedMode ? baseUrl + "/federated/node-leader" : baseUrl + "/api/federated/node-leader";
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/api/federated"))
+                    .uri(URI.create(url))
+                    .header("Authorization", token != null ? token : "")
                     .GET()
                     .build();
 
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
-                Map<String, Object> status = mapper.readValue(response.body(), Map.class);
-                System.out.println("Federated Leader: " + status.get("leaderId"));
-                System.out.println("----------------------------------------");
-                java.util.List<Map<String, Object>> nodes = (java.util.List<Map<String, Object>>) status.get("nodes");
-                if (nodes != null) {
-                    System.out.printf("%-15s | %-25s | %-10s | %-15s\n", "Node ID", "URL", "Status", "Last Seen");
-                    for (Map<String, Object> node : nodes) {
-                        String id = (String) node.get("id");
-                        String url = (String) node.get("url");
-                        String nStatus = (String) node.get("status");
-                        Long lastSeen = (Long) node.get("lastSeen");
-                        String lastSeenStr = lastSeen != null ? new java.util.Date(lastSeen).toString() : "N/A";
-                        System.out.printf("%-15s | %-25s | %-10s | %-15s\n", id, url, nStatus, lastSeenStr);
-                    }
+                Map<String, Object> node = mapper.readValue(response.body(), Map.class);
+                System.out.println("Current Database Leader (Detailed):");
+                System.out.println("  ID:     " + node.get("id"));
+                System.out.println("  URL:    " + node.get("url"));
+                System.out.println("  Status: " + node.get("status"));
+                if (node.get("metrics") != null) {
+                    Map<String, Object> metrics = (Map<String, Object>) node.get("metrics");
+                    System.out.println("  CPU:    " + metrics.get("cpuUsage") + "%");
+                    System.out.println("  RAM:    " + metrics.get("ramUsedStr") + " / " + metrics.get("ramTotalStr"));
                 }
             } else {
-                System.out.println("Federated mode not active or server unreachable: " + response.body());
+                System.out.println("Error: " + response.body());
             }
         } catch (Exception e) {
-            System.out.println("Error fetching federated status: " + e.getMessage());
+            System.out.println("Error fetching node leader: " + e.getMessage());
+        }
+    }
+
+    private static void handleFederatedStop(String targetUrl) throws Exception {
+        if (targetUrl.isEmpty()) {
+            targetUrl = baseUrl;
+        } else if (!targetUrl.startsWith("http")) {
+            targetUrl = "http://" + targetUrl;
+        }
+
+        String confirm = reader.readLine("Are you sure you want to stop federated server at " + targetUrl + "? (y/n): ").trim().toLowerCase();
+        if (!confirm.equals("y") && !confirm.equals("yes")) {
+            System.out.println("Canceled.");
+            return;
+        }
+
+        String stopUrl = targetUrl.endsWith("/federated/stop") ? targetUrl : 
+                        (targetUrl.endsWith("/") ? targetUrl + "federated/stop" : targetUrl + "/federated/stop");
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(stopUrl))
+                .header("Authorization", token != null ? token : "")
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            System.out.println("Stop command sent successfully.");
+        } else {
+            System.out.println("Error (" + response.statusCode() + "): " + response.body());
+        }
+    }
+
+    private static void handleFederatedRemove(String targetUrl) throws Exception {
+        if (targetUrl.isEmpty()) {
+            System.out.println("Usage: federated remove <url>");
+            return;
+        }
+        if (!targetUrl.startsWith("http")) {
+            targetUrl = "http://" + targetUrl;
+        }
+
+        String confirm = reader.readLine("Are you sure you want to remove federated server " + targetUrl + " from the cluster? (y/n): ").trim().toLowerCase();
+        if (!confirm.equals("y") && !confirm.equals("yes")) {
+            System.out.println("Canceled.");
+            return;
+        }
+
+        // Send removal request to CURRENT leader or connected server
+        String removeUrl = federatedMode ? baseUrl + "/federated/raft/removePeer" : baseUrl + "/api/federated/raft/removePeer";
+        
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(removeUrl))
+                .header("Authorization", token != null ? token : "")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(Map.of("url", targetUrl))))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            System.out.println("Peer removal initiated.");
+        } else {
+            System.out.println("Error (" + response.statusCode() + "): " + response.body());
+        }
+    }
+
+    private static void handleFederatedAdd(String targetUrl) throws Exception {
+        if (targetUrl.isEmpty()) {
+            System.out.println("Usage: federated add <url>");
+            return;
+        }
+        if (!targetUrl.startsWith("http")) targetUrl = "http://" + targetUrl;
+
+        String url = federatedMode ? baseUrl + "/federated/raft/addPeer" : baseUrl + "/api/federated/raft/addPeer";
+        
+        Map<String, String> body = Map.of("url", targetUrl);
+        String json = mapper.writeValueAsString(body);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", token != null ? token : "")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 200) {
+            System.out.println("Add command sent successfully: " + response.body());
+        } else {
+            System.out.println("Failed to add peer: " + response.body());
         }
     }
 }

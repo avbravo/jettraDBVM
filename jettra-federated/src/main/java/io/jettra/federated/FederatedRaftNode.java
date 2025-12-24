@@ -43,13 +43,15 @@ public class FederatedRaftNode {
     private long lastHeartbeatReceived;
     private final Random random = new Random();
     private int unreachableCount = 0;
+    private final java.util.function.Consumer<List<String>> configSaver;
 
-    public FederatedRaftNode(String selfId, String selfUrl, List<String> federatedPeers, FederatedEngine engine, boolean bootstrap) {
+    public FederatedRaftNode(String selfId, String selfUrl, List<String> federatedPeers, FederatedEngine engine, boolean bootstrap, java.util.function.Consumer<List<String>> configSaver) {
         this.selfId = selfId;
         this.selfUrl = selfUrl;
         this.federatedPeers = federatedPeers;
         this.engine = engine;
         this.bootstrap = bootstrap;
+        this.configSaver = configSaver;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
@@ -73,7 +75,7 @@ public class FederatedRaftNode {
             // Check election timeout
             long timeout = 3000 + random.nextInt(2000); 
             if (now - lastHeartbeatReceived > timeout) {
-                LOGGER.warning("Election timeout! Starting election.");
+                LOGGER.fine("Election timeout! Starting election."); // Changed to fine to reduce noise
                 startElection();
             }
         }
@@ -185,6 +187,7 @@ public class FederatedRaftNode {
          body.put("raftPeerStates", getPeerStates());
          body.put("raftPeerLastSeen", getPeerLastSeen());
          body.put("raftPeerIds", getPeerUrlToId());
+         body.put("allPeers", federatedPeers);
          
          for (String peerUrl : federatedPeers) {
              if (peerUrl.equals(selfUrl)) continue;
@@ -227,6 +230,12 @@ public class FederatedRaftNode {
         response.put("voteGranted", false);
         response.put("responderId", selfId);
         response.put("responderState", state.name());
+
+        // Security / Integrity check: Do not vote for unknown peers unless we are in bootstrap/empty mode
+        if (candidateUrl != null && !federatedPeers.isEmpty() && !federatedPeers.contains(candidateUrl)) {
+            LOGGER.warning("Rejected vote from unknown peer: " + candidateUrl);
+            return response;
+        }
 
         if (term < currentTerm) {
             return response;
@@ -282,6 +291,20 @@ public class FederatedRaftNode {
             @SuppressWarnings("unchecked")
             Map<String, Object> clusterState = (Map<String, Object>) data.get("clusterState");
             engine.applyClusterState(clusterState);
+        }
+
+        // Sync peers from leader
+        if (data.containsKey("allPeers")) {
+            @SuppressWarnings("unchecked")
+            List<String> leadersPeers = (List<String>) data.get("allPeers");
+            if (leadersPeers != null && !leadersPeers.equals(federatedPeers)) {
+                LOGGER.info("Updating peers list from leader: " + leadersPeers);
+                federatedPeers.clear();
+                federatedPeers.addAll(leadersPeers);
+                if (configSaver != null) {
+                    configSaver.accept(federatedPeers);
+                }
+            }
         }
 
         if (data.containsKey("raftPeerIds")) {
@@ -385,6 +408,28 @@ public class FederatedRaftNode {
 
     public Map<String, Long> getPeerLastSeen() {
         return new HashMap<>(peerLastSeen);
+    }
+
+    public synchronized void removePeer(String peerUrl) {
+        if (federatedPeers.remove(peerUrl)) {
+            peerUrlToId.remove(peerUrl);
+            peerStates.remove(peerUrl);
+            peerLastSeen.remove(peerUrl);
+            LOGGER.info("Peer removed: " + peerUrl + ". New peer list: " + federatedPeers);
+            if (configSaver != null) {
+                configSaver.accept(federatedPeers);
+            }
+        }
+    }
+
+    public synchronized void addPeer(String peerUrl) {
+        if (!federatedPeers.contains(peerUrl)) {
+            federatedPeers.add(peerUrl);
+            LOGGER.info("Peer added: " + peerUrl + ". New peer list: " + federatedPeers);
+            if (configSaver != null) {
+                configSaver.accept(federatedPeers);
+            }
+        }
     }
 
     public HttpClient getHttpClient() {

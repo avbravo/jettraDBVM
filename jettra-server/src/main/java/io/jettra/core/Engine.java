@@ -39,7 +39,9 @@ public class Engine {
 
         // -- RAFT INIT --
         boolean distributed = (Boolean) config.getOrDefault("distributed", false);
-        if (distributed) {
+        java.util.List<String> fedServersList = (java.util.List<String>) configManager.getOrDefault("FederatedServers", java.util.Collections.emptyList());
+        boolean federated = !fedServersList.isEmpty();
+        if (distributed || federated) {
             String nodeId = (String) config.getOrDefault("NodeID", "node-" + java.util.UUID.randomUUID().toString());
             @SuppressWarnings("unchecked")
             java.util.List<String> peers = (java.util.List<String>) config.getOrDefault("Peers",

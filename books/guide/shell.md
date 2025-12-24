@@ -4,14 +4,23 @@ El Shell de JettraDB es una interfaz de línea de comandos (CLI) interactiva que
 
 ## Conexión y Autenticación
 
-Por defecto, el shell intenta conectarse a `http://localhost:8080`.
+El Shell de JettraDB ahora soporta dos modos de conexión. Dependiendo del modo, ciertos comandos estarán disponibles o restringidos.
 
-- **Conectar a un servidor específico**:
+### Modos de Conexión
+
+- **Conectar a un Nodo de Base de Datos**:
+  Permite todos los comandos de gestión de datos, usuarios y colecciones.
   ```bash
-  jettra> connect http://192.168.1.50:8080
+  jettra> connect node http://localhost:8080
   ```
 
-- **Iniciar sesión**:
+- **Conectar a un Servidor Federado**:
+  Solo permite comandos de información del cluster federado (`federated ...`). Los comandos de bases de datos y colecciones están deshabilitados.
+  ```bash
+  jettra> connect federated http://localhost:9000
+  ```
+
+- **Iniciar sesión (solo en modo nodo)**:
   ```bash
   jettra> login admin adminadmin
   ```
@@ -139,39 +148,45 @@ Si la colección tiene habilitado el versionado, puede gestionar el historial.
   jettra> revert productos p1 1735001234567
   ```
 
-## Gestión del Cluster
+## Gestión Federada (Recomendado)
 
-Comandos para administrar nodos en un cluster distribuido.
+Si el nodo está bajo la gestión de un servidor federado, use los siguientes comandos para gestionar el cluster:
 
-- **Ver estado del cluster**:
+- **Listar servidores federados**:
   ```bash
-  jettra> cluster status
+  jettra> federated show
   ```
 
-- **Añadir un nodo**:
+- **Ver información del líder federado**:
   ```bash
-  jettra> cluster add http://localhost:8081
+  jettra> federated leader
   ```
 
-- **Eliminar un nodo**:
+- **Listar nodos de base de datos y líder actual**:
   ```bash
-  jettra> cluster remove http://localhost:8081
+  jettra> federated nodes
   ```
 
-- **Pausar/Reanudar sincronización**:
+- **Ver detalles del nodo líder de base de datos**:
   ```bash
-  jettra> cluster pause node2
-  jettra> cluster resume node2
+  jettra> federated node-leader
   ```
 
-## Estado Federado
-
-Si el nodo está bajo la gestión de un servidor federado:
-
-- **Ver estado federado**:
+- **Agregar un servidor federado (Runtime)**:
   ```bash
-  jettra> federated
+  jettra> federated add http://new-federated-node:9000
   ```
+
+- **Detener un servidor federado**:
+  ```bash
+  jettra> federated stop http://localhost:9000
+  ```
+
+- **Remover un peer federado (Raft)**:
+  ```bash
+  jettra> federated remove http://dead-node:9000
+  ```
+
 
 ## Comandos Directos (JQL / SQL)
 

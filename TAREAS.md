@@ -73,16 +73,42 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 
 # Servidor Federado
+- [] En el driver la conexion se debe indicar los servidores federados ya sea leyendo el archivo cluster.json o pasandolos directamente
+en el codigo del driver para abrir la conexion.
+El driver internamente verifica el lider de los servidores federados e identifica el lider de los nodos de base de datos
+e intermanete se va a comunicar con el lider de los nodos de bases de datos. 
+Esto libera al desarrollador de tener que preocuparse por saber cual es el nodo lider.
+Tambien puede obteber la lista y el estado de todos los nodos federados.
+Crea la documentacion en el archivo driver.md
 
-- [] No permitir accerder a los nodos de bases de datos  si no hay un servidor federado disponible, por lo tanto los driver, curl, shell deben apuntar al servidor federado en lugar de la base  de datos directamente.
 
-- [] Como saber cual servidor federado es el lider y cual nodo es el lider
-    
-- [] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
-y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los diversos componentes.
+- [] Elimina el proyecto jettra-federated-shell y la documentacion de ese proyecto.
+
+- [] Anadir los comandos nuevos al help del shell y documentar el archivo shell.md con todos los cambios y ejemplos.
+
+- [] Añadir a la interface grafica la opcion de añadir un nuevo servidor federado se abre un dialogo y se inserta el ip, password y el nombre del servidor
+
+- [] En el shell añadir la opcion de detener un servidor federado
+- [] En el shell añadir la opcion de remover un servidor federado
+
+
+- [] Eliminar el proyecto jettra-federated-shell ya no se necesita.
+
+- [] Cuando un nuevo servidor federado inicia y este solo tiene configurado el ip de los otros servidores federados
+     no debe convertirse en lider, el proceso seria que el lider añade el nuevo servidor federado a su archivo config.json
+    y este se distribuya a los demas servidores federados de manera que todos tengan la misma cantidad de registros de servidores 
+    federados. El proceo ocurre igual cuando se remueve un servidor federado.
+- [] Añadir en el formulario Web la opcion de añadir un nuevo servidor federado y este no debe converrtirse en lidee al menos que no exista otro lider.
+- [] Añadir en el shell un nuevo servidor federado y este no debe converrtirse en lidee al menos que no exista otro lider.
+
+
 
 
 # Documentacion
+
+
+- [ ] Hacer pruebas de  curl y driver que si no hay un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
+y documentarlo
 
 
 
@@ -95,6 +121,80 @@ y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los di
 
 - [x] Corregir en el shell, curl y driver que si no hay un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
 
+
+- [x] Cuando se añade un nuevo servidor federado,  no se deba asignar como lider si ya hay un servidor federado lider y este debe actualizar el archivo cluster.json del servidor lider y de todos los servidores 
+federados si uno o mas servidores federados esta inactivo al activarse debe sincronizar el archivo cluster.json con la lista de servidores federados.
+ -[x] Este proceso ocurre cuando se remueve un servidor federado
+ -[x] Si un servidor federado inicia y tiene configurado los otros servidores federados en el archico cluster.json, debe añadirlo pero no como lider 
+si existe un lider activo. Y el algoritmo compara los servidores federados con los establecidos en el archivo cluster.json de cada servidor
+federado y actualiza el archivo con el nuevo servidor federado para que garantize la integracion.
+ -[x] en la interface web debe añadir la opcion de añadir un nuevo servidor federado pero siempre debe ser FOLLOWER o la menos
+que no exista un lider añadirlo como lider.
+
+
+
+ - [x] El comando federated show  genera el error Error: config.json not found, y deberia mostrar la lista de servidores federados, el estatus y quien es el lider de servidores federados.
+ - [x] Añadir la opcion de detener un servidor federado con el comando federated stop <url> este comando debe llevar una pregunta de confirmacion
+ - [x] Añadir la opcion de eliminar un servidor federado con el comando federated remove <url> este comando debe llevar una pregunta de confirmacion
+
+
+- [x] cuando me conecto mediante 
+connect federated http://localhost:9000 
+e intengo ejecutar login admkn adminadmin
+envia el error
+Command not available in Federated Mode. Only 'federated' commands are allowed.
+debes permiter ejecutra el login para  autenficarse con el servidor federeado 
+
+
+- [x] Añadir a jettra-shell el comando connect federated que permite conectarse a un servidor federado 
+y modificar el antiguo connect
+para que sea connect node para conectarse a un nodo de base de datos 
+Por lo tanto el comando connect dejara de funcionaar y en su lugar se usar connect node o connect federated pasandole el url del servidor a conectarse
+cuando se ejecuta con connect federated no se permite ejectuar los comandos de bases de datos ni colecciones solo estara disponible
+ federated show         List federated servers
+  federated leader       Show federated leader info
+  federated nodes        Show DB nodes and DB leader
+  federated node-leader  Show DB leader info
+
+En cambio cuando usa connect node si deben estar disponibles todos los comandos
+modifique el help para que considere esta condicion y edite el archivo shell.md para indicar los nuevos cambios
+
+
+
+- [x] en jettra-shell el comando 
+federated node-leader genera el error
+Error: Internal Server Error
+y el comando federated leader inclur en la informacion generada el ip y puerto
+
+eleminar los comandos siguiente en el jettra-shell, curl y drive
+  cluster status         Show cluster status
+  cluster add <url>      Add a new node to the cluster
+  cluster remove <url>   Remove a node from the cluster
+
+
+
+y añadir la documentacion de estos comandos en el archivo shell.md
+ federated show         List federated servers
+  federated leader       Show federated leader info
+  federated nodes        Show DB nodes and DB leader
+  federated node-leader  Show DB leader info
+
+
+- [x] modifica jettra-shell y añade comandos federated show muesta la lista de los servidores federados a los que esta asociado la base de datos
+federated leader  : muestra la inforamcion del lider federado
+federated nodes muesta todos los nodos de base de datos y el nodo lider que son parte de la red federada
+federated node leader muesta la intormacion del nodo de base de datos lider. 
+Incluye estos comandos en el dirver y curl, y crea la documentacion con los ejemplos necesarios
+
+
+- [x] No permitir accerder a los nodos de bases de datos  si no hay un servidor federado disponible, por lo tanto los driver, curl, shell deben apuntar al servidor federado en lugar de la base  de datos directamente.
+
+- [] Como saber cual servidor federado es el lider y cual nodo es el lider
+
+- [x] añade un comando al jetrra-federaeted-shell llamado node-leader que devuelve el nodo de bsae dde datos lider, este comando tambien debe ser accedido por el driver , curl, y jettra-shel,l de manera que permita identiificar la base de datos lider para ejecutar las operaciones
+    
+- [x] Actualiza el shell, driver, curl, para que se conecten al servidor federado en lugar de la base de datos directamente y documenta esta opracion en federated.md 
+y actualiza los archivos .md que se refieren al tema. y Hacer pruebas con los diversos componentes.
 
 
 

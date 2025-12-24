@@ -3,6 +3,7 @@ package io.jettra.federated;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,6 +65,9 @@ public class FederatedService implements HttpService {
         rules.post("/node-config/{nodeId}", this::saveNodeConfig);
         rules.post("/node/stop/{nodeId}", this::handleStopNode);
         rules.post("/node/remove/{nodeId}", this::handleRemoveNode);
+        rules.get("/node-leader", this::getNodeLeader);
+        rules.post("/raft/removePeer", this::handleRemovePeer);
+        rules.post("/raft/addPeer", this::handleAddPeer);
         rules.post("/stop", (req, res) -> this.handleStopFederated(req, res));
     }
 
@@ -132,6 +136,21 @@ public class FederatedService implements HttpService {
                 status.put("raftState", raftNode.getState());
                 status.put("raftTerm", raftNode.getCurrentTerm());
                 status.put("raftLeaderId", raftNode.getLeaderId());
+                String leaderUrl = null;
+                if (raftNode.getLeaderId() != null) {
+                    if (raftNode.getLeaderId().equals(raftNode.getSelfId())) {
+                        leaderUrl = raftNode.getSelfUrl();
+                    } else {
+                        // Find URL from peer maps
+                        for (Map.Entry<String, String> entry : raftNode.getPeerUrlToId().entrySet()) {
+                            if (entry.getValue().equals(raftNode.getLeaderId())) {
+                                leaderUrl = entry.getKey();
+                                break;
+                            }
+                        }
+                    }
+                }
+                status.put("raftLeaderUrl", leaderUrl);
                 status.put("raftSelfId", raftNode.getSelfId());
                 status.put("raftSelfUrl", raftNode.getSelfUrl());
                 status.put("raftPeers", raftNode.getPeers());
@@ -170,11 +189,14 @@ public class FederatedService implements HttpService {
     private void getConfig(ServerRequest req, ServerResponse res) {
         try {
             File configFile = new File("config.json");
+            if (!configFile.exists()) {
+                configFile = new File("cluster.json");
+            }
             if (configFile.exists()) {
                 Map<String, Object> config = mapper.readValue(configFile, Map.class);
                 res.send(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(config));
             } else {
-                res.status(404).send("config.json not found");
+                res.send("{}");
             }
         } catch (Exception e) {
             res.status(500).send(e.getMessage());
@@ -296,12 +318,79 @@ public class FederatedService implements HttpService {
         // Authenticate - for now let's just do it if token is provided or simple check
         // Ideally we check if it's the right token.
         
-        res.send(Map.of("status", "stopping").toString());
+        try {
+            res.send(mapper.writeValueAsString(Map.of("status", "stopping")));
+        } catch (Exception e) {
+            res.send("{\"status\":\"stopping\"}");
+        }
+        
         new Thread(() -> {
             try {
                 Thread.sleep(1000);
                 System.exit(0);
             } catch (Exception e) {}
         }).start();
+    }
+
+
+    private void getNodeLeader(ServerRequest req, ServerResponse res) {
+        try {
+            Map<String, Object> status = engine.getClusterStatus();
+            String leaderId = (String) status.get("leaderId");
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> nodes = (List<Map<String, Object>>) status.get("nodes");
+
+            Map<String, Object> leaderInfo = null;
+            if (leaderId != null && nodes != null) {
+                for (Map<String, Object> node : nodes) {
+                    if (leaderId.equals(node.get("id"))) {
+                        leaderInfo = node;
+                        break;
+                    }
+                }
+            }
+
+            if (leaderInfo != null) {
+                res.send(mapper.writeValueAsString(leaderInfo));
+            } else {
+                res.status(404).send(mapper.writeValueAsString(Map.of("error", "No active DB leader found")));
+            }
+        } catch (Exception e) {
+            res.status(500).send(e.getMessage());
+        }
+    }
+
+    private void handleRemovePeer(ServerRequest req, ServerResponse res) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, String> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+            String url = data.get("url");
+            if (url != null) {
+                raftNode.removePeer(url);
+                res.send(mapper.writeValueAsString(Map.of("status", "success", "peerRemoved", url)));
+            } else {
+                res.status(400).send("Missing url");
+            }
+        } catch (Exception e) {
+            res.status(500).send(e.getMessage());
+        }
+    }
+
+
+    private void handleAddPeer(ServerRequest req, ServerResponse res) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, String> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+            String url = data.get("url");
+            if (url != null) {
+                if (!url.startsWith("http")) url = "http://" + url;
+                raftNode.addPeer(url);
+                res.send(mapper.writeValueAsString(Map.of("status", "success", "peerAdded", url)));
+            } else {
+                res.status(400).send("Missing url");
+            }
+        } catch (Exception e) {
+            res.status(500).send(e.getMessage());
+        }
     }
 }

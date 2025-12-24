@@ -151,24 +151,7 @@ Connected to http://localhost:8080
 
 - **Check Status**:
   ```bash
-  jettra> cluster status
-  {
-    "state" : "LEADER",
-    "term" : 5,
-    "peers" : [ "http://localhost:8081", "http://localhost:8082" ]
-  }
-  ```
-
-- **Add Node**:
-  ```bash
-  jettra> cluster add http://localhost:8081
-  Node added: ...
-  ```
-
-- **Remove Node**:
-  ```bash
-  jettra> cluster remove http://localhost:8081
-  Node removed: ...
+  jettra> federated nodes
   ```
 
 ### Java Driver
@@ -178,14 +161,10 @@ The `JettraClient` provides methods for programmatic management:
 ```java
 JettraClient client = new JettraClient("localhost", 8080, "admin", "password");
 
+```java
 // Get Status
-Map<String, Object> status = client.getClusterStatus();
-
-// Add Node
-client.registerNode("http://localhost:8081");
-
-// Remove Node
-client.deregisterNode("http://localhost:8081");
+List<Map<String, Object>> nodes = client.getFederatedNodes();
+```
 ```
 
 ## Management UI
