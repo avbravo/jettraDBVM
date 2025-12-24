@@ -131,7 +131,7 @@ max_value: Parse rule.Value as float/int and compare.
 range: Parse rule.Value as "min,max" and compare.
 Verification Plan
 Automated Tests
-Create a shell script verify_new_rules.sh to:
+Create a shell script sh/testing/verify_new_rules.sh to:
 Define rules for a test collection.
 Insert valid documents.
 Attempt to insert invalid documents for each rule and verify failure.

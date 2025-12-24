@@ -7,9 +7,11 @@ java -XX:+UseCompactObjectHeaders -jar jettraDBVM.jar
 
 java -XX:+UseCompactObjectHeaders -jar jettraDBVMShell.jar
 
+java -XX:+UseCompactObjectHeaders -jar jettraFederatedShell.jar
+
 # Benchmarking
 
-./run_benchmark_comparison.sh
+./sh/testing/run_benchmark_comparison.sh
 
 # Detener Jettra
 pkill -f "jettraDBVM.jar"
@@ -37,6 +39,8 @@ http://0.0.0.0:6585/
 
 curl -u admin:adminadmin "http://localhost:8080/..."
 
+# Docker 
+- [] Generar los archivos y ejemplos de docker compose
 
 # jAVA 25
 
@@ -58,6 +62,15 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 - [] Modificar el shell para que interactue con el servidor federado en lugar de las bases de datos directamente
 - [] Modificar el curl para que interactue con el servidor federado en lugar de las bases de datos directamente
 
+# Referencias entre documentos
+
+
+# Jettra Storage 
+
+
+
+# Base de datos prueba JetrraBasic
+
 
 # Servidor Federado
 
@@ -74,23 +87,7 @@ deben pasar por el servidor federado.
 
 
 
-- [] Puedes documentar como acceder a la interface web del servidor federeado y cambia la contraseña inicial por adminadmin y crea un registro que permita cambiar la contraseña y almacenarla para mayor seguridad. y en el Dashboard Federated siempre dice que esta activo el nodeo cuando no esta activo.
-- [] En la interface grafica de cada nodo solo debe mostrar al servidor federado al que pertenece
 
-- [] Crear un shell para el servidor federado que permita administrar los nodos
-
-
-
-
-
-# Referencias entre documentos
-
-
-# Jettra Storage 
-
-
-
-# Base de datos prueba JetrraBasic
 
 
 # ---------------------------------------------------------
@@ -107,6 +104,19 @@ deben pasar por el servidor federado.
 
 
 # Servidor Federado
+
+
+- [x] Crear un shell para el servidor federado que permita administrar los nodos desde la consola el proyecto se debe llamar jettra-federated-shell y debe estar 
+a nivel de jettra-server y documentar en el archivo federated.md como se usa. Este shell debe permitir ver todos los servidores federados
+su estatus, detener un servidor federado, ver cual es el servidor federado lider y los nodos que pertenecen al servidor federado.
+
+
+-[x] Una vez dentro, escriba help para ver la lista de comandos disponibles. Por defecto, intentará conectarse a http://localhost:9000.
+
+
+- [x] Organizar los directorios sh y log 
+
+
 - [x] El servidor federado lider no replica  a los otros servidores federados que son FOLLOWER el estado de todos los servidores federados 
 en la lista Servidores Federados de la interface grafica
 

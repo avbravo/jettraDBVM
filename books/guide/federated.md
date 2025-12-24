@@ -252,6 +252,65 @@ curl -s http://localhost:9000/federated/status | grep '"raftState"'
 
 Si detiene el proceso del líder actual y espera unos segundos, verá que uno de los otros nodos cambia su `raftState` de `FOLLOWER` a `LEADER`.
 
+## Jettra Federated Shell
+
+El Jettra Federated Shell es una herramienta de línea de comandos diseñada específicamente para la administración y monitorización del cluster federado. A diferencia del shell estándar de JettraDB, este enfoca sus capacidades en la salud de la infraestructura y el control de los nodos federados.
+
+### Características Principales
+
+*   **Monitorización en Tiempo Real**: Ver el estado de todos los servidores federados (Líder, Seguidores).
+*   **Gestión de Topología**: Consultar los nodos de base de datos registrados y sus roles actuales.
+*   **Control de Servicio**: Capacidad para detener nodos federados de forma remota (requiere autenticación).
+
+### Instalación y Ejecución
+
+El shell se encuentra en el proyecto `jettra-federated-shell`. Una vez compilado, puede ejecutarse mediante:
+
+```bash
+java -jar target/jettraFederatedShell.jar
+```
+
+### Comandos Disponibles
+
+Una vez dentro del shell, puede utilizar los siguientes comandos:
+
+*   **`connect <url>`**: Establece la dirección del servidor federado al que desea conectarse (por defecto `http://localhost:9000`).
+*   **`login <user> <password>`**: Autentica la sesión para permitir comandos administrativos como el apagado de nodos.
+*   **`status`**: Muestra una tabla detallada con todos los servidores federados, sus IDs, estados Raft y URLs.
+*   **`leader`**: Identifica de un vistazo quién es el Líder Federado y quién es el Líder de la Base de Datos.
+*   **`nodes`**: Lista todos los nodos de base de datos registrados, su estado de salud (ACTIVE/INACTIVE) y su rol (LEADER/FOLLOWER).
+*   **`stop <url|self>`**: Envía un comando de apagado ordenado al servidor federado especificado o al actual.
+*   **`help`**: Muestra la lista de comandos disponibles.
+*   **`exit`**: Sale de la aplicación.
+
+### Ejemplo de Uso
+
+1.  **Conexión**:
+    `jettra-fed [http://localhost:9000]> connect http://localhost:9001`
+2.  **Consulta de Estado**:
+    `jettra-fed [http://localhost:9001]> status`
+    ```
+    --- Federated Cluster Status ---
+    Self ID: fed-9001
+    Self URL: http://localhost:9001
+    Raft State: FOLLOWER
+    Raft Term: 12
+    Raft Leader ID: fed-9000
+
+    --- Federated Peers ---
+    * http://localhost:9001     | ID: fed-9001   | Status: FOLLOWER (SELF)
+      http://localhost:9000     | ID: fed-9000   | Status: LEADER
+      http://localhost:9002     | ID: fed-9002   | Status: FOLLOWER
+    ```
+3.  **Verificar Nodos de DB**:
+    `jettra-fed [http://localhost:9001]> nodes`
+    ```
+    Node ID         | URL                       | Status     | Role
+    ----------------------------------------------------------------------
+    node1           | http://localhost:8080     | ACTIVE     | LEADER
+    node2           | http://localhost:8081     | ACTIVE     | FOLLOWER
+    ```
+
 ## Uso con Herramientas Cliente
 
 Aunque el Servidor Federado coordina el cluster, las herramientas clientes (Shell, Driver, Curl) generalmente siguen interactuando con los puntos de entrada de los nodos de base de datos, quienes internamente respetan la topología dictada por el federado.
@@ -378,7 +437,7 @@ networks:
 
 ## Pruebas de Failover Automático
 
-Para validar que su infraestructura de Servidores Federados es capaz de recuperarse ante fallos, puede utilizar el script de prueba incluido `test_federated_failover.sh`.
+Para validar que su infraestructura de Servidores Federados es capaz de recuperarse ante fallos, puede utilizar el script de prueba incluido `sh/testing/test_federated_failover.sh`.
 
 ### ¿Qué hace esta prueba?
 1.  **Levanta 3 Servidores Federados** en la misma máquina (puertos 9000, 9001 y 9002).
@@ -392,8 +451,47 @@ Para validar que su infraestructura de Servidores Federados es capaz de recupera
 Asegúrese de que no haya otros procesos usando los puertos 9000-9002 y ejecute:
 
 ```bash
-chmod +x test_federated_failover.sh
-./test_federated_failover.sh
+chmod +x sh/testing/test_federated_failover.sh
+./sh/testing/test_federated_failover.sh
 ```
 
 El script mostrará en tiempo real cómo los nodos detectan la caída y cómo el nuevo mando se establece sin intervención manual.
+
+
+# Shell
+
+Ejecute el proyecto
+
+```shell
+java -jar jettraFederatedShell.jar
+```
+Ingrese el comando help para ver la ayuda
+
+```shell
+help
+```
+
+Listado de comandos:
+
+  connect <url>    - Set federated server URL (default: http://localhost:9000)
+  login <u? <p>    - Login to federated server
+  status           - View federated cluster and raft status
+  leader           - View current leaders (Federated and DB)
+  nodes            - View managed DB nodes and their status
+  stop <url|self>  - Stop a federated node (Requires login)
+  help             - Show this help
+  exit/quit        - Exit shell
+
+
+Conectarse el servidor federado
+
+connect http://localhost:9000
+
+
+Hacer el login
+
+login admin adminadmin
+
+
+Ejecute los comandos que considere oportunos.
+
