@@ -47,6 +47,34 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 
 [BellSoft](https://bell-sw.com/pages/downloads/#jdk-25-lts)
 
+# Test Avanzado.
+
+- [] Ejecutar un test de federated1 hasta federated5 y de node1 hasta node7. Insertar registros , eliminar registros
+simular 500 usuarios simultaneos y guardar el resultado en archivos en book/test/
+Guardar resultados de consumo de memoria ram, consumo de cpu, tiempos de respuestas , distribucion de datos.
+Cantidad e usuarios simultaneos, has este test para la version de helidon, de golang y quarkus y genera
+los resultados para consultarlos en archivos y graficas comparativas y  un analisis para determinar cual es la
+mejor implementacion
+
+
+- [] Apl
+
+# Golang
+ -[] Analiza todos los proyectos y crea su contraparte en Goolang, es decir una alternativa a cada uno
+pero desarrollado sobre el lenguaje golang, Los proyectos los renombras al final con -golang. Por ejemplo
+jettra-server seria jettra-server-golang y debes implementar todas las funcionalidades existentes en el los proyectos.
+
+
+# Quarkus
+ -[] Analiza todos los proyectos y crea su contraparte en Quarkus, es decir una alternativa a cada uno
+pero desarrollado sobre el lenguaje quarkus Los proyectos los renombras al final con -quarkus. Por ejemplo
+jettra-server seria jettra-server-quarkus y debes implementar todas las funcionalidades existentes en el los proyectos.
+
+
+
+
+
+
 # JettraMemoryDB
 - [] Crear la base de datos JettraMemoryDB que es una base de datos Key-Value en memoria desarrollada en Golang y que contiene un driver Java
      esta base de datos se usa con el servidor federado para almacenar los datos en memoria , mientras un proceso asincrono 
@@ -67,8 +95,6 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 # Jettra Storage 
 
 
-
-# Base de datos prueba JetrraBasic
 
 
 # Documentacion
@@ -115,30 +141,6 @@ Crea la documentacion en el archivo driver.md
 
 
 - [] Instale el plugin de excalidraw pero no muestra los diagramas de manera visual
-
-
-# Test Avanzado.
-
-- [] Ejecutar un test de federated1 hasta federated5 y de node1 hasta node7. Insertar registros , eliminar registros
-simular 500 usuarios simultaneos y guardar el resultado en archivos en book/test/
-Guardar resultados de consumo de memoria ram, consumo de cpu, tiempos de respuestas , distribucion de datos.
-Cantidad e usuarios simultaneos, has este test para la version de helidon, de golang y quarkus y genera
-los resultados para consultarlos en archivos y graficas comparativas y  un analisis para determinar cual es la
-mejor implementacion
-
-
-- [] Apl
-
-# Golang
- -[] Analiza todos los proyectos y crea su contraparte en Goolang, es decir una alternativa a cada uno
-pero desarrollado sobre el lenguaje golang, Los proyectos los renombras al final con -golang. Por ejemplo
-jettra-server seria jettra-server-golang y debes implementar todas las funcionalidades existentes en el los proyectos.
-
-
-# Quarkus
- -[] Analiza todos los proyectos y crea su contraparte en Quarkus, es decir una alternativa a cada uno
-pero desarrollado sobre el lenguaje quarkus Los proyectos los renombras al final con -quarkus. Por ejemplo
-jettra-server seria jettra-server-quarkus y debes implementar todas las funcionalidades existentes en el los proyectos.
 
 
 
