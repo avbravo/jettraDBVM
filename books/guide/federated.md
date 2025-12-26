@@ -569,3 +569,41 @@ chmod +x sh/testing/test_federated_failover.sh
 El script mostrará en tiempo real cómo los nodos detectan la caída y cómo el nuevo mando se establece sin intervención manual.
 
 
+## Integración con Jettra-memory (Capa de Memoria)
+
+JettraDB puede integrar una capa de base de datos en memoria avanzada (`jettra-memory`) para acelerar las operaciones y proporcionar una latencia ultra-baja. El Servidor Federado actúa como el orquestador principal de esta capa.
+
+### Arquitectura CRUDP (Memory Sync, DB Async)
+
+El Servidor Federado implementa el patrón **CRUDP** para unificar el acceso a la memoria y al almacenamiento persistente:
+
+1.  **Escritura en Memoria (Síncrona)**: Cuando llega una operación CRUD al Servidor Federado a través de `/api/*`, este la reenvía inmediatamente al **Memory Leader**. El cliente recibe la respuesta una vez que la memoria ha confirmado el cambio.
+2.  **Persistencia en DB (Asíncrona)**: Simultáneamente, el servidor federado envía la misma operación al **Persistent DB Leader** de forma asíncrona (en segundo plano). Esto garantiza que los datos sean persistentes sin penalizar la velocidad de respuesta al cliente.
+
+### Gestión de Nodos de Memoria
+
+*   **Registro**: Los nodos `jettra-memory` se registran en el servidor federado usando el endpoint `/federated/register/memory`.
+*   **Elección de Líder de Memoria**: El Líder Federado selecciona un **Memory Leader** activo. Se prioriza la proximidad física (nodos en `localhost`) para minimizar la latencia de red.
+*   **Sincronización Inicial (Warm-up)**: Cuando un nuevo Memory Leader es elegido (o al arrancar el cluster), el Servidor Federado le ordena sincronizarse con el Persistent DB Leader actual mediante el endpoint `/api/sync`. El nodo de memoria descarga todos los datos de la base de datos persistente para estar "caliente" antes de servir peticiones.
+
+### Configuración de Jettra-memory (`memory.json`)
+
+El archivo `memory.json` sigue una estructura plana similar a `config.json` para facilitar la consistencia en el cluster:
+
+```json
+{
+  "Host": "0.0.0.0",
+  "Port": 9090,
+  "AdminPassword": "adminadmin",
+  "FederatedServers": [
+    "http://localhost:9000",
+    "http://localhost:9001"
+  ]
+}
+```
+
+### Endpoints de Gestión de Memoria
+
+*   `POST /federated/register/memory`: Registra un nuevo nodo de memoria.
+*   `POST /federated/heartbeat/memory`: Envía latidos de salud desde los nodos de memoria.
+*   `ANY /api/{path+}`: Proxy unificado que aplica el patrón CRUDP.

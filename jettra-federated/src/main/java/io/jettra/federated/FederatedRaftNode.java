@@ -48,13 +48,18 @@ public class FederatedRaftNode {
     public FederatedRaftNode(String selfId, String selfUrl, List<String> federatedPeers, FederatedEngine engine, boolean bootstrap, java.util.function.Consumer<List<String>> configSaver) {
         this.selfId = selfId;
         this.selfUrl = selfUrl;
-        this.federatedPeers = federatedPeers;
         this.engine = engine;
         this.bootstrap = bootstrap;
         this.configSaver = configSaver;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
                 .build();
+
+        // Deduplicate initial peers
+        java.util.List<String> unique = federatedPeers.stream().distinct().toList();
+        federatedPeers.clear();
+        federatedPeers.addAll(unique);
+        this.federatedPeers = federatedPeers;
     }
 
     public void start() {
@@ -112,10 +117,11 @@ public class FederatedRaftNode {
         if (state == State.LEADER) {
             sendHeartbeats();
         } else {
-            // Check election timeout
-            long timeout = 3000 + random.nextInt(2000); 
+            // Check election timeout - Increased to allow fallback mechanisms to run
+            // Timeout range: 1500ms - 3500ms
+            long timeout = 1500 + random.nextInt(2000); 
             if (now - lastHeartbeatReceived > timeout) {
-                LOGGER.fine("Election timeout! Starting election."); // Changed to fine to reduce noise
+                LOGGER.info("Election timeout (" + timeout + "ms)! Starting election.");
                 startElection();
             }
         }
@@ -125,48 +131,99 @@ public class FederatedRaftNode {
         state = State.CANDIDATE;
         currentTerm++;
         votedFor = selfId;
+        leaderId = null;
         lastHeartbeatReceived = System.currentTimeMillis();
         
-        List<String> otherPeers = federatedPeers.stream()
+        // Use a set to deduplicate peers by URL and normalize them
+        java.util.Set<String> uniquePeers = new java.util.HashSet<>(federatedPeers);
+        
+        List<String> otherPeers = uniquePeers.stream()
                 .filter(url -> !url.equals(selfUrl))
-                .filter(url -> !url.contains("localhost:" + engine.getPort()))
-                .filter(url -> !url.contains("127.0.0.1:" + engine.getPort()))
-                .filter(url -> !url.contains("0.0.0.0:" + engine.getPort()))
+                .filter(url -> {
+                    // Filter own node aliases to avoid voting for ourselves via different hostnames
+                    try {
+                        String myPort = ":" + selfUrl.substring(selfUrl.lastIndexOf(":") + 1);
+                        if (url.contains(myPort)) {
+                            if (url.contains("localhost") || url.contains("127.0.0.1") || url.contains("0.0.0.0")) {
+                                return false;
+                            }
+                        }
+                    } catch (Exception e) {
+                        // Ignore malformed URLs
+                    }
+                    return true;
+                })
                 .toList();
 
+        int totalPeers = uniquePeers.size();
+        int majority = (totalPeers / 2) + 1;
+        
+        LOGGER.info("Starting election for node " + selfId + " term " + currentTerm + ". Peers: " + totalPeers + ", Majority: " + majority);
+
         if (otherPeers.isEmpty()) {
+            LOGGER.info("No other peers found. Becoming LEADER by default.");
             becomeLeader();
             return;
         }
 
+        LOGGER.info("Sending RequestVote to " + otherPeers.size() + " peers. Term: " + currentTerm);
+
         final java.util.concurrent.atomic.AtomicInteger votes = new java.util.concurrent.atomic.AtomicInteger(1);
         final java.util.concurrent.atomic.AtomicInteger responses = new java.util.concurrent.atomic.AtomicInteger(0);
-        int majority = (federatedPeers.size() / 2) + 1;
 
         for (String peerUrl : otherPeers) {
              sendRequestVote(peerUrl, votes, majority, responses);
         }
         
-        // Safety check for isolation
+        // Adaptive Solitary / Stalemate Fallback
         scheduler.schedule(() -> {
-            if (state == State.CANDIDATE && responses.get() == 0) {
-                unreachableCount++;
-                if (unreachableCount >= 3) {
-                    LOGGER.warning("Multiple election cycles without any peer response. Assuming SOLITARY LEADERSHIP.");
-                    becomeLeader();
+            if (state == State.CANDIDATE) {
+                int respCount = responses.get();
+                int activeCount = respCount + 1; // +1 for self
+                
+                LOGGER.info("Election status term " + currentTerm + ": votes=" + votes.get() + "/" + majority + ", responses=" + respCount + "/" + otherPeers.size());
+
+                if (respCount > 0 && activeCount < majority) {
+                    boolean isBestCandidate = true;
+                    java.util.List<String> sortedIds = new java.util.ArrayList<>(peerUrlToId.values());
+                    sortedIds.add(selfId);
+                    java.util.Collections.sort(sortedIds);
+                    
+                    if (!selfId.equals(sortedIds.get(0))) {
+                        isBestCandidate = false;
+                        LOGGER.fine("Stalemate fallback: NOT the best candidate (smaller ID " + sortedIds.get(0) + ")");
+                    }
+                    
+                    if (isBestCandidate) {
+                        unreachableCount++;
+                        if (unreachableCount >= 2) { 
+                            LOGGER.warning("Election stalemate. Reachable (" + activeCount + "/" + totalPeers + "). Forced leadership by ID priority.");
+                            becomeLeader();
+                            unreachableCount = 0;
+                        }
+                    } else {
+                        unreachableCount = 0;
+                    }
+                } else if (respCount == 0 && totalPeers > 1) {
+                    unreachableCount++;
+                    if (unreachableCount >= 2) { 
+                        LOGGER.warning("Solitary mode: No peers responding out of " + (totalPeers-1) + ". Assuming leadership.");
+                        becomeLeader();
+                        unreachableCount = 0;
+                    }
+                } else {
                     unreachableCount = 0;
                 }
-            } else if (responses.get() > 0) {
-                unreachableCount = 0;
             }
-        }, 1500, TimeUnit.MILLISECONDS);
+        }, 1200, TimeUnit.MILLISECONDS);
     }
 
     private void becomeLeader() {
         if (state != State.LEADER) {
             state = State.LEADER;
             leaderId = selfId;
-            LOGGER.info("Became LEADER for term " + currentTerm);
+            lastHeartbeatReceived = System.currentTimeMillis(); // Reset to avoid immediate re-election if something skips
+            LOGGER.info("Promoted to LEADER for term " + currentTerm);
             engine.onBecomeLeader();
             sendHeartbeats(); // Immediate heartbeat
         }
@@ -181,6 +238,7 @@ public class FederatedRaftNode {
         votedFor = null;
         leaderId = null;
         lastHeartbeatReceived = System.currentTimeMillis();
+        unreachableCount = 0;
     }
 
     // --- RPC Senders ---

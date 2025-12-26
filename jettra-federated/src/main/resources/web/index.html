@@ -121,6 +121,10 @@
                             <span id="active-nodes" class="value text-success">0</span>
                         </div>
                         <div class="stat-card glass">
+                            <span class="label">Nodos de Memoria</span>
+                            <span id="memory-nodes-stat" class="value">0</span>
+                        </div>
+                        <div class="stat-card glass">
                             <span class="label">Raft Term</span>
                             <span id="raft-term" class="value">0</span>
                         </div>
@@ -128,38 +132,68 @@
                 </div>
 
                 <div class="grid-layout">
-                    <!-- Nodes Table -->
-                    <section class="section glass">
-                        <div class="section-header">
-                            <h2><i class="fas fa-server"></i> Nodos del Cluster</h2>
-                            <div class="controls">
-                                <button id="refresh-btn" class="btn-secondary btn-sm">
-                                    <i class="fas fa-sync-alt"></i> Refrescar
-                                </button>
+                    <!-- Main Column for Tables -->
+                    <div class="main-sections space-y-8">
+                        <!-- DB Nodes Table -->
+                        <section class="section glass">
+                            <div class="section-header">
+                                <h2><i class="fas fa-database text-primary"></i> Tabla de Cluster (Escritura
+                                    Persistente)</h2>
+                                <div class="controls">
+                                    <button id="refresh-btn" class="btn-secondary btn-sm">
+                                        <i class="fas fa-sync-alt"></i> Refrescar
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                        <div class="table-container">
-                            <table id="nodes-table">
-                                <thead>
-                                    <tr>
-                                        <th>Estado</th>
-                                        <th>ID del Nodo</th>
-                                        <th>URL</th>
-                                        <th>Rol</th>
-                                        <th>CPU</th>
-                                        <th>RAM</th>
-                                        <th>Disco</th>
-                                        <th>Latencia</th>
-                                        <th>Último Heartbeat</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="nodes-list">
-                                    <!-- Data injected here -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
+                            <div class="table-container">
+                                <table id="nodes-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Estado</th>
+                                            <th>ID del Nodo</th>
+                                            <th>URL</th>
+                                            <th>Rol</th>
+                                            <th>CPU</th>
+                                            <th>RAM</th>
+                                            <th>Disco</th>
+                                            <th>Latencia</th>
+                                            <th>Último Heartbeat</th>
+                                            <th>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="nodes-list">
+                                        <!-- Data injected here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+
+                        <!-- Memory Nodes Table -->
+                        <section class="section glass" style="margin-top: 2rem;">
+                            <div class="section-header">
+                                <h2><i class="fas fa-memory text-warning"></i> Nodos de Memoria (Lectura Ultra-Rápida /
+                                    In-Memory)</h2>
+                            </div>
+                            <div class="table-container">
+                                <table id="memory-nodes-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Estado</th>
+                                            <th>ID del Nodo</th>
+                                            <th>URL</th>
+                                            <th>Rol de Memoria</th>
+                                            <th>CPU</th>
+                                            <th>RAM</th>
+                                            <th>Último Heartbeat</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="memory-nodes-list">
+                                        <!-- Data injected here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
 
                     <!-- Raft Info Side -->
                     <aside class="sidebar-info">

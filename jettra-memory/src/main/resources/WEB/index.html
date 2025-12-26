@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JettraMemory DB</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col">
+    <nav class="glass p-4 flex justify-between items-center">
+        <div class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+            JettraMemory DB</div>
+        <div class="flex gap-4">
+            <button class="px-4 py-2 rounded hover:bg-white/10" onclick="showSection('dashboard')">Dashboard</button>
+            <button class="px-4 py-2 rounded hover:bg-white/10"
+                onclick="showSection('collections')">Collections</button>
+            <button class="px-4 py-2 rounded hover:bg-white/10" onclick="showSection('config')">Config</button>
+        </div>
+        <div id="status" class="text-sm px-3 py-1 rounded bg-green-500/20 text-green-400">Online</div>
+    </nav>
+
+    <main class="flex-1 p-8 overflow-auto">
+        <div id="dashboard" class="section">
+            <h1 class="text-3xl font-bold mb-6">Memory Dashboard</h1>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="glass p-6 rounded-xl">
+                    <h3 class="text-gray-400 mb-2">Memory Usage</h3>
+                    <div class="text-3xl font-mono" id="mem-usage">Loading...</div>
+                </div>
+                <div class="glass p-6 rounded-xl">
+                    <h3 class="text-gray-400 mb-2">Total Collections</h3>
+                    <div class="text-3xl font-mono" id="total-cols">0</div>
+                </div>
+                <div class="glass p-6 rounded-xl">
+                    <h3 class="text-gray-400 mb-2">Uptime</h3>
+                    <div class="text-3xl font-mono" id="uptime">0s</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="collections" class="section hidden">
+            <h1 class="text-3xl font-bold mb-6">Collections</h1>
+            <div class="glass p-6 rounded-xl">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="p-3">Name</th>
+                            <th class="p-3">Size</th>
+                            <th class="p-3">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="col-list">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="config" class="section hidden">
+            <h1 class="text-3xl font-bold mb-6">Configuration</h1>
+            <div class="glass p-6 rounded-xl max-w-lg">
+                <div class="mb-4">
+                    <label class="block text-gray-400 mb-2">Admin Password</label>
+                    <input type="password" id="new-password"
+                        class="w-full bg-black/30 border border-white/10 rounded p-2 text-white"
+                        placeholder="New Password">
+                </div>
+                <button class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded"
+                    onclick="updatePassword()">Update</button>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function showSection(id) {
+            document.querySelectorAll('.section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+                document.getElementById('mem-usage').innerText = data.memoryUsage;
+                document.getElementById('total-cols').innerText = data.collections;
+                document.getElementById('uptime').innerText = data.uptime;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        setInterval(fetchStats, 2000);
+        fetchStats();
+    </script>
+</body>
+
+</html>

@@ -39,7 +39,7 @@ public class FederatedEngine {
 
     public void onBecomeLeader() {
         this.isFederatedLeader = true;
-        LOGGER.info("This node is now the FEDERATED LEADER. Taking control of DB cluster.");
+        LOGGER.info("This node is now the FEDERATED LEADER (" + port + "). Taking control of DB cluster.");
         
         // Reconcile: If we think there is a leader, make sure it's promoted.
         // If not, elect a new one immediately.
@@ -49,9 +49,11 @@ public class FederatedEngine {
                 LOGGER.info("Re-promoting current leader on federated leadership takeover: " + currentLeaderId);
                 assignLeader(currentLeaderId);
             } else {
+                LOGGER.info("Current leader " + currentLeaderId + " is not active/valid. Electing new one.");
                 electNewLeader();
             }
         } else {
+            LOGGER.info("No current leader ID. Electing new one.");
             electNewLeader();
         }
         checkNodesHealth();
@@ -65,6 +67,16 @@ public class FederatedEngine {
     public void start() {
         LOGGER.info("Federated Engine starting...");
         scheduler.scheduleAtFixedRate(this::checkNodesHealth, 5, 5, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(this::reconcileDbLeader, 10, 10, TimeUnit.SECONDS);
+    }
+
+    private void reconcileDbLeader() {
+        if (!isFederatedLeader) return;
+        
+        if (currentLeaderId == null || !isNodeActive(currentLeaderId)) {
+            LOGGER.info("Periodic health check: No active DB leader. Triggering election.");
+            electNewLeader();
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -100,9 +112,14 @@ public class FederatedEngine {
     }
 
     public synchronized void registerNode(String nodeId, String url, Map<String, Object> additionalInfo) {
-        Map<String, Object> nodeInfo = dbNodes.getOrDefault(nodeId, new HashMap<>());
-        nodeInfo.put("id", nodeId);
-        nodeInfo.put("url", url);
+        Map<String, Object> nodeInfo = dbNodes.get(nodeId);
+        boolean wasNotActive = nodeInfo == null || !"ACTIVE".equals(nodeInfo.get("status"));
+        
+        if (nodeInfo == null) {
+            nodeInfo = new HashMap<>();
+            nodeInfo.put("id", nodeId);
+            nodeInfo.put("url", url);
+        }
         nodeInfo.put("status", "ACTIVE");
         nodeInfo.put("lastSeen", System.currentTimeMillis());
         if (additionalInfo != null) {
@@ -110,13 +127,21 @@ public class FederatedEngine {
         }
         dbNodes.put(nodeId, nodeInfo);
         
-        // If we are federated leader and there is no DB leader, assign one.
-        if (isFederatedLeader && (currentLeaderId == null || "INACTIVE".equals(dbNodes.get(currentLeaderId).get("status")))) {
-            assignLeader(nodeId);
-        } else {
-            saveState();
+        if (isFederatedLeader) {
+            // Force re-evaluation of leader if none exists or current is inactive
+            if (currentLeaderId == null || !isNodeActive(currentLeaderId)) {
+                LOGGER.info("No active DB leader found during registration of " + nodeId + ". Electing...");
+                electNewLeader();
+            }
         }
+        saveState();
         LOGGER.info(() -> String.format("Registered DB node: %s at %s", nodeId, url));
+    }
+
+    private boolean isNodeActive(String nodeId) {
+        if (nodeId == null) return false;
+        Map<String, Object> node = dbNodes.get(nodeId);
+        return node != null && "ACTIVE".equals(node.get("status"));
     }
 
     private synchronized void assignLeader(String nodeId) {
@@ -195,15 +220,25 @@ public class FederatedEngine {
         boolean changed = false;
         for (Map.Entry<String, Map<String, Object>> entry : dbNodes.entrySet()) {
             Map<String, Object> info = entry.getValue();
-            if (!info.containsKey("lastSeen")) continue;
-            long lastSeen = (long) info.get("lastSeen");
             String status = (String) info.getOrDefault("status", "ACTIVE");
+            
+            if (!info.containsKey("lastSeen")) {
+                if (isFederatedLeader && entry.getKey().equals(currentLeaderId)) {
+                    LOGGER.info("Leader " + currentLeaderId + " has no heartbeat. Clearing.");
+                    electNewLeader();
+                    changed = true;
+                }
+                continue;
+            }
+
+            long lastSeen = (long) info.get("lastSeen");
             
             if (now - lastSeen > 10000) { 
                 if (!"INACTIVE".equals(status)) {
                     info.put("status", "INACTIVE");
                     changed = true;
                     if (isFederatedLeader && entry.getKey().equals(currentLeaderId)) {
+                        LOGGER.info("Leader " + currentLeaderId + " timed out. Electing new one.");
                         electNewLeader();
                     }
                 }
@@ -281,14 +316,192 @@ public class FederatedEngine {
     }
 
     private synchronized void electNewLeader() {
+        LOGGER.info("Starting election for DB Cluster Leader...");
         currentLeaderId = null;
         for (Map.Entry<String, Map<String, Object>> entry : dbNodes.entrySet()) {
             if ("ACTIVE".equals(entry.getValue().get("status"))) {
+                LOGGER.info("Found active node: " + entry.getKey() + ". Assigning as leader.");
                 assignLeader(entry.getKey());
                 return;
             }
         }
+        LOGGER.warning("No active nodes found in DB Cluster. Leader remains unassigned.");
         saveState();
+    }
+
+    private final Map<String, Map<String, Object>> memoryNodes = new ConcurrentHashMap<>();
+    private String currentMemoryLeaderId = null;
+
+    public Map<String, Map<String, Object>> getMemoryNodes() {
+        return memoryNodes;
+    }
+
+    public synchronized void registerMemoryNode(String nodeId, String url, Map<String, Object> additionalInfo) {
+        Map<String, Object> nodeInfo = memoryNodes.getOrDefault(nodeId, new HashMap<>());
+        nodeInfo.put("id", nodeId);
+        nodeInfo.put("url", url);
+        nodeInfo.put("status", "ACTIVE");
+        nodeInfo.put("lastSeen", System.currentTimeMillis());
+        if (additionalInfo != null) {
+            nodeInfo.putAll(additionalInfo);
+        }
+        memoryNodes.put(nodeId, nodeInfo);
+        LOGGER.info(() -> String.format("Registered Memory node: %s at %s", nodeId, url));
+        
+        // Elect memory leader if none or inactive
+        if (currentMemoryLeaderId == null || !isActiveMemory(currentMemoryLeaderId)) {
+            assignMemoryLeader();
+        }
+    }
+    
+    private boolean isActiveMemory(String id) {
+        Map<String, Object> node = memoryNodes.get(id);
+        return node != null && "ACTIVE".equals(node.get("status"));
+    }
+
+    private synchronized void assignMemoryLeader() {
+        String previousLeaderId = currentMemoryLeaderId;
+        currentMemoryLeaderId = null;
+        
+        // Priority 1: Match host (prefer local memory node)
+        String myHost = "localhost"; // Usually
+        for (Map.Entry<String, Map<String, Object>> entry : memoryNodes.entrySet()) {
+            if ("ACTIVE".equals(entry.getValue().get("status"))) {
+                String url = (String) entry.getValue().get("url");
+                if (url.contains("localhost") || url.contains("127.0.0.1") || (url.contains(myHost) && !myHost.isEmpty())) {
+                    currentMemoryLeaderId = entry.getKey();
+                    break;
+                }
+            }
+        }
+        
+        // Priority 2: Any active node if no local one found
+        if (currentMemoryLeaderId == null) {
+            for (Map.Entry<String, Map<String, Object>> entry : memoryNodes.entrySet()) {
+                if ("ACTIVE".equals(entry.getValue().get("status"))) {
+                    currentMemoryLeaderId = entry.getKey();
+                    break;
+                }
+            }
+        }
+        
+        if (currentMemoryLeaderId != null) {
+            LOGGER.info("Assigned MEMORY LEADER: " + currentMemoryLeaderId);
+            if (!currentMemoryLeaderId.equals(previousLeaderId)) {
+                syncMemoryLeaderWithDb();
+            }
+        }
+    }
+    
+    public void syncMemoryLeaderWithDb() {
+        if (!isFederatedLeader) return;
+        
+        String memoryUrl = getMemoryLeaderUrl();
+        String dbUrl = (currentLeaderId != null) ? (String) dbNodes.get(currentLeaderId).get("url") : null;
+        
+        if (memoryUrl != null && dbUrl != null) {
+            LOGGER.info("Requesting Memory Leader to sync with DB Leader: " + dbUrl);
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(URI.create(memoryUrl + "/api/sync?dbLeaderUrl=" + dbUrl))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .timeout(java.time.Duration.ofSeconds(60)) // Sync can take time
+                    .build();
+            
+            httpClient.sendAsync(req, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(res -> {
+                        if (res.statusCode() == 200) {
+                            LOGGER.info("Memory sync command accepted by " + currentMemoryLeaderId);
+                        } else {
+                            LOGGER.warning("Memory sync command failed: " + res.body());
+                        }
+                    });
+        }
+    }
+    
+    /**
+     * Determines the closest/best memory node.
+     * Logic: if current leader is active, use it. Else re-elect.
+     */
+    public String getMemoryLeaderUrl() {
+        if (currentMemoryLeaderId != null && isActiveMemory(currentMemoryLeaderId)) {
+            return (String) memoryNodes.get(currentMemoryLeaderId).get("url");
+        }
+        if (isFederatedLeader) {
+            assignMemoryLeader();
+            if (currentMemoryLeaderId != null) {
+                return (String) memoryNodes.get(currentMemoryLeaderId).get("url");
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Unified CRUD Operation:
+     * 1. Execute on Memory Leader (Sync)
+     * 2. Execute on DB Cluster Leader (Async)
+     */
+    public String executeCrudpOperation(String apiPath, String query, String method, byte[] payload) throws Exception {
+        String memoryUrl = getMemoryLeaderUrl();
+        String result = null;
+        
+        String fullPath = apiPath + (query != null && !query.isEmpty() ? "?" + query : "");
+
+        if (memoryUrl != null) {
+             // 1. Sync write to Memory
+             LOGGER.info("Forwarding (Sync) to Memory Leader: " + memoryUrl + fullPath);
+             result = sendRequestSync(memoryUrl + fullPath, method, payload);
+        } else {
+             LOGGER.warning("No Memory Leader available. Operations might be slow as we skip memory layer.");
+        }
+        
+        // 2. Async write to DB Leader
+        if (currentLeaderId != null) {
+            Map<String, Object> node = dbNodes.get(currentLeaderId);
+            if (node != null) {
+                String dbUrl = (String) node.get("url");
+                Executors.newSingleThreadExecutor().submit(() -> {
+                     try {
+                         LOGGER.info("Forwarding (Async) to Persistent Leader: " + dbUrl + fullPath);
+                         sendRequestSync(dbUrl + fullPath, method, payload);
+                     } catch(Exception e) {
+                         LOGGER.severe("Async persistence failed for " + fullPath + ": " + e.getMessage());
+                     }
+                });
+            }
+        }
+        
+        // If memory was available, return its result.
+        // If not, we might want to wait for DB leader sync if it was a GET? 
+        // But Crudp usually implies mutations.
+        if (result == null && currentLeaderId != null) {
+             // If memory skipped, we could wait for DB sync here, but for now we follow the "fast" model
+             // where we return something quickly or a placeholder.
+             return "{\"status\":\"accepted_async\"}";
+        }
+        
+        return result != null ? result : "{\"status\":\"error\",\"message\":\"no_active_nodes\"}";
+    }
+
+    private String sendRequestSync(String url, String method, byte[] payload) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json");
+        
+        if ("POST".equalsIgnoreCase(method)) {
+            builder.POST(HttpRequest.BodyPublishers.ofByteArray(payload));
+        } else if ("PUT".equalsIgnoreCase(method)) {
+            builder.PUT(HttpRequest.BodyPublishers.ofByteArray(payload));
+        } else if ("DELETE".equalsIgnoreCase(method)) {
+            builder.DELETE();
+        } else {
+            builder.GET();
+        }
+
+        HttpResponse<String> response = httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() >= 400) {
+            throw new Exception("HTTP Error " + response.statusCode() + ": " + response.body());
+        }
+        return response.body();
     }
 
     public Map<String, Object> getClusterStatus() {
@@ -296,6 +509,8 @@ public class FederatedEngine {
         status.put("leaderId", currentLeaderId);
         status.put("isFederatedLeader", isFederatedLeader);
         status.put("nodes", new ArrayList<>(dbNodes.values()));
+        status.put("memoryNodes", new ArrayList<>(memoryNodes.values()));
+        status.put("memoryLeaderId", currentMemoryLeaderId);
         return status;
     }
 
@@ -325,6 +540,27 @@ public class FederatedEngine {
 
     public void heartbeat(String nodeId, Map<String, Object> additionalInfo) {
         Map<String, Object> info = dbNodes.get(nodeId);
+        if (info != null) {
+            boolean wasNotActive = !"ACTIVE".equals(info.get("status"));
+            info.put("lastSeen", System.currentTimeMillis());
+            if (additionalInfo != null) {
+                info.putAll(additionalInfo);
+            }
+            if (wasNotActive) {
+                 info.put("status", "ACTIVE");
+                 saveState();
+            }
+            
+            if (isFederatedLeader && wasNotActive) {
+                if (currentLeaderId == null || !isNodeActive(currentLeaderId) || nodeId.equals(currentLeaderId)) {
+                    assignLeader(nodeId);
+                }
+            }
+        }
+    }
+
+    public void heartbeatMemory(String nodeId, Map<String, Object> additionalInfo) {
+        Map<String, Object> info = memoryNodes.get(nodeId);
         if (info != null) {
             info.put("lastSeen", System.currentTimeMillis());
             if (additionalInfo != null) {

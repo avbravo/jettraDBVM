@@ -1,0 +1,12 @@
+{
+  "Host" : "0.0.0.0",
+  "Port" : 8080,
+  "DataDir" : "data",
+  "Role" : "Obsolete",
+  "SessionTimeout" : 0,
+  "Bootstrap" : true,
+  "ClusterID" : "cluster-1",
+  "NodeID" : "node-4e866f9f-04a3-48bf-a974-3ffeb9cef460",
+  "distributed" : false,
+  "Peers" : [ ]
+}

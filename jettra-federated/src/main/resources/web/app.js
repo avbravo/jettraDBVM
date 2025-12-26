@@ -318,8 +318,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDashboard(data) {
         // Stats
         const nodes = data.nodes || [];
+        const memoryNodes = data.memoryNodes || [];
         document.getElementById('total-nodes').textContent = nodes.length;
         document.getElementById('active-nodes').textContent = nodes.filter(n => n.status === 'ACTIVE').length;
+        document.getElementById('memory-nodes-stat').textContent = memoryNodes.length;
         document.getElementById('raft-term').textContent = data.raftTerm || 0;
 
         // Raft State Badge
@@ -328,11 +330,25 @@ document.addEventListener('DOMContentLoaded', () => {
         badge.className = 'badge ' + (data.raftState || '');
 
         // Raft Details
-        document.getElementById('raft-leader').textContent = data.raftLeaderId || 'Buscando...';
+        const raftLeaderEl = document.getElementById('raft-leader');
+        if (data.raftLeaderId) {
+            raftLeaderEl.textContent = data.raftLeaderId;
+            raftLeaderEl.classList.remove('text-warning');
+            raftLeaderEl.classList.add('text-primary');
+        } else {
+            const quorum = data.raftQuorum || 0;
+            const active = data.raftActivePeers || 0;
+            raftLeaderEl.textContent = `Buscando... (Se requieren ${quorum} servidores para Quórum)`;
+            raftLeaderEl.classList.add('text-warning');
+        }
 
-        // Nodes Table
+        // DB Nodes Table
         const list = document.getElementById('nodes-list');
         list.innerHTML = '';
+
+        // Memory Nodes Table
+        const memoryList = document.getElementById('memory-nodes-list');
+        memoryList.innerHTML = '';
 
         // Update config node select if hidden
         const currentSelectedNode = configNodeSelect.value;
@@ -340,12 +356,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isSelfLeader = (data.raftState === 'LEADER');
 
+        // Render DB Nodes
         nodes.sort((a, b) => a.id.localeCompare(b.id)).forEach(node => {
-            // Add to dropdown if not present
             if (!currentOptions.includes(node.id)) {
                 const opt = document.createElement('option');
                 opt.value = node.id;
-                opt.textContent = `Nodo: ${node.id}`;
+                opt.textContent = `Nodo DB: ${node.id}`;
                 configNodeSelect.appendChild(opt);
             }
 
@@ -353,13 +369,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const metrics = node.metrics || {};
             const isActive = node.status === 'ACTIVE';
 
-            // Metrics: Set to zero if node is inactive
             const ramUsage = (isActive && metrics.ramUsage) ? `${metrics.ramUsage}%` : '0%';
             const cpuUsage = (isActive && metrics.cpuUsage) ? `${metrics.cpuUsage}%` : '0%';
             const diskUsage = (isActive && metrics.diskUsage) ? `${metrics.diskUsage}%` : '0%';
             const latency = (isActive && metrics.latency) ? `${metrics.latency}ms` : '0ms';
 
-            // Define action handlers based on leadership
             const stopAction = isSelfLeader ? (isActive ? `stopNode('${node.id}')` : '') : `showNotLeaderDialog()`;
             const restartAction = isSelfLeader ? (isActive ? `restartNode('${node.id}')` : '') : `showNotLeaderDialog()`;
             const removeAction = isSelfLeader ? `removeNode('${node.id}')` : `showNotLeaderDialog()`;
@@ -367,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td><span class="status-dot ${node.status}"></span> ${node.status}</td>
-                <td class="code">${node.id} ${isLeader ? '<i class="fas fa-crown text-warning" title="Leader"></i>' : ''}</td>
+                <td class="code">${node.id} ${isLeader ? '<i class="fas fa-crown text-warning" title="Persistent Leader"></i>' : ''}</td>
                 <td><a href="${node.url}" target="_blank" class="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">${node.url}</a></td>
                 <td><span class="node-role">${isLeader ? 'LEADER' : 'FOLLOWER'}</span></td>
                 <td>${cpuUsage}</td>
@@ -396,6 +410,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 </td>
             `;
             list.appendChild(row);
+        });
+
+        // Render Memory Nodes
+        memoryNodes.sort((a, b) => a.nodeId.localeCompare(b.nodeId)).forEach(node => {
+            const isMemLeader = node.nodeId === data.memoryLeaderId;
+            const metrics = node.metrics || {};
+            const isActive = node.status === 'ACTIVE';
+
+            const ramUsage = (isActive && metrics.ramUsage) ? `${metrics.ramUsage}%` : '--';
+            const cpuUsage = (isActive && metrics.cpuUsage) ? `${metrics.cpuUsage}%` : '--';
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><span class="status-dot ${node.status}"></span> ${node.status}</td>
+                <td class="code">${node.nodeId} ${isMemLeader ? '<i class="fas fa-bolt text-warning" title="Memory Leader"></i>' : ''}</td>
+                <td><a href="${node.url}" target="_blank" class="text-indigo-400 hover:text-indigo-300 hover:underline transition-colors">${node.url}</a></td>
+                <td><span class="node-role memory">${isMemLeader ? 'MEMORY LEADER' : 'REPLICA'}</span></td>
+                <td>${cpuUsage}</td>
+                <td>${ramUsage}</td>
+                <td>${node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A'}</td>
+            `;
+            memoryList.appendChild(row);
         });
 
         // Peers

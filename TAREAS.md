@@ -73,16 +73,6 @@ jettra-server seria jettra-server-quarkus y debes implementar todas las funciona
 
 
 
-
-
-# JettraMemoryDB
-- [] Crear la base de datos JettraMemoryDB que es una base de datos Key-Value en memoria desarrollada en Golang y que contiene un driver Java
-     esta base de datos se usa con el servidor federado para almacenar los datos en memoria , mientras un proceso asincrono 
-      se encarga de persistir los datos en el lider y los nodos controlados por el servidor federado.
-
-- [] Integrar la base de datos en Memoria con el servidor federado para que escriba en cache los datos
-- [] Crear la base de datos totalmente en memoria y que usa JettraDBVM como motor de almacenamiento
-
 # Driver
 
 - [] Modificar el driver para que interactue con el servidor federado en lugar de las bases de datos directamente
@@ -145,6 +135,27 @@ Crea la documentacion en el archivo driver.md
 
 
 
+# JettraMemoryDB
+
+
+
+- [] Implementar en el servidor federado que almacene los datos e interactue con jettra-memory para almacenamiento en
+memoria, y la persistencia debe ser con jettra-server.
+
+
+
+- [] Al detenerse el servidor federado lider no asigna un nuevo servidor federedado como lider
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -157,6 +168,64 @@ Crea la documentacion en el archivo driver.md
 # Arranque de un servidor Federado
 
 
+
+
+
+- [x] Hay un error el servidor federado no marca ningun servidor federado como lider ni marca ningun nodo de base de datos como lider
+tampoco esta mostrando la lista de bases de datos en memoria en el formulario Dashboard del Cluster
+
+
+- [x] Añadir en la documentacion que cada servidor federadod debe tener una base de datos en memoria jettrra-memory configurada.
+Cuando un servidor federado lider deja de funcionar se asigna un nuevo lider federado este proceso esta funcionando perfectamente
+y se verifica la base de datos en memoria si la lider deja de funcionar, se toma como primera alternativa la base de datos enmoria
+del servidor federado que acaba de convertirse en lider si no esta disponible se toma otra base de datos de memoria disponible.
+- [x] Cuando una nueva base de datos en memoria se convierte en lider esta debe sincronizarse con los datos del nodo de base de datos lider
+de almacenamiento permamente.
+- [x] Tambien se debe mostrar en jettra-federated el estado de las bases de datos en memoria y cual es el lider de bases de datos en memoria
+ademas de las que ya se muestran.
+
+- [x] Documentar este proceso tambien, 
+
+
+
+
+
+-[x]  El archivo memory.json debe tener el atributo FederatedServers similar a los config.json y si no existe al ejecutarse
+jettraMemory debe crearlo de manera automatica.
+- [x] Añade un archivo de configuracion para Jettra-memory similar a config.json pero llamdo memory.json 
+- [x] Cada red federada trabajara con una base de datos en memoria de tipo lider, pueden haber mas bases de datos en memoria
+ejecutandose en la red pero solo se tomara en cuenta la que este como lider para las operaciones el orden de prioridad para asignarla como lider
+sera la que este mas cerca del servidor federado lider.
+- [x] Cuando una base de datos en memoria deje de estar disponible la red federada asignara otra base de datos en memoria como lider
+- [x] El servidor federado realizara las operaciones crud en la base de datos en memoria y luego en un proceso asincrono hara las operaciones en
+el nodo lider y estos cambios se distribuyen a los otros nodos. Esto permite rapidez de las operaciones
+ya que todos los procoes se ejecutan primeramente contra la base de datos en memoria, y luego
+se realiza la persistencia.
+- [x] Añadir a jettra-memory la interface grafica similar a jettra-server de manera que se puedan administrar las bases de datos, colecciones, indices, reglas, configuracion
+- [x] Añadir el usuario admin con passsword adminamin que sera el administrador y permitir cambiar contraseña y password.
+- [x] Modficar jettra-federated para que administre tambien las bases de datos en memoria similar a como lo hace con los nodos de base de datos
+- [x] Documentar estos detalles para que sirvan a los lectores de como se implementa y la logica a seguir.
+
+
+
+
+- [x] Debe crear el proyecto jettra-memory-driver que es el driver para interactuar con jettra-memory
+- [x] Debe crear el proyecto jettra-memory-shell que es el shell para interactuar con jettra-memory.
+
+- [x] Crea en books/guide/ el archivo jettra-memory.md y docuemnta todo el procedimiento y funcionalidades y da ejemplos de uso
+
+
+- [x]  Cree el proyecto jettra-memory a nivel de jettra-server , su funcion es 
+    crear la base de datos JettraMemoryDB que es una base de datos en memoria sumamente rapida y eficiente
+     no tiene persistencia en disco, las operaciones todas se almacenan en la memoria debe estar optimizada
+     para el consumo de recuersos de manera eficiente.
+     Debe ser optimizada para que consuma memoria Ram es decir debe tener algoritmos de optimizacion.
+     Debe monitorear los recursos disponibles, usar tecnicas de LSM optimizados para operar con los datos
+     Debe soportar transacciones integridad referencial, indices , reglas similar a jettra-server
+
+
+
+ 
 - [x] El dialogo con el mensaje "Acción Denegada
 No puede detener, recargar o eliminar este nodo porque este servidor no es el Líder Federado. Solo el Líder tiene prioridad para ejecutar estas acciones."
 no se cierra queda siempre visible
@@ -180,7 +249,7 @@ y en la seccion Nodos del Cluster del formulario el unico que puede detener reca
 es el servidor federado lider. Los que no son lider no pueden detenerlo
 
 
-à
+
 - [x] Al ejecutar las aplicaciones se nota un consumo excesivo de memoria RAM tienes algun algoritmo que se puede
 implementar para mejorar el consumo de memoria RAM.
 

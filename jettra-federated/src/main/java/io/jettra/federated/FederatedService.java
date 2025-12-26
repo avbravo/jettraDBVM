@@ -57,7 +57,9 @@ public class FederatedService implements HttpService {
         rules.post("/change-password", this::handleChangePassword);
         rules.get("/status", this::getStatus);
         rules.post("/register", this::register);
+        rules.post("/register/memory", this::registerMemory);
         rules.post("/heartbeat", this::heartbeat);
+        rules.post("/heartbeat/memory", this::heartbeatMemory);
         rules.post("/raft/vote", this::handleVote);
         rules.post("/raft/join", this::handleJoin);
         rules.post("/raft/appendEntries", this::handleAppendEntries);
@@ -74,6 +76,29 @@ public class FederatedService implements HttpService {
         rules.post("/raft/stopPeer", this::handleStopPeer);
         rules.post("/restart", this::handleRestart);
         rules.post("/stop", (req, res) -> this.handleStopFederated(req, res));
+        
+        // Unified CRUD Proxy (Memory + DB)
+        rules.any("/api/{path+}", this::handleApiProxy);
+    }
+
+    private void handleApiProxy(ServerRequest req, ServerResponse res) {
+        String path = "/api/" + req.path().pathParameters().get("path");
+        String query = req.query().rawValue();
+        String method = req.prologue().method().name();
+        
+        try {
+            byte[] payload = null;
+            if (req.headers().contentLength().orElse(0L) > 0) {
+                 payload = req.content().as(byte[].class);
+            } else {
+                 payload = new byte[0];
+            }
+            
+            String result = engine.executeCrudpOperation(path, query, method, payload);
+            res.send(result);
+        } catch (Exception e) {
+            res.status(500).send(e.getMessage());
+        }
     }
 
     private void handleLogin(ServerRequest req, ServerResponse res) {
@@ -150,9 +175,21 @@ public class FederatedService implements HttpService {
         try {
             Map<String, Object> status = engine.getClusterStatus();
             if (raftNode != null) {
-                status.put("raftState", raftNode.getState());
+                status.put("raftState", raftNode.getState().name());
                 status.put("raftTerm", raftNode.getCurrentTerm());
                 status.put("raftLeaderId", raftNode.getLeaderId());
+                
+                int totalPeers = raftNode.getPeers().size();
+                int majority = (totalPeers / 2) + 1;
+                status.put("raftQuorum", majority);
+                
+                int activePeers = 1; // self
+                long now = System.currentTimeMillis();
+                for (Long lastSeen : raftNode.getPeerLastSeen().values()) {
+                    if (now - lastSeen < 10000) activePeers++;
+                }
+                status.put("raftActivePeers", activePeers);
+
                 String leaderUrl = null;
                 if (raftNode.getLeaderId() != null) {
                     if (raftNode.getLeaderId().equals(raftNode.getSelfId())) {
@@ -568,6 +605,53 @@ public class FederatedService implements HttpService {
             }
         } catch (Exception e) {
             res.status(500).send(e.getMessage());
+        }
+    }
+
+    private void registerMemory(ServerRequest req, ServerResponse res) {
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+            String id = (String) data.get("nodeId");
+            String url = (String) data.get("url");
+            
+            if (!raftNode.isLeader()) {
+                String leaderUrl = raftNode.getLeaderUrl();
+                if (leaderUrl != null) {
+                    res.status(307).header("Location", leaderUrl + "/federated/register/memory").send();
+                    return;
+                }
+            }
+            
+            engine.registerMemoryNode(id, url, data);
+            res.send(mapper.writeValueAsString(engine.getClusterStatus()));
+        } catch (Exception e) {
+            res.status(400).send(e.getMessage());
+        }
+    }
+
+    private void heartbeatMemory(ServerRequest req, ServerResponse res) {
+        try {
+            String nodeId = req.query().get("nodeId");
+            if (!raftNode.isLeader()) {
+                String leaderUrl = raftNode.getLeaderUrl();
+                if (leaderUrl != null) {
+                    res.status(307).header("Location", leaderUrl + "/federated/heartbeat/memory?nodeId=" + nodeId).send();
+                    return;
+                }
+            }
+            
+            Map<String, Object> additionalInfo = null;
+            if (req.headers().contentLength().orElse(0L) > 0) {
+                 @SuppressWarnings("unchecked")
+                 Map<String, Object> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+                 additionalInfo = data;
+            }
+            
+            engine.heartbeatMemory(nodeId, additionalInfo);
+            res.send(mapper.writeValueAsString(engine.getClusterStatus()));
+        } catch (Exception e) {
+            res.status(400).send(e.getMessage());
         }
     }
 }

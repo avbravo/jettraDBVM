@@ -1,0 +1,13 @@
+{
+    "Host": "0.0.0.0",
+    "Port": 7000,
+    "AdminPassword": "adminadmin",
+    "MaxMemoryBytes": 0,
+    "CriticalThreshold": 0.85,
+    "MemTableSize": 1048576,
+    "UseCompression": false,
+    "FederatedServers": [
+        "http://localhost:9000",
+        "http://localhost:9001"
+    ]
+}

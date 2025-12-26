@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JettraDBVM Excalidraw Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: sans-serif;
+            background: #f0f0f0;
+        }
+
+        #container {
+            display: flex;
+            justify-content: center;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            min-height: 50vh;
+            align-items: center;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        .error {
+            color: red;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Excalidraw Diagram: JettraDBVM</h1>
+    <div id="container">
+        <p id="loading">Loading diagram...</p>
+    </div>
+
+    <script type="module">
+        // Import Excalidraw utils from esm.sh CDN
+        import { exportToSvg } from "https://esm.sh/@excalidraw/utils@0.1.2";
+        // Import the local data converted to a module
+        import data from "./jettradbvm_data.js";
+
+        async function render() {
+            try {
+                if (!data || !data.elements) {
+                    throw new Error("Invalid data loaded");
+                }
+
+                const svg = await exportToSvg({
+                    elements: data.elements,
+                    appState: {
+                        ...data.appState,
+                        exportWithDarkMode: false
+                    },
+                    files: data.files || {}
+                });
+
+                svg.style.maxWidth = "100%";
+                svg.style.height = "auto";
+
+                const container = document.getElementById('container');
+                container.innerHTML = ''; // Clear loading message
+                container.appendChild(svg);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loading').innerHTML = `<span class="error">Error rendering diagram: ${err.message}<br>Check console for details.</span>`;
+            }
+        }
+
+        render();
+    </script>
+</body>
+
+</html>

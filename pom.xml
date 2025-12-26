@@ -14,6 +14,9 @@
         <module>jettra-shell</module>
         <module>jettra-driver</module>
         <module>jettra-collections</module>
+        <module>jettra-memory</module>
+        <module>jettra-memory-driver</module>
+        <module>jettra-memory-shell</module>
     </modules>
 
     <properties>
