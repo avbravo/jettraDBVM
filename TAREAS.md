@@ -109,6 +109,15 @@ Crea la documentacion en el archivo driver.md
 - [] Instale el plugin de excalidraw pero no muestra los diagramas de manera visual
 
 
+- [] Al ejecutar las aplicaciones se nota un consumo excesivo de memoria RAM tienes algun algoritmo que se puede
+implementar para mejorar el consumo de memoria RAM.
+
+- [] Las estadisticas de memoria Ram de los nodos no muestran los valores reales
+
+- [] Elimina la opcion del menu Diagrams de la interface web del proyecto  jetrra-server
+
+
+
 # Documentacion
 
 
@@ -124,6 +133,20 @@ y documentarlo
 # Completadas
 # ------------------------------------------------------------
 # Arranque de un servidor Federado
+
+
+- [x] El formulario Federated de la interface web de jetrra-server,  en la seccion  superior del formulario Federated Cluster (Peers), 
+    colocar en color rojo el status para los servidores INACTIVE. Y PARA EL LIDER marca el estatus UNKNOWN y esta activo debe ser ACTIVE 
+   el estatus   que marca.
+
+
+- [X] El formulario Federated de la interface web de jetrra-server,  en la seccion  superior del formulario Federated Cluster (Peers), 
+      muestra todos los servidores federados como esta ACTIVE , y en el ejemplo que uso solo hay uno activo, los demas estan inactivos
+      pero aparecen todos como activos aunque esten inactivos.
+
+- [x] El formulario Federated de la interface web de jetrra-server, muestra perfectamente los nodos de la base de datos.
+Pero en la seccion  superior del formulario Federated Cluster (Peers), repite el servidor federado con el url http://localhost:9000
+y elimine el boton +Add Federated Server ya que no es necesario añadir el servidor desde este formulario.
 
 -  [x] No muestra nada en el formulario  Federated de la interface web de jetrra-server. Debe mostrar el nodo de bases 
 de datos actual indicar cual es el lider, mostrar estadisticas metrics de cada nodo y mostrar los servidores federados

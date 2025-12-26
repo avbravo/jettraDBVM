@@ -3228,6 +3228,8 @@ const App = {
 
             if (peers) {
                 peers.forEach(peerUrl => {
+                    // Avoid duplicating self if already in peers list
+                    if (peerUrl === selfUrl) return;
                     const pid = data.raftPeerIds ? data.raftPeerIds[peerUrl] : 'unknown';
                     allPeers.push({ url: peerUrl, id: pid, isSelf: false });
                 });
@@ -3236,7 +3238,15 @@ const App = {
             allPeers.forEach(peer => {
                 const tr = document.createElement('tr');
                 const isLeader = (peer.id && peer.id === raftLeaderId) || (peer.url && peer.url === raftLeaderUrl);
-                const state = data.raftPeerStates ? (data.raftPeerStates[peer.url] || 'ACTIVE') : 'ACTIVE';
+                let state = data.raftPeerStates ? (data.raftPeerStates[peer.url] || 'UNKNOWN') : 'UNKNOWN';
+                if (peer.isSelf) {
+                    state = 'ACTIVE';
+                }
+
+                let badgeClass = 'success';
+                if (state === 'INACTIVE' || state === 'UNKNOWN') {
+                    badgeClass = 'danger';
+                }
 
                 tr.innerHTML = `
                    <td>${peer.id || '-'} ${peer.isSelf ? '<span class="text-muted">(You)</span>' : ''}</td>
@@ -3246,7 +3256,7 @@ const App = {
                             ${isLeader ? 'LEADER' : 'FOLLOWER'}
                         </span>
                    </td>
-                   <td><span class="badge badge-success">${state}</span></td>
+                   <td><span class="badge badge-${badgeClass}">${state}</span></td>
                 `;
                 serverTbody.appendChild(tr);
             });

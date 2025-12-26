@@ -248,6 +248,8 @@ public class FederatedRaftNode {
                      if (term > currentTerm) {
                          stepDown(term);
                      }
+                 } else {
+                     peerStates.put(peerUrl, "INACTIVE");
                  }
              });
          }
