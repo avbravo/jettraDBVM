@@ -138,7 +138,9 @@ public class WebServices {
                 .post("/api/tx/begin", this::beginTransaction)
                 .post("/api/tx/commit", this::commitTransaction)
                 .post("/api/tx/rollback", this::rollbackTransaction)
-                .post("/api/tx/rollback", this::rollbackTransaction);
+                .post("/api/tx/rollback", this::rollbackTransaction)
+            .get("/api/diagrams", this::listDiagrams)
+            .get("/api/diagrams/content", this::getDiagramContent);
 
         // Register Raft Services
         // Note: RaftService registers its own paths (e.g. /raft/...) which are NOT
@@ -161,7 +163,8 @@ public class WebServices {
         // Skip login and metrics endpoints
         String path = req.path().path();
         if (path.equals("/api/login") || path.equals("/api/metrics") ||
-                path.startsWith("/api/cluster/") || path.startsWith("/api/federated") || path.equals("/api/config")) {
+                path.startsWith("/api/cluster/") || path.startsWith("/api/federated") || path.equals("/api/config")
+                || path.startsWith("/api/diagrams")) {
             res.next();
             return;
         }
@@ -1840,6 +1843,55 @@ public class WebServices {
             
         } catch (Exception e) {
             LOGGER.log(java.util.logging.Level.SEVERE, "Unexpected error in proxyFederatedRequest", e);
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void listDiagrams(ServerRequest req, ServerResponse res) {
+        try {
+            // Try absolute path first, then relative
+            java.io.File dir = new java.io.File("/home/avbravo/NetBeansProjects/golang/jettraDBVM/books/excalidraw");
+            if (!dir.exists()) {
+                dir = new java.io.File("../books/excalidraw");
+            }
+            if (!dir.exists()) {
+                res.send("[]");
+                return;
+            }
+            java.io.File[] files = dir.listFiles((d, name) -> name.endsWith(".excalidraw"));
+            List<String> fileNames = new java.util.ArrayList<>();
+            if (files != null) {
+                for (java.io.File f : files) {
+                    fileNames.add(f.getName());
+                }
+            }
+            res.send(jsonMapper.writeValueAsString(fileNames));
+        } catch (Exception e) {
+            res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+        }
+    }
+
+    private void getDiagramContent(ServerRequest req, ServerResponse res) {
+        try {
+            String name = req.query().get("name");
+            if (name == null || !name.endsWith(".excalidraw") || name.contains("..") || name.contains("/")) {
+                res.status(Status.BAD_REQUEST_400).send("Invalid file name");
+                return;
+            }
+            
+            java.io.File dir = new java.io.File("/home/avbravo/NetBeansProjects/golang/jettraDBVM/books/excalidraw");
+            if (!dir.exists()) {
+                dir = new java.io.File("../books/excalidraw");
+            }
+            
+            java.io.File file = new java.io.File(dir, name);
+            if (!file.exists()) {
+                res.status(Status.NOT_FOUND_404).send("File not found");
+                return;
+            }
+            String content = java.nio.file.Files.readString(file.toPath());
+            res.send(content);
+        } catch (Exception e) {
             res.status(Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
         }
     }

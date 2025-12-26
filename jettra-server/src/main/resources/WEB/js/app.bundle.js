@@ -3251,6 +3251,95 @@ const App = {
                 serverTbody.appendChild(tr);
             });
         }
+    },
+
+    // Diagram Methods
+    initDiagramsView() {
+        this.loadDiagrams();
+    },
+
+    async loadDiagrams() {
+        try {
+            const res = await this.authenticatedFetch('/api/diagrams');
+            if (res.ok) {
+                const files = await res.json();
+                this.renderDiagramsList(files);
+            }
+        } catch (e) {
+            console.error('Error loading diagrams:', e);
+        }
+    },
+
+    renderDiagramsList(files) {
+        const list = document.getElementById('diagrams-list');
+        if (!list) return;
+        list.innerHTML = '';
+        if (!files || files.length === 0) {
+            list.innerHTML = '<li class="text-muted">No diagrams found.</li>';
+            return;
+        }
+        files.forEach(file => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div class="flex justify-between items-center bg-gray-800 p-3 rounded mb-2">
+                    <span class="text-white">${file}</span>
+                    <div style="display:flex; gap: 0.5rem;">
+                        <button onclick="app.viewDiagram('${file}')" class="btn btn-sm btn-primary">View</button>
+                        <button onclick="app.downloadDiagram('${file}')" class="btn btn-sm btn-secondary">Download</button>
+                    </div>
+                </div>
+            `;
+            list.appendChild(li);
+        });
+    },
+
+    async viewDiagram(name) {
+        const viewer = document.getElementById('diagram-viewer');
+        if (!viewer) return;
+        viewer.style.display = 'block';
+        viewer.innerHTML = '<div class="p-4 text-center text-white">Loading...</div>';
+
+        try {
+            const res = await this.authenticatedFetch('/api/diagrams/content?name=' + encodeURIComponent(name));
+            if (res.ok) {
+                const content = await res.text();
+                // Try to determine if it is JSON
+                try {
+                    const json = JSON.parse(content);
+                    viewer.innerHTML = `
+                        <div class="p-4 bg-gray-900 h-full overflow-auto text-green-400 font-mono text-xs" style="max-height: 500px;">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="text-white font-bold">${name}</h4>
+                                <button onclick="document.getElementById('diagram-viewer').style.display='none'" class="text-gray-400 hover:text-white">&times;</button>
+                            </div>
+                            <pre>${this.escapeHtml(JSON.stringify(json, null, 2))}</pre>
+                            <p class="text-muted mt-2 italic">Visual rendering requires external Excalidraw viewer.</p>
+                        </div>
+                     `;
+                } catch (e) {
+                    viewer.innerHTML = `<pre class="p-4 text-white">${this.escapeHtml(content)}</pre>`;
+                }
+            } else {
+                viewer.innerHTML = '<div class="p-4 text-red-500">Failed to load diagram content.</div>';
+            }
+        } catch (e) {
+            viewer.innerHTML = `<div class="p-4 text-red-500">Error: ${e.message}</div>`;
+        }
+    },
+
+    downloadDiagram(name) {
+        const url = '/api/diagrams/content?name=' + encodeURIComponent(name);
+        window.open(url, '_blank');
+    },
+
+    escapeHtml(text) {
+        if (!text) return text;
+        return text
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     }
 
 };

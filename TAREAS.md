@@ -105,8 +105,8 @@ Crea la documentacion en el archivo driver.md
 - [] En el shell añadir la opcion de remover un servidor federado
 
 
--  [] No muestra nada en el formulario  Federated de la interface web de jetrra-server y esta duplicado la opcion del menu dos veces
 
+- [] Instale el plugin de excalidraw pero no muestra los diagramas de manera visual
 
 
 # Documentacion
@@ -124,6 +124,11 @@ y documentarlo
 # Completadas
 # ------------------------------------------------------------
 # Arranque de un servidor Federado
+
+-  [x] No muestra nada en el formulario  Federated de la interface web de jetrra-server. Debe mostrar el nodo de bases 
+de datos actual indicar cual es el lider, mostrar estadisticas metrics de cada nodo y mostrar los servidores federados
+y cual es el lider de los servidores federados.
+
   
   - [x] Para mantener la sincronizacion en todo momento y evitar que un usuario elimine de su configuracion local federated.json o añada uno nuevo sin la autorizacion cuando inicia cada servidor federado
 envia la informacion de  "FederatedServers": al lider este verifica con la configuracion local y si no se trata de un nuevo servidor federado ni de uno que fue removido, el servidor federado envia la configuracion al servidor federado este actualiza en local el archivo federated.json, y ocurre el Hot-Realoded.
