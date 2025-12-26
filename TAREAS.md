@@ -123,6 +123,32 @@ y documentarlo
 # ---------------------------------------------------------
 # Completadas
 # ------------------------------------------------------------
+# Arranque de un servidor Federado
+  
+  - [x] Para mantener la sincronizacion en todo momento y evitar que un usuario elimine de su configuracion local federated.json o añada uno nuevo sin la autorizacion cuando inicia cada servidor federado
+envia la informacion de  "FederatedServers": al lider este verifica con la configuracion local y si no se trata de un nuevo servidor federado ni de uno que fue removido, el servidor federado envia la configuracion al servidor federado este actualiza en local el archivo federated.json, y ocurre el Hot-Realoded.
+Esto permite mantener la coherencia de la red de servidores federados.
+
+
+- [x] Esa logica funciona perfecta para los servidores federados ahora se necesita aplicar la misma logica para los nodos de bases de datos
+
+- [x] cuando un nodo de base de datos se conecta a la red federada. El nodo de base de datos envia al servidor federado su configuracionç
+que tiene en el archivo config.json en especial "FederatedServers": , el servidor federado lo compara con "FederatedServers": del archivo
+federated.json y devuelve al nodo la lista actualizad de "FederatedServers": , el nodo de base de datos
+actualiza su archivo config.json local con el listado actualizado y hace Hot-Reloaded automatico para garantizar que todos 
+los nodos tengan actualizado la lista de servidores federados.
+Si el listado del nodo de base de datos es identico al del servidor federado no es necesario actualizar el archivo config.json del nodo de base de datos.
+
+
+
+- [x] debes implementar el hot-reloaded a nivel del nodo de la base de datos ya que lo deja detenido y no vuelve a ejecutarlo. Recuerda que este se puede ejcutar como un java -jar, o mediante run.sh o mediante imagene nativa o mediante docker o kubernetes por lo que debes tener en cuanta como reiniciar para cada uno. Y recuerda siempre garantizar que se actualice "FederatedServers" con el que posee el lider de los servidores federados
+
+
+
+- [x] añadira la opciond e hot-reloaded desde el mismo codigo java es decir que las aplicaciones java soporten reiniciar y arrancar directamente esto se necesita para que los nodos y servidores federados en ciertas condiciones deben reiniciarse, y para no depender de aplicaciones externas para el reinicio sea una funcion dentro de los mismos proyectos
+
+
+
 - [x] actualiza la documentacion de todos el proyecto con los ultimos cambios,. y en el proyecto jettra-server en la interface web en el formulario  Federated no se muestra, alli debe mostrar los nodos con sus estatus quien es el nodo lider, y los servidores federados y quien es el servidor federado y la informacion metrixs de cada node
 - [x] Cuando no hay ningun servidor federado activo, no se pemiten realizar operaciones de insercion, eliminacion o actualizacion
      de ningun tipo sobre el nodo lider de la base de datos, recuerde que los nodos que no son lideres  no deben realizar estas operaciones
