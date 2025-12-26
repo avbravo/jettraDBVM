@@ -116,17 +116,34 @@ Crea la documentacion en el archivo driver.md
 
 - [] Instale el plugin de excalidraw pero no muestra los diagramas de manera visual
 
+
 # Test Avanzado.
 
 - [] Ejecutar un test de federated1 hasta federated5 y de node1 hasta node7. Insertar registros , eliminar registros
-simular 500 usuarios simultaneos y guardar el resultado en archivos en book/test/result-helidon.md
-Guardar resultados de consumo de memoria ram, consumo de cpu, tiempos de respuestas , distribucion de datos.ç
+simular 500 usuarios simultaneos y guardar el resultado en archivos en book/test/
+Guardar resultados de consumo de memoria ram, consumo de cpu, tiempos de respuestas , distribucion de datos.
+Cantidad e usuarios simultaneos, has este test para la version de helidon, de golang y quarkus y genera
+los resultados para consultarlos en archivos y graficas comparativas y  un analisis para determinar cual es la
+mejor implementacion
 
 
-- [] Enviar el mensaje que no puede detener recargar o eliminar un nodo de base  de datos poque no es un servidor federado lider y no tiene prioridad para ejecutar 
-esta accion mostrarlo en un dialogo estilo flowbiew css en la interface web del sistema jettra-federated removerlas desde el formulario
-web de jettra-server estas opciones solo deben aparecer en el proyecto jettra-federated en jettra-server no debe
-tener las opciones de detener, recargar y actualizar.
+- [] Apl
+
+# Golang
+ -[] Analiza todos los proyectos y crea su contraparte en Goolang, es decir una alternativa a cada uno
+pero desarrollado sobre el lenguaje golang, Los proyectos los renombras al final con -golang. Por ejemplo
+jettra-server seria jettra-server-golang y debes implementar todas las funcionalidades existentes en el los proyectos.
+
+
+# Quarkus
+ -[] Analiza todos los proyectos y crea su contraparte en Quarkus, es decir una alternativa a cada uno
+pero desarrollado sobre el lenguaje quarkus Los proyectos los renombras al final con -quarkus. Por ejemplo
+jettra-server seria jettra-server-quarkus y debes implementar todas las funcionalidades existentes en el los proyectos.
+
+
+
+
+
 
 
 
@@ -136,6 +153,21 @@ tener las opciones de detener, recargar y actualizar.
 # Completadas
 # ------------------------------------------------------------
 # Arranque de un servidor Federado
+
+
+- [x] El dialogo con el mensaje "Acción Denegada
+No puede detener, recargar o eliminar este nodo porque este servidor no es el Líder Federado. Solo el Líder tiene prioridad para ejecutar estas acciones."
+no se cierra queda siempre visible
+
+
+
+- [x] Enviar el mensaje que no puede detener recargar o eliminar un nodo de base  de datos poque no es un servidor federado lider y no tiene prioridad para ejecutar 
+esta accion mostrarlo en un dialogo estilo flowbiew css en la interface web del sistema jettra-federated removerlas desde el formulario
+web de jettra-server estas opciones solo deben aparecer en el proyecto jettra-federated en jettra-server no debe
+tener las opciones de detener, recargar y actualizar.
+
+
+
 
 - [x] Enviar el mensaje que no puede detener recargar o eliminar un nodo de base  de datos poque no es un servidor federado lider y no tiene prioridad para ejecutar 
 esta accion mostrarlo en un dialogo estilo flowbiew css

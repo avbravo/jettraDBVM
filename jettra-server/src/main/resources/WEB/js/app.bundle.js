@@ -3196,29 +3196,6 @@ const App = {
                     const disk = (metrics.diskUsage !== undefined) ? metrics.diskUsage + '%' : '0%';
                     const lastSeen = node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A';
 
-                    // Check if current fed node is leader
-                    const isSelfFederatedLeader = (data.raftLeaderId === data.raftSelfId);
-
-                    let actionsHtml = '';
-                    if (isSelfFederatedLeader) {
-                        actionsHtml = `
-                         <div style="display:flex; gap: 5px;">
-                             <button onclick="app.restartNode('${node.id}')" class="btn btn-sm btn-secondary" title="Restart Node">↻</button>
-                             ${!isLeader ? `<button onclick="app.stopNode('${node.id}')" class="btn btn-sm btn-warning" title="Stop Node">⏹</button>` : ''}
-                             <button onclick="app.removeNode('${node.id}')" class="btn btn-sm btn-danger" title="Remove Node">🗑</button>
-                         </div>
-                        `;
-                    } else {
-                        // Non-leaders see buttons but get a dialog when clicking
-                        actionsHtml = `
-                         <div style="display:flex; gap: 5px;">
-                             <button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-secondary" title="Restart Node" style="opacity: 0.6;">↻</button>
-                             ${!isLeader ? `<button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-warning" title="Stop Node" style="opacity: 0.6;">⏹</button>` : ''}
-                             <button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-danger" title="Remove Node" style="opacity: 0.6;">🗑</button>
-                         </div>
-                        `;
-                    }
-
                     tr.innerHTML = `
                         <td>
                             ${node.id || 'N/A'} 
@@ -3230,7 +3207,6 @@ const App = {
                         <td>${ram}</td>
                         <td>${disk}</td>
                         <td>${lastSeen}</td>
-                        <td>${actionsHtml}</td>
                     `;
                     nodesTbody.appendChild(tr);
                 });
@@ -3246,8 +3222,6 @@ const App = {
             const selfUrl = data.raftSelfUrl;
             const raftLeaderId = data.raftLeaderId;
             const raftLeaderUrl = data.raftLeaderUrl;
-            const isSelfLeader = (selfId === raftLeaderId);
-
 
             const allPeers = [];
             if (selfUrl) allPeers.push({ url: selfUrl, id: selfId, isSelf: true });
@@ -3274,16 +3248,6 @@ const App = {
                     badgeClass = 'danger';
                 }
 
-                let actionHtml = '';
-                if (isSelfLeader && !peer.isSelf) {
-                    actionHtml = `<button onclick="app.stopFederatedPeer('${peer.url}')" class="btn btn-sm btn-danger" title="Stop Server">Stop</button>`;
-                } else if (!isSelfLeader && !peer.isSelf) {
-                    // Show button but trigger dialog
-                    actionHtml = `<button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-danger" title="Stop Server" style="opacity: 0.6;">Stop</button>`;
-                } else {
-                    // Self or other cases
-                }
-
                 tr.innerHTML = `
                    <td>${peer.id || '-'} ${peer.isSelf ? '<span class="text-muted">(You)</span>' : ''}</td>
                    <td><a href="${peer.url}" target="_blank" class="text-primary hover:underline">${peer.url}</a></td>
@@ -3293,7 +3257,6 @@ const App = {
                         </span>
                    </td>
                    <td><span class="badge badge-${badgeClass}">${state}</span></td>
-                   <td>${actionHtml}</td>
                 `;
                 serverTbody.appendChild(tr);
             });
