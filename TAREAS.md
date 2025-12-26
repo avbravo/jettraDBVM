@@ -116,10 +116,17 @@ Crea la documentacion en el archivo driver.md
 
 - [] Instale el plugin de excalidraw pero no muestra los diagramas de manera visual
 
+# Test Avanzado.
+
+- [] Ejecutar un test de federated1 hasta federated5 y de node1 hasta node7. Insertar registros , eliminar registros
+simular 500 usuarios simultaneos y guardar el resultado en archivos en book/test/result-helidon.md
+Guardar resultados de consumo de memoria ram, consumo de cpu, tiempos de respuestas , distribucion de datos.ç
 
 
-
-
+- [] Enviar el mensaje que no puede detener recargar o eliminar un nodo de base  de datos poque no es un servidor federado lider y no tiene prioridad para ejecutar 
+esta accion mostrarlo en un dialogo estilo flowbiew css en la interface web del sistema jettra-federated removerlas desde el formulario
+web de jettra-server estas opciones solo deben aparecer en el proyecto jettra-federated en jettra-server no debe
+tener las opciones de detener, recargar y actualizar.
 
 
 
@@ -130,6 +137,16 @@ Crea la documentacion en el archivo driver.md
 # ------------------------------------------------------------
 # Arranque de un servidor Federado
 
+- [x] Enviar el mensaje que no puede detener recargar o eliminar un nodo de base  de datos poque no es un servidor federado lider y no tiene prioridad para ejecutar 
+esta accion mostrarlo en un dialogo estilo flowbiew css
+
+- [x] En la interface Web del proyecto jettra-federated  añadir la opcion de detener un servidor federado en el panel Estado de consenso
+el unico autorizado a detener un servidor federado es el servidor federado lider los demas no podran detenerlos.
+y en la seccion Nodos del Cluster del formulario el unico que puede detener recargar o eliminar nodos del cluster de bases de datos
+es el servidor federado lider. Los que no son lider no pueden detenerlo
+
+
+à
 - [x] Al ejecutar las aplicaciones se nota un consumo excesivo de memoria RAM tienes algun algoritmo que se puede
 implementar para mejorar el consumo de memoria RAM.
 

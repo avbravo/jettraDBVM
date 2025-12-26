@@ -3196,6 +3196,29 @@ const App = {
                     const disk = (metrics.diskUsage !== undefined) ? metrics.diskUsage + '%' : '0%';
                     const lastSeen = node.lastSeen ? new Date(node.lastSeen).toLocaleTimeString() : 'N/A';
 
+                    // Check if current fed node is leader
+                    const isSelfFederatedLeader = (data.raftLeaderId === data.raftSelfId);
+
+                    let actionsHtml = '';
+                    if (isSelfFederatedLeader) {
+                        actionsHtml = `
+                         <div style="display:flex; gap: 5px;">
+                             <button onclick="app.restartNode('${node.id}')" class="btn btn-sm btn-secondary" title="Restart Node">↻</button>
+                             ${!isLeader ? `<button onclick="app.stopNode('${node.id}')" class="btn btn-sm btn-warning" title="Stop Node">⏹</button>` : ''}
+                             <button onclick="app.removeNode('${node.id}')" class="btn btn-sm btn-danger" title="Remove Node">🗑</button>
+                         </div>
+                        `;
+                    } else {
+                        // Non-leaders see buttons but get a dialog when clicking
+                        actionsHtml = `
+                         <div style="display:flex; gap: 5px;">
+                             <button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-secondary" title="Restart Node" style="opacity: 0.6;">↻</button>
+                             ${!isLeader ? `<button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-warning" title="Stop Node" style="opacity: 0.6;">⏹</button>` : ''}
+                             <button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-danger" title="Remove Node" style="opacity: 0.6;">🗑</button>
+                         </div>
+                        `;
+                    }
+
                     tr.innerHTML = `
                         <td>
                             ${node.id || 'N/A'} 
@@ -3207,6 +3230,7 @@ const App = {
                         <td>${ram}</td>
                         <td>${disk}</td>
                         <td>${lastSeen}</td>
+                        <td>${actionsHtml}</td>
                     `;
                     nodesTbody.appendChild(tr);
                 });
@@ -3222,6 +3246,8 @@ const App = {
             const selfUrl = data.raftSelfUrl;
             const raftLeaderId = data.raftLeaderId;
             const raftLeaderUrl = data.raftLeaderUrl;
+            const isSelfLeader = (selfId === raftLeaderId);
+
 
             const allPeers = [];
             if (selfUrl) allPeers.push({ url: selfUrl, id: selfId, isSelf: true });
@@ -3248,6 +3274,16 @@ const App = {
                     badgeClass = 'danger';
                 }
 
+                let actionHtml = '';
+                if (isSelfLeader && !peer.isSelf) {
+                    actionHtml = `<button onclick="app.stopFederatedPeer('${peer.url}')" class="btn btn-sm btn-danger" title="Stop Server">Stop</button>`;
+                } else if (!isSelfLeader && !peer.isSelf) {
+                    // Show button but trigger dialog
+                    actionHtml = `<button onclick="app.showNotLeaderDialog()" class="btn btn-sm btn-danger" title="Stop Server" style="opacity: 0.6;">Stop</button>`;
+                } else {
+                    // Self or other cases
+                }
+
                 tr.innerHTML = `
                    <td>${peer.id || '-'} ${peer.isSelf ? '<span class="text-muted">(You)</span>' : ''}</td>
                    <td><a href="${peer.url}" target="_blank" class="text-primary hover:underline">${peer.url}</a></td>
@@ -3257,9 +3293,63 @@ const App = {
                         </span>
                    </td>
                    <td><span class="badge badge-${badgeClass}">${state}</span></td>
+                   <td>${actionHtml}</td>
                 `;
                 serverTbody.appendChild(tr);
             });
+        }
+    },
+
+    showNotLeaderDialog() {
+        const modal = document.getElementById('modal-overlay');
+        const title = document.getElementById('modal-title');
+        const body = document.getElementById('modal-body');
+        const footer = document.getElementById('modal-footer');
+
+        title.innerText = 'Action Denied';
+
+        // Flowbite-inspired styling content
+        body.innerHTML = `
+            <div style="text-align: center; color: var(--text-primary);">
+                <svg class="w-16 h-16 mx-auto mb-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <h3 class="mb-5 text-lg font-normal text-gray-500 dark:text-gray-400">
+                    You cannot perform this action (Stop, Restart, or Remove).
+                </h3>
+                <p class="text-sm text-gray-500 mb-6">
+                    Only the <span class="font-bold">Federated Leader</span> has the priority and authority to execute this action on the database cluster.
+                </p>
+            </div>
+        `;
+
+        footer.innerHTML = `
+            <button onclick="app.closeInputModal()" class="btn btn-secondary">
+                Understood
+            </button>
+        `;
+
+        // Apply some "Flowbite" looking classes if CSS supports it or just inline styles above
+        modal.style.display = 'flex';
+        modal.classList.remove('hidden');
+    },
+
+    async stopFederatedPeer(url) {
+        if (!confirm('Are you sure you want to stop the federated server at ' + url + '?')) return;
+        try {
+            const res = await this.authenticatedFetch('/api/raft/stopPeer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
+
+            if (res.ok) {
+                this.showToast('Stop command sent to peer.', 'success');
+                setTimeout(() => this.loadFederatedStatus(), 1000);
+            } else {
+                const err = await res.text();
+                this.showToast('Error stopping peer: ' + err, 'error');
+            }
+        } catch (e) {
+            this.showToast('Error: ' + e.message, 'error');
         }
     },
 

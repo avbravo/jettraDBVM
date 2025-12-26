@@ -71,6 +71,7 @@ public class FederatedService implements HttpService {
         rules.get("/node-leader", this::getNodeLeader);
         rules.post("/raft/removePeer", this::handleRemovePeer);
         rules.post("/raft/addPeer", this::handleAddPeer);
+        rules.post("/raft/stopPeer", this::handleStopPeer);
         rules.post("/restart", this::handleRestart);
         rules.post("/stop", (req, res) -> this.handleStopFederated(req, res));
     }
@@ -400,18 +401,30 @@ public class FederatedService implements HttpService {
         }
     }
     private void handleStopNode(ServerRequest req, ServerResponse res) {
+        if (!raftNode.isLeader()) {
+            res.status(403).send(Map.of("error", "Only leader can stop nodes").toString());
+            return;
+        }
         String nodeId = req.path().pathParameters().get("nodeId");
         engine.stopNode(nodeId);
         res.send(Map.of("status", "stop_sent").toString());
     }
 
     private void handleRestartNode(ServerRequest req, ServerResponse res) {
+        if (!raftNode.isLeader()) {
+            res.status(403).send(Map.of("error", "Only leader can restart nodes").toString());
+            return;
+        }
         String nodeId = req.path().pathParameters().get("nodeId");
         engine.restartNode(nodeId);
         res.send(Map.of("status", "restart_sent").toString());
     }
 
     private void handleRemoveNode(ServerRequest req, ServerResponse res) {
+        if (!raftNode.isLeader()) {
+            res.status(403).send(Map.of("error", "Only leader can remove nodes").toString());
+            return;
+        }
         String nodeId = req.path().pathParameters().get("nodeId");
         engine.removeNode(nodeId);
         res.send(Map.of("status", "removed").toString());
@@ -516,6 +529,40 @@ public class FederatedService implements HttpService {
                         res.send(mapper.writeValueAsString(Map.of("status", "success", "peerAddedLocally", url)));
                     }
                 }
+            } else {
+                res.status(400).send("Missing url");
+            }
+        } catch (Exception e) {
+            res.status(500).send(e.getMessage());
+        }
+    }
+
+    private void handleStopPeer(ServerRequest req, ServerResponse res) {
+        if (!raftNode.isLeader()) {
+            res.status(403).send(Map.of("error", "Only leader can stop peers").toString());
+            return;
+        }
+
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, String> data = mapper.readValue(req.content().as(byte[].class), Map.class);
+            String url = data.get("url");
+            if (url != null) {
+                // Forward stop command to peer
+                java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                        .uri(java.net.URI.create(url + "/federated/stop"))
+                        .POST(java.net.http.HttpRequest.BodyPublishers.noBody())
+                        .timeout(java.time.Duration.ofMillis(3000))
+                        .build();
+
+                raftNode.getHttpClient().sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString())
+                        .thenAccept(response -> {
+                             res.send(Map.of("status", "stop_sent_to_peer", "peer", url).toString());
+                        })
+                        .exceptionally(ex -> {
+                            res.status(500).send("Peer unreachable: " + ex.getMessage());
+                            return null;
+                        });
             } else {
                 res.status(400).send("Missing url");
             }
