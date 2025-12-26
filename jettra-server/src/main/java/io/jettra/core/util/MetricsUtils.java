@@ -19,7 +19,7 @@ public class MetricsUtils {
             if (cpuLoad < 0) cpuLoad = 0; // Sometimes returns -1 if not available yet
             metrics.put("cpuUsage", Math.round(cpuLoad * 1000.0) / 10.0); // e.g. 15.5
             
-            // RAM
+            // RAM (OS)
             long totalMemory = osBean.getTotalMemorySize();
             long freeMemory = osBean.getFreeMemorySize();
             metrics.put("ramTotal", totalMemory);
@@ -29,6 +29,22 @@ public class MetricsUtils {
             metrics.put("ramTotalStr", formatSize(totalMemory));
             metrics.put("ramUsedStr", formatSize(totalMemory - freeMemory));
             metrics.put("ramFreeStr", formatSize(freeMemory));
+
+            // RAM (JVM Heap) - "Real" application usage
+            Runtime runtime = Runtime.getRuntime();
+            long heapTotal = runtime.totalMemory();
+            long heapFree = runtime.freeMemory();
+            long heapMax = runtime.maxMemory();
+            long heapUsed = heapTotal - heapFree;
+            
+            metrics.put("jvmHeapTotal", heapTotal);
+            metrics.put("jvmHeapFree", heapFree);
+            metrics.put("jvmHeapUsed", heapUsed);
+            metrics.put("jvmHeapMax", heapMax);
+            metrics.put("jvmHeapUsage", Math.round(((double)heapUsed / heapTotal) * 1000.0) / 10.0);
+            metrics.put("jvmHeapUsedStr", formatSize(heapUsed));
+            metrics.put("jvmHeapTotalStr", formatSize(heapTotal));
+            metrics.put("jvmHeapMaxStr", formatSize(heapMax));
             
             // Disk (Data Directory)
             File dataFolder = new File(dataDir != null ? dataDir : ".");

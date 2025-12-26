@@ -71,6 +71,14 @@ curl -u admin:adminadmin "http://localhost:8080/..."
 # Base de datos prueba JetrraBasic
 
 
+# Documentacion
+
+
+- [ ] Hacer pruebas de  curl y driver que si no hay un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
+y documentarlo
+
+
+
 # Servidor Federado
 
 
@@ -109,20 +117,8 @@ Crea la documentacion en el archivo driver.md
 - [] Instale el plugin de excalidraw pero no muestra los diagramas de manera visual
 
 
-- [] Al ejecutar las aplicaciones se nota un consumo excesivo de memoria RAM tienes algun algoritmo que se puede
-implementar para mejorar el consumo de memoria RAM.
-
-- [] Las estadisticas de memoria Ram de los nodos no muestran los valores reales
-
-- [] Elimina la opcion del menu Diagrams de la interface web del proyecto  jetrra-server
 
 
-
-# Documentacion
-
-
-- [ ] Hacer pruebas de  curl y driver que si no hay un servidor federado que indique cual es el nodo de bsae de datos lider los operaciones de insercion actualizcoon y eliminacion a nivel de bases de datos, colecciones  , documentos no se pueden realizar y se debe enviar un mensaje indicando que no hay servidor federado disponible.
-y documentarlo
 
 
 
@@ -134,6 +130,12 @@ y documentarlo
 # ------------------------------------------------------------
 # Arranque de un servidor Federado
 
+- [x] Al ejecutar las aplicaciones se nota un consumo excesivo de memoria RAM tienes algun algoritmo que se puede
+implementar para mejorar el consumo de memoria RAM.
+
+- [x] Las estadisticas de memoria Ram de los nodos no muestran los valores reales
+
+- [x] Elimina la opcion del menu Diagrams de la interface web del proyecto  jetrra-server
 
 - [x] El formulario Federated de la interface web de jetrra-server,  en la seccion  superior del formulario Federated Cluster (Peers), 
     colocar en color rojo el status para los servidores INACTIVE. Y PARA EL LIDER marca el estatus UNKNOWN y esta activo debe ser ACTIVE 

@@ -32,6 +32,25 @@ public class WebServices {
         this.engine = engine;
         this.queryExecutor = new QueryExecutor(engine);
         metricsScheduler.scheduleAtFixedRate(this::pollPeerMetrics, 5, 10, java.util.concurrent.TimeUnit.SECONDS);
+        metricsScheduler.scheduleAtFixedRate(this::optimizeMemory, 30, 60, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    private void optimizeMemory() {
+        try {
+            Runtime runtime = Runtime.getRuntime();
+            long total = runtime.totalMemory();
+            long free = runtime.freeMemory();
+            long used = total - free;
+            double usage = (double) used / total;
+
+            if (usage > 0.85) {
+                LOGGER.warning("High memory usage detected (" + String.format("%.1f", usage * 100) + "%). Algorithm optimizing... Triggering GC and clearing caches.");
+                PEER_METRICS_CACHE.clear();
+                System.gc();
+            }
+        } catch (Exception e) {
+            // ignore
+        }
     }
 
     private void pollPeerMetrics() {
