@@ -3,3 +3,6 @@
 /jettra-server/target/
 /jettra-collections/target/
 /jettra-federated/target/
+/jettra-memory-driver/target/
+/jettra-memory/target/
+/jettra-memory-shell/target/

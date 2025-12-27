@@ -18,35 +18,33 @@ public class JettraMemoryServer {
     private static JettraMemoryDB db;
     private static MemoryConfig config;
     private static final long START_TIME = System.currentTimeMillis();
-    
+
     public static void main(String[] args) {
         String configPath = System.getProperty("config", "memory.json");
-        java.io.File file = new java.io.File(configPath);
-        boolean exists = file.exists();
-        
-        config = MemoryConfig.loadFromFile(configPath);
-        
-        if (!exists) {
-            config.saveToFile(configPath);
-        }
-        
+        MemoryConfig config = MemoryConfig.loadFromFile(configPath);
+        startServer(config);
+    }
+
+    public static void startServer(MemoryConfig memoryConfig) {
+        config = memoryConfig;
         db = new JettraMemoryDB("jettra-memory-sys", config);
-        
+
         WebServer server = WebServer.builder()
                 .port(config.getPort())
                 .host(config.getHost())
                 .routing(JettraMemoryServer::routing)
                 .build();
-                
+
         server.start();
         LOGGER.info(() -> "Jettra Memory Server started at http://" + config.getHost() + ":" + config.getPort());
-        
+
         startFederatedSync();
     }
-    
+
     private static void startFederatedSync() {
-        if (config.getFederatedServers().isEmpty()) return;
-        
+        if (config.getFederatedServers().isEmpty())
+            return;
+
         java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();
         ObjectMapper mapper = new ObjectMapper();
         String nodeId = "memory-" + config.getPort(); // Simple ID
@@ -65,7 +63,8 @@ public class JettraMemoryServer {
                         .header("Content-Type", "application/json")
                         .build();
                 client.sendAsync(req, java.net.http.HttpResponse.BodyHandlers.discarding());
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
         }
 
         java.util.concurrent.Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
@@ -74,7 +73,7 @@ public class JettraMemoryServer {
                     Map<String, Object> payload = new HashMap<>();
                     payload.put("nodeId", nodeId);
                     payload.put("url", url);
-                    
+
                     String json = mapper.writeValueAsString(payload);
                     java.net.http.HttpRequest req = java.net.http.HttpRequest.newBuilder()
                             .uri(java.net.URI.create(fedServer + "/federated/heartbeat/memory?nodeId=" + nodeId))
@@ -82,34 +81,34 @@ public class JettraMemoryServer {
                             .header("Content-Type", "application/json")
                             .timeout(java.time.Duration.ofSeconds(2))
                             .build();
-                    
+
                     client.sendAsync(req, java.net.http.HttpResponse.BodyHandlers.discarding())
-                        .thenAccept(res -> {
-                            // If we get 404, re-register
-                            if (res.statusCode() == 404) {
-                                  java.net.http.HttpRequest regReq = java.net.http.HttpRequest.newBuilder()
-                                    .uri(java.net.URI.create(fedServer + "/federated/register/memory"))
-                                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
-                                    .header("Content-Type", "application/json")
-                                    .build();
-                                  client.sendAsync(regReq, java.net.http.HttpResponse.BodyHandlers.discarding());
-                            }
-                        });
+                            .thenAccept(res -> {
+                                // If we get 404, re-register
+                                if (res.statusCode() == 404) {
+                                    java.net.http.HttpRequest regReq = java.net.http.HttpRequest.newBuilder()
+                                            .uri(java.net.URI.create(fedServer + "/federated/register/memory"))
+                                            .POST(java.net.http.HttpRequest.BodyPublishers.ofString(json))
+                                            .header("Content-Type", "application/json")
+                                            .build();
+                                    client.sendAsync(regReq, java.net.http.HttpResponse.BodyHandlers.discarding());
+                                }
+                            });
                 } catch (Exception e) {
                     // LOGGER.warning("Failed to sync with: " + fedServer);
                 }
             }
         }, 5, 5, java.util.concurrent.TimeUnit.SECONDS);
     }
-    
+
     static void routing(HttpRules rules) {
         rules
-            .register("/api", new ApiService())
-            .register("/", StaticContentService.builder("WEB")
-                .welcomeFileName("index.html")
-                .build());
+                .register("/api", new ApiService())
+                .register("/", StaticContentService.builder("WEB")
+                        .welcomeFileName("index.html")
+                        .build());
     }
-    
+
     static class ApiService implements io.helidon.webserver.http.HttpService {
         private final ObjectMapper mapper = new ObjectMapper();
         private final java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
@@ -118,43 +117,97 @@ public class JettraMemoryServer {
         public void routing(HttpRules rules) {
             rules.get("/status", this::status);
             rules.post("/admin/password", this::changePassword);
+            rules.post("/login", this::login);
+            rules.post("/change-password", this::changePassword);
             rules.post("/sync", this::sync);
-            
+
+            rules.get("/dbs", this::listDatabases);
+            rules.post("/dbs", this::createDatabase);
+            rules.delete("/dbs", this::deleteDatabase);
+            rules.get("/dbs/{db}/cols", this::listCollections);
+            rules.post("/cols", this::createCollection);
+            rules.delete("/cols", this::deleteCollection);
+            rules.get("/metrics", this::metrics);
+            rules.get("/diagrams", this::listDiagrams);
+            rules.get("/diagrams/content", this::getDiagramContent);
+
             // CRUD
             rules.post("/doc", this::saveDocument);
             rules.get("/doc", this::getDocument);
             rules.put("/doc", this::updateDocument);
             rules.delete("/doc", this::deleteDocument);
             rules.get("/query", this::queryDocuments);
+            rules.get("/count", this::countDocuments);
+            
+            // Placeholder for cluster and config to avoid frontend errors
+            rules.get("/cluster", (req, res) -> res.send("{\"nodes\":[]}"));
+            rules.get("/config", (req, res) -> res.send("{}"));
+            rules.get("/users", (req, res) -> res.send("[]"));
+            rules.get("/federated", (req, res) -> res.send("{}"));
+            rules.get("/backups", (req, res) -> res.send("[]"));
+            rules.get("/index", this::getIndexes);
+            rules.post("/index", this::createIndex);
+            rules.delete("/index", this::deleteIndex);
+            rules.get("/versions", this::getVersions);
+            rules.get("/version", this::getVersionContent);
+            rules.post("/restore-version", this::restoreVersion);
+            rules.get("/versions_placeholder", (req, res) -> res.send("[]"));
         }
-        
+
         private void status(ServerRequest req, ServerResponse res) {
             long uptime = System.currentTimeMillis() - START_TIME;
             StatusResponse status = new StatusResponse(
-                formatUptime(uptime),
-                db.getResourceMonitor().getAvailableMemory() / 1024 / 1024 + " MB Free",
-                db.getCollectionCount()
-            );
+                    formatUptime(uptime),
+                    db.getResourceMonitor().getAvailableMemory() / 1024 / 1024 + " MB Free",
+                    db.getCollectionCount());
             try {
                 res.send(mapper.writeValueAsString(status));
-            } catch(IOException e) {
+            } catch (IOException e) {
                 res.status(io.helidon.http.Status.INTERNAL_SERVER_ERROR_500).send("Error");
             }
         }
-        
+
+        private void login(ServerRequest req, ServerResponse res) {
+            try {
+                byte[] content = req.content().as(byte[].class);
+                com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(content);
+                String user = node.get("username").asText();
+                String pass = node.get("password").asText();
+
+                if ("admin".equals(user) && config.getAdminPassword().equals(pass)) {
+                    String token = java.util.Base64.getEncoder().encodeToString((user + ":" + pass).getBytes());
+                    res.send(mapper.createObjectNode()
+                            .put("token", "Basic " + token)
+                            .put("role", "admin")
+                            .toString());
+                } else {
+                    res.status(io.helidon.http.Status.UNAUTHORIZED_401).send("Invalid credentials");
+                }
+            } catch (Exception e) {
+                res.status(401).send("Error");
+            }
+        }
+
         private void changePassword(ServerRequest req, ServerResponse res) {
-             try {
+            try {
                 String body = req.content().as(String.class);
                 com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(body);
+                String newPass = null;
                 if (node.has("newPassword")) {
-                    config.setAdminPassword(node.get("newPassword").asText());
-                    res.send("Password updated");
+                    newPass = node.get("newPassword").asText();
+                } else if (node.has("password")) {
+                    newPass = node.get("password").asText();
+                }
+
+                if (newPass != null) {
+                    config.setAdminPassword(newPass);
+                    res.send(mapper.createObjectNode().put("status", "Password updated").toString());
                 } else {
                     res.status(io.helidon.http.Status.BAD_REQUEST_400).send("Missing newPassword");
                 }
-             } catch(Exception e) {
-                 res.status(io.helidon.http.Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
-             }
+            } catch (Exception e) {
+                res.status(io.helidon.http.Status.INTERNAL_SERVER_ERROR_500).send(e.getMessage());
+            }
         }
 
         private void sync(ServerRequest req, ServerResponse res) {
@@ -164,7 +217,7 @@ public class JettraMemoryServer {
                     res.status(400).send("Missing dbLeaderUrl");
                     return;
                 }
-                
+
                 LOGGER.info("Starting memory sync from: " + dbLeaderUrl);
                 syncFromPermanentStorage(dbLeaderUrl);
                 res.send("Sync started");
@@ -179,37 +232,48 @@ public class JettraMemoryServer {
                     .uri(java.net.URI.create(dbLeaderUrl + "/api/dbs"))
                     .GET()
                     .build();
-            
+
             String dbsJson = httpClient.send(listDbsReq, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
-            java.util.List<Map<String, Object>> dbs = mapper.readValue(dbsJson, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<Map<String, Object>>>() {});
-            
+            java.util.List<Map<String, Object>> dbs = mapper.readValue(dbsJson,
+                    new com.fasterxml.jackson.core.type.TypeReference<java.util.List<Map<String, Object>>>() {
+                    });
+
             for (Map<String, Object> dbInfo : dbs) {
                 String dbName = (String) dbInfo.get("name");
-                if (dbName.equals("_system")) continue; // Optional: sync system?
-                
+                if (dbName.equals("_system"))
+                    continue; // Optional: sync system?
+
                 // 2. List Collections
                 java.net.http.HttpRequest listColsReq = java.net.http.HttpRequest.newBuilder()
                         .uri(java.net.URI.create(dbLeaderUrl + "/api/dbs/" + dbName + "/cols"))
                         .GET()
                         .build();
-                String colsJson = httpClient.send(listColsReq, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
-                java.util.List<String> cols = mapper.readValue(colsJson, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {});
-                
+                String colsJson = httpClient.send(listColsReq, java.net.http.HttpResponse.BodyHandlers.ofString())
+                        .body();
+                java.util.List<String> cols = mapper.readValue(colsJson,
+                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
+                        });
+
                 for (String colName : cols) {
-                    if (colName.startsWith("_")) continue;
-                    
+                    if (colName.startsWith("_"))
+                        continue;
+
                     // 3. Fetch all documents
                     java.net.http.HttpRequest fetchDocsReq = java.net.http.HttpRequest.newBuilder()
                             .uri(java.net.URI.create(dbLeaderUrl + "/api/query?db=" + dbName + "&col=" + colName))
                             .GET()
                             .build();
-                    String docsJson = httpClient.send(fetchDocsReq, java.net.http.HttpResponse.BodyHandlers.ofString()).body();
-                    java.util.List<Map<String, Object>> docs = mapper.readValue(docsJson, new com.fasterxml.jackson.core.type.TypeReference<java.util.List<Map<String, Object>>>() {});
-                    
+                    String docsJson = httpClient.send(fetchDocsReq, java.net.http.HttpResponse.BodyHandlers.ofString())
+                            .body();
+                    java.util.List<Map<String, Object>> docs = mapper.readValue(docsJson,
+                            new com.fasterxml.jackson.core.type.TypeReference<java.util.List<Map<String, Object>>>() {
+                            });
+
                     MemoryCollection memCol = db.createCollection(dbName, colName);
                     for (Map<String, Object> doc : docs) {
                         String id = (String) doc.get("_id");
-                        if (id == null) id = (String) doc.get("id");
+                        if (id == null)
+                            id = (String) doc.get("id");
                         if (id != null) {
                             memCol.insert(id, doc, 0);
                         }
@@ -226,11 +290,12 @@ public class JettraMemoryServer {
                 String colName = req.query().get("col");
                 byte[] bytes = req.content().as(byte[].class);
                 Map<String, Object> doc = mapper.readValue(bytes, Map.class);
-                
+
                 String id = (String) doc.get("_id");
-                if (id == null) id = java.util.UUID.randomUUID().toString();
+                if (id == null)
+                    id = java.util.UUID.randomUUID().toString();
                 doc.put("_id", id);
-                
+
                 db.createCollection(dbName, colName).insert(id, doc, 0);
                 res.send(mapper.writeValueAsString(Map.of("id", id, "status", "ok")));
             } catch (Exception e) {
@@ -243,10 +308,10 @@ public class JettraMemoryServer {
                 String dbName = req.query().get("db");
                 String colName = req.query().get("col");
                 String id = req.query().get("id");
-                
+
                 MemoryCollection col = db.getCollection(dbName, colName);
                 Object doc = (col != null) ? col.get(id) : null;
-                
+
                 if (doc != null) {
                     res.send(mapper.writeValueAsString(doc));
                 } else {
@@ -264,7 +329,7 @@ public class JettraMemoryServer {
                 String id = req.query().get("id");
                 byte[] bytes = req.content().as(byte[].class);
                 Map<String, Object> doc = mapper.readValue(bytes, Map.class);
-                
+
                 doc.put("_id", id);
                 MemoryCollection col = db.getCollection(dbName, colName);
                 if (col != null) {
@@ -283,7 +348,7 @@ public class JettraMemoryServer {
                 String dbName = req.query().get("db");
                 String colName = req.query().get("col");
                 String id = req.query().get("id");
-                
+
                 MemoryCollection col = db.getCollection(dbName, colName);
                 if (col != null) {
                     col.delete(id, 0);
@@ -300,16 +365,10 @@ public class JettraMemoryServer {
             try {
                 String dbName = req.query().get("db");
                 String colName = req.query().get("col");
-                
+
                 MemoryCollection col = db.getCollection(dbName, colName);
                 if (col != null) {
-                    // Very simple: returns all for now.
-                    // In real impl, we'd apply filters.
-                    java.util.List<Object> all = new java.util.ArrayList<>();
-                    // Need a way to iterate MemoryCollection. 
-                    // Let's add it or use internal map access.
-                    // For now, I'll add a 'getAll' to MemoryCollection.
-                    res.send("[]"); // Placeholder until I add iteration
+                    res.send(mapper.writeValueAsString(col.getAll().values()));
                 } else {
                     res.send("[]");
                 }
@@ -317,8 +376,262 @@ public class JettraMemoryServer {
                 res.status(500).send(e.getMessage());
             }
         }
+
+        private void countDocuments(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                MemoryCollection col = db.getCollection(dbName, colName);
+                res.send("{\"count\":" + (col != null ? col.size() : 0) + "}");
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void listDatabases(ServerRequest req, ServerResponse res) {
+            try {
+                java.util.List<Map<String, String>> dbs = new java.util.ArrayList<>();
+                for (String name : db.getDatabaseNames()) {
+                    dbs.add(Map.of("name", name, "engine", "JettraMemoryDB"));
+                }
+                res.send(mapper.writeValueAsString(dbs));
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void listCollections(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.path().pathParameters().get("db");
+                java.util.Set<String> cols = db.getCollectionNames(dbName);
+                res.send(mapper.writeValueAsString(cols));
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void createDatabase(ServerRequest req, ServerResponse res) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(req.content().as(byte[].class));
+                String name = node.get("name").asText();
+                db.getDatabase(name);
+                res.send(mapper.createObjectNode().put("status", "Database created").toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void deleteDatabase(ServerRequest req, ServerResponse res) {
+            try {
+                String name = req.query().get("name");
+                if (name == null) {
+                    com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(req.content().as(byte[].class));
+                    name = node.get("name").asText();
+                }
+                db.deleteDatabase(name);
+                res.send(mapper.createObjectNode().put("status", "Database deleted").toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void createCollection(ServerRequest req, ServerResponse res) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(req.content().as(byte[].class));
+                String dbName = node.get("database").asText();
+                String colName = node.get("collection").asText();
+                db.createCollection(dbName, colName);
+                res.send(mapper.createObjectNode().put("status", "Collection created").toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void deleteCollection(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                if (dbName == null || colName == null) {
+                    com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(req.content().as(byte[].class));
+                    dbName = node.get("database").asText();
+                    colName = node.get("collection").asText();
+                }
+                db.deleteCollection(dbName, colName);
+                res.send(mapper.createObjectNode().put("status", "Collection deleted").toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void metrics(ServerRequest req, ServerResponse res) {
+            status(req, res);
+        }
+
+        private void listDiagrams(ServerRequest req, ServerResponse res) {
+            try {
+                java.io.File dir = new java.io.File("/home/avbravo/NetBeansProjects/golang/jettraDBVM/books/excalidraw");
+                if (!dir.exists()) {
+                    dir = new java.io.File("../books/excalidraw");
+                }
+                if (!dir.exists()) {
+                    res.send("[]");
+                    return;
+                }
+                java.io.File[] files = dir.listFiles((d, name) -> name.endsWith(".excalidraw"));
+                java.util.List<String> fileNames = new java.util.ArrayList<>();
+                if (files != null) {
+                    for (java.io.File f : files) {
+                        fileNames.add(f.getName());
+                    }
+                }
+                res.send(mapper.writeValueAsString(fileNames));
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void getDiagramContent(ServerRequest req, ServerResponse res) {
+            try {
+                String name = req.query().get("name");
+                if (name == null) {
+                    res.status(400).send("Missing name");
+                    return;
+                }
+                java.io.File dir = new java.io.File("/home/avbravo/NetBeansProjects/golang/jettraDBVM/books/excalidraw");
+                if (!dir.exists()) {
+                    dir = new java.io.File("../books/excalidraw");
+                }
+                java.io.File file = new java.io.File(dir, name);
+                if (!file.exists()) {
+                    res.status(404).send("File not found");
+                    return;
+                }
+                res.send(java.nio.file.Files.readString(file.toPath()));
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void getIndexes(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                MemoryCollection col = db.getCollection(dbName, colName);
+                if (col != null) {
+                    res.send(mapper.writeValueAsString(col.getIndexes()));
+                } else {
+                    res.send("[]");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void createIndex(ServerRequest req, ServerResponse res) {
+            try {
+                byte[] content = req.content().as(byte[].class);
+                com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(content);
+                String dbName = node.get("database").asText();
+                String colName = node.get("collection").asText();
+                String field = node.get("field").asText();
+                boolean unique = node.has("unique") && node.get("unique").asBoolean();
+                boolean sequential = node.has("sequential") && node.get("sequential").asBoolean();
+
+                MemoryCollection col = db.getCollection(dbName, colName);
+                if (col != null) {
+                    Map<String, Object> index = new HashMap<>();
+                    index.put("field", field);
+                    index.put("unique", unique);
+                    index.put("sequential", sequential);
+                    col.createIndex(index);
+                    res.send(mapper.createObjectNode().put("status", "Index created").toString());
+                } else {
+                    res.status(404).send("Collection not found");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void deleteIndex(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                String field = req.query().get("field");
+                MemoryCollection col = db.getCollection(dbName, colName);
+                if (col != null) {
+                    col.deleteIndex(field);
+                    res.send(mapper.createObjectNode().put("status", "Index deleted").toString());
+                } else {
+                    res.status(404).send("Collection not found");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void getVersions(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                String id = req.query().get("id");
+                MemoryCollection col = db.getCollection(dbName, colName);
+                if (col != null) {
+                    java.util.List<String> versions = col.getVersions(id).stream()
+                            .map(v -> v.versionId())
+                            .collect(java.util.stream.Collectors.toList());
+                    res.send(mapper.writeValueAsString(versions));
+                } else {
+                    res.send("[]");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void getVersionContent(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                String id = req.query().get("id");
+                String version = req.query().get("version");
+                MemoryCollection col = db.getCollection(dbName, colName);
+                if (col != null) {
+                    MemoryCollection.DocVersion v = col.getVersion(id, version);
+                    if (v != null) {
+                        res.send(mapper.writeValueAsString(v.data()));
+                    } else {
+                        res.status(404).send("Version not found");
+                    }
+                } else {
+                    res.status(404).send("Collection not found");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void restoreVersion(ServerRequest req, ServerResponse res) {
+            try {
+                byte[] content = req.content().as(byte[].class);
+                com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(content);
+                String dbName = node.get("db").asText();
+                String colName = node.get("col").asText();
+                String id = node.get("id").asText();
+                String version = node.get("version").asText();
+                MemoryCollection col = db.getCollection(dbName, colName);
+                if (col != null) {
+                    col.restoreVersion(id, version);
+                    res.send(mapper.createObjectNode().put("status", "restored").toString());
+                } else {
+                    res.status(404).send("Collection not found");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
     }
-    
+
     static class StatusResponse {
         public String uptime;
         public String memoryUsage;
@@ -330,13 +643,15 @@ public class JettraMemoryServer {
             this.collections = collections;
         }
     }
-    
+
     private static String formatUptime(long millis) {
         long seconds = millis / 1000;
         long minutes = seconds / 60;
         long hours = minutes / 60;
         return String.format("%02d:%02d:%02d", hours, minutes % 60, seconds % 60);
     }
-    
-    public static JettraMemoryDB getDB() { return db; }
+
+    public static JettraMemoryDB getDB() {
+        return db;
+    }
 }

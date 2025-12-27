@@ -16,31 +16,69 @@ public class MemoryCollection {
     private final String name;
     private final JettraMemoryDB db;
     
-    // The "MemTable": Concurrent sorted map for O(log n) operations
-    // <Key, Value>
-    private final ConcurrentSkipListMap<String, Object> activeMemTable; // Simply Object for value placeholder
+    public record DocVersion(Object data, long timestamp, String versionId, String author) {}
     
-    // In a real LSM, we switch active to immutable. 
-    // For this prototype, we'll keep it simple but structure it for expansion.
+    private final ConcurrentSkipListMap<String, Object> activeMemTable;
+    private final java.util.Map<String, java.util.List<DocVersion>> versionHistory;
+    private final java.util.List<java.util.Map<String, Object>> indexes;
     
     public MemoryCollection(String name, JettraMemoryDB db) {
         this.name = name;
         this.db = db;
         this.activeMemTable = new ConcurrentSkipListMap<>();
+        this.versionHistory = new java.util.concurrent.ConcurrentHashMap<>();
+        this.indexes = new java.util.concurrent.CopyOnWriteArrayList<>();
+    }
+
+    public void createIndex(java.util.Map<String, Object> index) {
+        indexes.add(index);
+    }
+
+    public void deleteIndex(String field) {
+        indexes.removeIf(idx -> field.equals(idx.get("field")));
+    }
+
+    public java.util.List<java.util.Map<String, Object>> getIndexes() {
+        return java.util.Collections.unmodifiableList(indexes);
     }
     
     public void insert(String key, Object document, long txId) {
-        // In MVCC, typically we wrap the document with version info
         activeMemTable.put(key, document);
+        
+        // Add to history
+        java.util.List<DocVersion> history = versionHistory.computeIfAbsent(key, k -> new java.util.concurrent.CopyOnWriteArrayList<>());
+        String vId = String.valueOf(System.currentTimeMillis());
+        history.add(new DocVersion(document, System.currentTimeMillis(), vId, "admin"));
     }
     
     public Object get(String key) {
         return activeMemTable.get(key);
     }
     
+    public java.util.List<DocVersion> getVersions(String key) {
+        return versionHistory.getOrDefault(key, java.util.Collections.emptyList());
+    }
+
+    public DocVersion getVersion(String key, String versionId) {
+        java.util.List<DocVersion> history = versionHistory.get(key);
+        if (history != null) {
+            for (DocVersion v : history) {
+                if (v.versionId().equals(versionId)) return v;
+            }
+        }
+        return null;
+    }
+
+    public void restoreVersion(String key, String versionId) {
+        DocVersion v = getVersion(key, versionId);
+        if (v != null) {
+            insert(key, v.data(), 0);
+        }
+    }
+
     public void delete(String key, long txId) {
-        // tombstone in LSM
         activeMemTable.remove(key); 
+        // We might want to keep history? jettra-server seems to keep it if requested by ID.
     }
     
     /**

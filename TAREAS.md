@@ -143,13 +143,16 @@ Crea la documentacion en el archivo driver.md
 memoria, y la persistencia debe ser con jettra-server.
 
 
+- [x] Creacion de indices y  versiones de documentos
 
-- [] Al detenerse el servidor federado lider no asigna un nuevo servidor federedado como lider
-
-
-
+- [x] En la interface web de jettra-memory colocar las mismas opciones que tiene jettra-server
 
 
+- [x] Configura jettra-memory con un archivo Main.java similar a como esta cofigurado jettra-server y configura tambien el archivo
+pom.xml en la seccion  <build> con la configuracion en  <executions>
+
+
+- [x] Al detenerse el servidor federado lider no asigna un nuevo servidor federedado como lider
 
 
 

@@ -66,6 +66,17 @@ public class JettraMemoryDB {
         Map<String, MemoryCollection> db = databases.get(dbName);
         return (db != null) ? Collections.unmodifiableSet(db.keySet()) : Collections.emptySet();
     }
+
+    public void deleteDatabase(String dbName) {
+        databases.remove(dbName);
+    }
+
+    public void deleteCollection(String dbName, String collectionName) {
+        Map<String, MemoryCollection> db = databases.get(dbName);
+        if (db != null) {
+            db.remove(collectionName);
+        }
+    }
     
     public TransactionManager getTransactionManager() {
         return transactionManager;

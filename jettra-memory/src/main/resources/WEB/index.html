@@ -4,108 +4,1063 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JettraMemory DB</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a;
-            color: #e2e8f0;
-        }
-
-        .glass {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-    </style>
+    <title>JettraDB Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 
-<body class="h-screen flex flex-col">
-    <nav class="glass p-4 flex justify-between items-center">
-        <div class="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-            JettraMemory DB</div>
-        <div class="flex gap-4">
-            <button class="px-4 py-2 rounded hover:bg-white/10" onclick="showSection('dashboard')">Dashboard</button>
-            <button class="px-4 py-2 rounded hover:bg-white/10"
-                onclick="showSection('collections')">Collections</button>
-            <button class="px-4 py-2 rounded hover:bg-white/10" onclick="showSection('config')">Config</button>
-        </div>
-        <div id="status" class="text-sm px-3 py-1 rounded bg-green-500/20 text-green-400">Online</div>
-    </nav>
-
-    <main class="flex-1 p-8 overflow-auto">
-        <div id="dashboard" class="section">
-            <h1 class="text-3xl font-bold mb-6">Memory Dashboard</h1>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div class="glass p-6 rounded-xl">
-                    <h3 class="text-gray-400 mb-2">Memory Usage</h3>
-                    <div class="text-3xl font-mono" id="mem-usage">Loading...</div>
+<body>
+    <div id="app">
+        <div id="notification-container"></div>
+        <!-- Login View -->
+        <div id="login-view" class="view active">
+            <div class="login-container">
+                <div class="brand">
+                    <div class="logo-icon">J</div>
+                    <h1>JettraDB</h1>
                 </div>
-                <div class="glass p-6 rounded-xl">
-                    <h3 class="text-gray-400 mb-2">Total Collections</h3>
-                    <div class="text-3xl font-mono" id="total-cols">0</div>
-                </div>
-                <div class="glass p-6 rounded-xl">
-                    <h3 class="text-gray-400 mb-2">Uptime</h3>
-                    <div class="text-3xl font-mono" id="uptime">0s</div>
-                </div>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" placeholder="admin" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Sign In</button>
+                    <div id="login-error" class="error-message"></div>
+                </form>
             </div>
         </div>
 
-        <div id="collections" class="section hidden">
-            <h1 class="text-3xl font-bold mb-6">Collections</h1>
-            <div class="glass p-6 rounded-xl">
-                <table class="w-full text-left">
-                    <thead>
-                        <tr class="border-b border-white/10">
-                            <th class="p-3">Name</th>
-                            <th class="p-3">Size</th>
-                            <th class="p-3">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="col-list">
-                        <!-- Dynamic content -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div id="config" class="section hidden">
-            <h1 class="text-3xl font-bold mb-6">Configuration</h1>
-            <div class="glass p-6 rounded-xl max-w-lg">
-                <div class="mb-4">
-                    <label class="block text-gray-400 mb-2">Admin Password</label>
-                    <input type="password" id="new-password"
-                        class="w-full bg-black/30 border border-white/10 rounded p-2 text-white"
-                        placeholder="New Password">
+        <!-- Dashboard View -->
+        <div id="dashboard-view" class="view">
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <div class="logo-icon sm">J</div>
+                    <span>JettraDB</span>
                 </div>
-                <button class="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded"
-                    onclick="updatePassword()">Update</button>
-            </div>
+                <div class="sidebar-actions"
+                    style="padding: 0.5rem 1rem; border-bottom: 1px solid var(--border-color);">
+                    <button id="create-db-btn" class="btn btn-sm btn-primary" style="width: 100%;">+ New
+                        Database</button>
+                </div>
+                <nav class="sidebar-nav">
+                    <div class="nav-section">
+                        <!-- Databases Tree -->
+                        <ul id="db-list" class="tree-view">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+                    <div class="nav-section">
+                        <ul class="tree-view">
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('indexes')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Indexes</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('rules')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Rules</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('transactions')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Transactions</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('query')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Query Console</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('backups')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Backups</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('import-export')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Import / Export</span>
+                                </a>
+                            </li>
+                            <li id="menu-users" class="hidden">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('users')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Users</span>
+                                </a>
+                            </li>
+                            <li id="menu-invoices">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('invoices')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Invoices</span>
+                                </a>
+                            </li>
+                            <li id="menu-federated">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('federated')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
+                                </a>
+                            </li>
+                            <li id="menu-diagrams">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('diagrams')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Diagrams</span>
+                                </a>
+                            </li>
+
+                            <li id="menu-config" class="hidden">
+                                <a href="#" class="sidebar-link group" onclick="app.showSection('config')">
+                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
+                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                        stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Configuración</span>
+                                </a>
+                            </li>
+                            <!-- <li>
+                                <a href="#"
+                                    class="flex items-center p-2 text-gray-900 rounded-lg dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 group"
+                                    onclick="app.logout()">
+                                    <span class="flex-1 ml-3 whitespace-nowrap">Sign Out</span>
+                                </a>
+                            </li> -->
+                        </ul>
+                    </div>
+                </nav>
+                <div class="sidebar-footer">
+                    <div class="user-menu">
+                        <span id="user-display">User</span>
+                        <div class="user-actions">
+                            <button id="change-pass-btn" class="btn btn-ghost btn-sm">Change Password</button>
+                            <button id="logout-btn" class="btn btn-ghost btn-sm">Logout</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+            <main class="main-content">
+                <header class="top-bar">
+                    <div style="display: flex; align-items: center;">
+                        <button id="menu-toggle">☰</button>
+                        <div id="breadcrumbs">Dashboard</div>
+                    </div>
+                    <div class="actions">
+                        <!-- Collection Actions (Visible when collection selected) -->
+                        <div id="collection-actions" style="display: none; gap: 0.5rem;">
+                            <input type="text" id="doc-search" placeholder="Search..."
+                                style="padding: 0.4rem; font-size: 0.9rem; width: 200px;">
+                            <button id="add-doc-btn" class="btn btn-primary btn-sm">+ New Document</button>
+                            <select id="view-mode"
+                                style="padding: 0.4rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 4px;">
+                                <option value="table">Table View</option>
+                                <option value="json">JSON View</option>
+                                <option value="tree">Tree View</option>
+                            </select>
+                        </div>
+                        <button id="theme-toggle-btn" class="btn btn-icon" title="Toggle Theme">🌓</button>
+                        <button id="refresh-btn" class="btn btn-icon" title="Refresh">↻</button>
+                    </div>
+                </header>
+                <div id="content-area">
+                    <!-- Dynamic Content -->
+                    <div id="dashboard-section" class="section-content">
+                        <div class="empty-state">
+                            <h2>Welcome to JettraDB</h2>
+                            <p>Select a database to get started.</p>
+                        </div>
+                    </div>
+
+
+                    <!-- Indexes Section -->
+                    <div id="indexes-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Index Management</h2>
+                            </div>
+
+                            <div class="form-grid-2 mb-8" style="margin-bottom: 2rem;">
+                                <div class="form-group">
+                                    <label>Database</label>
+                                    <select id="idx-db-select" onchange="app.loadIndexCollections()"
+                                        class="form-control"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Collection</label>
+                                    <select id="idx-col-select" onchange="app.loadIndexes()"
+                                        class="form-control"></select>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Existing Indexes</h3>
+                                <ul id="indexes-list" class="modern-list" style="margin-bottom: 2rem;">
+                                    <!-- Indexes list -->
+                                </ul>
+
+                                <h3 class="text-xl font-semibold mb-4">Create New Index</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Field Name</label>
+                                        <input type="text" id="idx-field" placeholder="e.g. email" class="form-control">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Type</label>
+                                        <select id="idx-type" class="form-control">
+                                            <option value="unique">Unique</option>
+                                            <option value="non-unique">Non-Unique (Standard)</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="display: flex; align-items: center; height: 48px;">
+                                        <label class="checkbox-wrapper">
+                                            <input type="checkbox" id="idx-sequential">
+                                            <span>Sequential</span>
+                                        </label>
+                                    </div>
+                                    <button onclick="app.createIndex()" class="btn btn-primary"
+                                        style="height: 48px;">Create Index</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Rules Section -->
+                    <div id="rules-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Rules Management</h2>
+                            </div>
+
+                            <div class="form-grid-2 mb-8" style="margin-bottom: 2rem;">
+                                <div class="form-group">
+                                    <label>Database</label>
+                                    <select id="rule-db-select" onchange="app.loadRuleCollections()"
+                                        class="form-control"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Collection</label>
+                                    <select id="rule-col-select" onchange="app.loadRules()"
+                                        class="form-control"></select>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Existing Rules</h3>
+                                <div class="table-container mb-4" style="margin-bottom: 2rem;">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Field</th>
+                                                <th>Type</th>
+                                                <th>Value/Ref</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rules-table-body"></tbody>
+                                    </table>
+                                </div>
+
+                                <h3 class="text-xl font-semibold mb-4">Add New Rule</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Field Name</label>
+                                        <input type="text" id="rule-field" placeholder="e.g. email"
+                                            class="form-control">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Rule Type</label>
+                                        <select id="rule-type" class="form-control" onchange="app.toggleRuleInputs()">
+                                            <option value="validation">Validation (Simple)</option>
+                                            <option value="min_value">Min Value</option>
+                                            <option value="max_value">Max Value</option>
+                                            <option value="referenced">Referenced (Foreign Key)</option>
+                                        </select>
+                                    </div>
+
+                                    <!-- Simple/Min/Max Inputs -->
+                                    <div class="form-group" id="rule-val-group">
+                                        <label>Value</label>
+                                        <input type="text" id="rule-value" placeholder="notnull or number"
+                                            class="form-control">
+                                        <small class="text-muted">For simple: notnull, notempty. For min/max:
+                                            number.</small>
+                                    </div>
+
+                                    <!-- Referenced Inputs -->
+                                    <div class="form-group hidden" id="rule-ref-col-group">
+                                        <label>Referenced Collection</label>
+                                        <input type="text" id="rule-ref-col" class="form-control">
+                                    </div>
+                                    <div class="form-group hidden" id="rule-ref-field-group">
+                                        <label>External Field (Target)</label>
+                                        <input type="text" id="rule-ref-field" value="_id" class="form-control">
+                                    </div>
+
+                                    <button onclick="app.addRule()" class="btn btn-primary" style="height: 48px;">Add
+                                        Rule</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+
+                    <!-- Transactions Section -->
+                    <div id="transactions-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Transaction Testing</h2>
+                            </div>
+
+                            <div class="form-grid-2 mb-8" style="margin-bottom: 2rem;">
+                                <div class="form-group">
+                                    <label>Database</label>
+                                    <select id="tx-db-select" class="form-control"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Collection</label>
+                                    <select id="tx-col-select" class="form-control"></select>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel" style="margin-bottom: 2rem;">
+                                <h3 class="text-xl font-semibold mb-4">Transaction Control</h3>
+                                <div style="display: flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+                                    <button class="btn btn-primary" onclick="app.beginTx()">Begin Transaction</button>
+                                    <button class="btn btn-success" onclick="app.commitTx()">Commit</button>
+                                    <button class="btn btn-danger" onclick="app.rollbackTx()">Rollback</button>
+                                    <span id="tx-status"
+                                        style="font-family: monospace; font-weight: bold; color: var(--text-muted);">No
+                                        Active Tx</span>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Operations in Tx</h3>
+                                <div class="form-grid">
+                                    <div class="form-group">
+                                        <label>Document JSON</label>
+                                        <textarea id="tx-doc-json" class="form-control" rows="3"
+                                            placeholder='{"name": "test"}'></textarea>
+                                    </div>
+                                    <button class="btn btn-secondary" onclick="app.addToTx('save')">Add Save
+                                        Operation</button>
+
+                                    <div style="margin: 1rem 0; border-top: 1px solid var(--border-color);"></div>
+
+                                    <div class="form-group">
+                                        <label>Document ID to Delete</label>
+                                        <input type="text" id="tx-del-id" class="form-control">
+                                    </div>
+                                    <button class="btn btn-danger" onclick="app.addToTx('delete')">Add Delete
+                                        Operation</button>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel" style="margin-top: 2rem;">
+                                <h3 class="text-xl font-semibold mb-2">Transaction Log</h3>
+                                <div id="tx-log"
+                                    style="background: #111; color: #0f0; padding: 1rem; border-radius: 4px; height: 200px; overflow-y: auto; font-family: monospace;">
+                                    <!-- Logs -->
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Query Section -->
+                    <div id="query-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Query Console</h2>
+                            </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div class="lg:col-span-2 space-y-6">
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-4">Command Input</h3>
+                                        <div class="form-group">
+                                            <label>Database Context</label>
+                                            <select id="query-db-select" class="form-control"
+                                                style="width: 200px; margin-bottom: 1rem;"></select>
+                                        </div>
+                                        <div class="relative">
+                                            <textarea id="query-input" class="form-control font-mono" rows="5"
+                                                placeholder="Enter JQL or SQL command..."></textarea>
+                                            <div class="absolute bottom-2 right-2">
+                                                <button onclick="app.executeQuery()"
+                                                    class="btn btn-primary">Execute</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-2">Results</h3>
+                                        <div id="query-results"
+                                            class="bg-gray-900 rounded-lg p-4 font-mono text-sm overflow-x-auto min-h-[200px]"
+                                            style="white-space: pre-wrap; color: #00ff9d;">
+                                            // Results will appear here...
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="space-y-6">
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-4">JQL Reference</h3>
+                                        <div class="space-y-4 text-sm">
+                                            <div>
+                                                <p class="font-semibold text-primary">Find Documents</p><code
+                                                    class="block bg-black/20 p-2 rounded mt-1">FIND IN users WHERE age = 25</code>
+                                            </div>
+                                            <div>
+                                                <p class="font-semibold text-primary">Insert Document</p><code
+                                                    class="block bg-black/20 p-2 rounded mt-1">INSERT INTO users DOC {"name": "Alice"}</code>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="glass-panel">
+                                        <h3 class="text-xl font-semibold mb-4">Join Example</h3>
+                                        <div class="bg-black/20 p-3 rounded text-sm">
+                                            <p class="font-semibold mb-2">Manual Join:</p>
+                                            <ol class="list-decimal pl-4 space-y-2 text-gray-300">
+                                                <li>Find User: <code
+                                                        class="text-xs text-primary">FIND IN users WHERE name="Bob"</code>
+                                                </li>
+                                                <li>Find Orders: <code
+                                                        class="text-xs text-primary">FIND IN orders WHERE uid="u1"</code>
+                                                </li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Backups Section -->
+                    <div id="backups-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Backup & Restore</h2>
+                                <div style="display: flex; gap: 1rem;">
+                                    <button class="btn btn-primary" onclick="app.promptCreateBackup()">+ Create
+                                        Backup</button>
+                                    <button class="btn btn-secondary" onclick="app.promptGeneralRestore()">Upload &
+                                        Restore</button>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Existing Backups</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Filename</th>
+                                                <th>Date</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="backups-list">
+                                            <!-- Populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Import/Export Section -->
+                    <div id="import-export-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Import / Export Data</h2>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6"
+                                style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                                <!-- Export Card -->
+                                <div class="glass-panel">
+                                    <h3 class="text-xl font-semibold mb-4">Export Collection</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label>Database</label>
+                                            <select id="export-db-select" onchange="app.loadExportCollections()"
+                                                class="form-control"></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Collection</label>
+                                            <select id="export-col-select" class="form-control"></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Format</label>
+                                            <select id="export-format" class="form-control">
+                                                <option value="json">JSON</option>
+                                                <option value="csv">CSV</option>
+                                            </select>
+                                        </div>
+                                        <button class="btn btn-primary" onclick="app.performExport()">Download Export
+                                            File</button>
+                                    </div>
+                                </div>
+
+                                <!-- Import Card -->
+                                <div class="glass-panel">
+                                    <h3 class="text-xl font-semibold mb-4">Import Data</h3>
+                                    <div class="form-grid">
+                                        <div class="form-group">
+                                            <label>Database</label>
+                                            <select id="import-db-select" onchange="app.loadImportCollections()"
+                                                class="form-control"></select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Target Collection</label>
+                                            <select id="import-col-select" class="form-control"></select>
+                                            <small class="text-muted" style="font-size: 0.8em; color: #888;">Or type new
+                                                name to create:</small>
+                                            <input type="text" id="import-new-col" placeholder="New Collection Name"
+                                                class="form-control" style="margin-top: 5px;">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Format</label>
+                                            <select id="import-format" class="form-control">
+                                                <option value="json">JSON</option>
+                                                <option value="csv">CSV</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>File</label>
+                                            <input type="file" id="import-file" class="form-control">
+                                        </div>
+                                        <button class="btn btn-success" onclick="app.performImport()">Import
+                                            Data</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Users Manage Section -->
+                    <div id="users-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">User Management</h2>
+                                <button class="btn btn-primary" onclick="app.showAddUserModal()">+ Add User</button>
+                            </div>
+                        </div>
+                        <div class="glass-panel">
+                            <div class="table-container">
+                                <table class="w-full text-sm text-left custom-table">
+                                    <thead class="text-xs uppercase bg-gray-700 text-gray-400">
+                                        <tr>
+                                            <th class="px-6 py-3">Username</th>
+                                            <th scope="col" class="px-6 py-3">Description</th>
+                                            <th class="px-6 py-3">Role</th>
+                                            <th class="px-6 py-3 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="users-table-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoices Section -->
+                    <div id="invoices-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Invoices</h2>
+                                <button class="btn btn-primary" onclick="app.showCreateInvoice()">+ New Invoice</button>
+                            </div>
+
+                            <div class="form-group mb-4" style="margin-bottom: 1rem;">
+                                <label>Select Database</label>
+                                <select id="invoice-db-select" class="form-control"
+                                    onchange="app.loadInvoices()"></select>
+                            </div>
+
+                        </div>
+
+                        <div class="glass-panel">
+                            <h3 class="text-xl font-semibold mb-4">Invoice List</h3>
+                            <div class="table-container">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Date</th>
+                                            <th>Client</th>
+                                            <th>Total</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="invoices-table-body">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="pagination mt-4">
+                                <button class="btn btn-sm btn-secondary"
+                                    onclick="app.prevInvoicePage()">Previous</button>
+                                <span id="invoice-page-num" style="margin: 0 10px;">Page 1</span>
+                                <button class="btn btn-sm btn-secondary" onclick="app.nextInvoicePage()">Next</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Config Section -->
+                    <div id="config-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Configuración del Nodo (config.json)</h2>
+                            </div>
+
+                            <div class="glass-panel">
+                                <p class="mb-4 text-secondary">Edite la configuración local de este nodo JettraDB.</p>
+                                <textarea id="config-editor" spellcheck="false"
+                                    placeholder="Cargando configuración..."></textarea>
+
+                                <div id="config-status" class="hidden"></div>
+
+                                <div class="config-actions">
+                                    <button id="save-config-btn" class="btn btn-primary"
+                                        onclick="saveNodeConfig(false)">
+                                        Guardar sin Reiniciar
+                                    </button>
+                                    <button id="save-restart-config-btn" class="btn btn-success"
+                                        onclick="saveNodeConfig(true)">
+                                        Guardar y Reiniciar
+                                    </button>
+                                    <button id="restart-node-btn" class="btn btn-secondary"
+                                        style="background-color: #f59e0b; border: none; color: white;"
+                                        onclick="app.restartInternalNode()">
+                                        Solo Reiniciar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Federated Section -->
+                    <div id="federated-section" class="section-content hidden">
+                        <div class="p-4" style="padding: 2rem;">
+                            <div class="section-header">
+                                <h2 class="section-title">Federated Cluster Management</h2>
+                            </div>
+
+                            <div id="federated-status-content" class="mb-8">
+                                <!-- Populated by JS -->
+                            </div>
+
+                            <div class="glass-panel mb-8">
+                                <h3 class="text-xl font-semibold mb-4">Federated Cluster (Peers)</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Node ID</th>
+                                                <th>URL</th>
+                                                <th>Role</th>
+                                                <th>Status</th>
+                                                <th>Last Seen</th>
+                                                <!-- <th>Actions</th> -->
+                                            </tr>
+                                        </thead>
+                                        <tbody id="federated-servers-tbody">
+                                            <!-- JS populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <h3 class="text-xl font-semibold mb-4">Managed DB Nodes</h3>
+                                <div class="table-container">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Node ID</th>
+                                                <th>URL</th>
+                                                <th>Status</th>
+                                                <th>CPU</th>
+                                                <th>RAM</th>
+                                                <th>Disk</th>
+                                                <th>Last Seen</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="federated-managed-nodes-tbody">
+                                            <!-- JS populated -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Diagrams Section -->
+                <div id="diagrams-section" class="section-content hidden">
+                    <div class="p-4" style="padding: 2rem;">
+                        <div class="section-header">
+                            <h2 class="section-title">Excalidraw Diagrams</h2>
+                        </div>
+                        <div class="glass-panel">
+                            <h3 class="text-xl font-semibold mb-4">Available Diagrams</h3>
+                            <ul id="diagrams-list" class="modern-list">
+                                <!-- Populated by JS -->
+                            </ul>
+                        </div>
+
+                        <!-- Viewer Container -->
+                        <div id="diagram-viewer-container" class="glass-panel mt-8 hidden">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 id="current-diagram-title" class="text-xl font-semibold">Diagram Viewer</h3>
+                                <button class="btn btn-secondary btn-sm"
+                                    onclick="appExtended.closeDiagram()">Close</button>
+                            </div>
+                            <div id="diagram-render-area"
+                                style="background: white; border-radius: 8px; overflow: auto; min-height: 400px; padding: 20px; display: flex; justify-content: center; align-items: center;">
+                                <!-- SVG will be rendered here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
         </div>
+    </div>
+
+    </div> <!-- content-area -->
+    <footer class="app-footer">
+        &copy; 2025 JettraDB. All Rights Reserved.
+    </footer>
     </main>
+    </div> <!-- dashboard-view -->
+    </div> <!-- app -->
 
-    <script>
-        function showSection(id) {
-            document.querySelectorAll('.section').forEach(el => el.classList.add('hidden'));
-            document.getElementById(id).classList.remove('hidden');
-        }
+    <!-- Deprecated Modals Removed: Using Center View Router -->
+    <!-- Global Modal Overlay -->
+    <div id="modal-overlay" class="hidden" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Title</h3>
+                <button class="btn-close" onclick="app.closeInputModal()">×</button>
+            </div>
+            <div id="modal-body" class="modal-body">
+                <!-- Content injected by JS -->
+            </div>
+            <div id="modal-footer" class="modal-footer">
+                <!-- Buttons injected by JS -->
+            </div>
+        </div>
+    </div>
 
-        async function fetchStats() {
-            try {
-                const res = await fetch('/api/status');
-                const data = await res.json();
-                document.getElementById('mem-usage').innerText = data.memoryUsage;
-                document.getElementById('total-cols').innerText = data.collections;
-                document.getElementById('uptime').innerText = data.uptime;
-            } catch (e) {
-                console.error(e);
+    <script src="js/app.bundle.js"></script>
+    <script type="module">
+        // Excalidraw support
+        import { exportToSvg } from "https://esm.sh/@excalidraw/utils@0.1.2";
+
+        window.appExtended = {
+            async loadDiagrams() {
+                try {
+                    const res = await fetch('/api/diagrams');
+                    const files = await res.json();
+                    const list = document.getElementById('diagrams-list');
+                    list.innerHTML = '';
+                    files.forEach(file => {
+                        const li = document.createElement('li');
+                        li.className = 'modern-list-item';
+                        li.style.display = 'flex';
+                        li.style.justifyContent = 'space-between';
+                        li.style.alignItems = 'center';
+                        li.style.padding = '1rem';
+                        li.style.borderBottom = '1px solid var(--border-color)';
+                        li.innerHTML = `
+                            <span>${file}</span>
+                            <button class="btn btn-primary btn-sm" onclick="appExtended.openDiagram('${file}')">Open</button>
+                        `;
+                        list.appendChild(li);
+                    });
+                } catch (err) {
+                    console.error('Failed to load diagrams:', err);
+                }
+            },
+
+            async openDiagram(name) {
+                document.getElementById('current-diagram-title').innerText = `Diagram: ${name}`;
+                document.getElementById('diagram-viewer-container').classList.remove('hidden');
+                const renderArea = document.getElementById('diagram-render-area');
+                renderArea.innerHTML = '<p style="color: #666;">Rendering diagram...</p>';
+
+                try {
+                    const res = await fetch(`/api/diagrams/content?name=${name}`);
+                    if (!res.ok) throw new Error('Failed to fetch diagram content');
+                    const text = await res.text();
+                    const content = JSON.parse(text);
+
+                    const svg = await exportToSvg({
+                        elements: content.elements,
+                        appState: {
+                            ...content.appState,
+                            exportWithDarkMode: document.body.classList.contains('dark-theme')
+                        },
+                        files: content.files || {}
+                    });
+
+                    svg.style.maxWidth = "100%";
+                    svg.style.height = "auto";
+                    renderArea.innerHTML = '';
+                    renderArea.appendChild(svg);
+                } catch (err) {
+                    console.error('Render error:', err);
+                    renderArea.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
+                }
+            },
+
+            closeDiagram() {
+                document.getElementById('diagram-viewer-container').classList.add('hidden');
+            }
+        };
+
+        // Hook into app.showSection
+        // Wait for app to be defined
+        function hookApp() {
+            if (window.app && window.app.showSection) {
+                const originalShowSection = window.app.showSection;
+                window.app.showSection = function (section) {
+                    originalShowSection.apply(this, arguments);
+                    if (section === 'diagrams') {
+                        window.appExtended.loadDiagrams();
+                    }
+                };
+            } else {
+                setTimeout(hookApp, 100);
             }
         }
+        hookApp();
+    </script>
+    <script>
+        // Security: Force login on startup by clearing stored tokens
+        localStorage.removeItem('jettra_token');
+        localStorage.removeItem('jettra_user');
+        if (window.app && window.app.state) {
+            window.app.state.token = null;
+            window.app.state.user = null;
+            // Force return to login view if app has that method
+            if (typeof window.app.logout === 'function') {
+                window.app.logout();
+            } else {
+                window.location.hash = '#login'; // Heuristic
+            }
+        }
+    </script>
+    <script>
+        (function () {
+            // Monkey patch app.showSection to trigger data load
+            const originalShowSection = app.showSection;
+            app.showSection = function (section) {
+                if (originalShowSection) originalShowSection.apply(this, arguments);
+                // The app.showSection already handles initFederatedView() for 'federated' section
+                if (section === 'config') {
+                    loadNodeConfig();
+                }
+            };
 
-        setInterval(fetchStats, 2000);
-        fetchStats();
+            // Monkey patch upgradeUsersMenuVisibility to handle Config menu
+            const originalUpdateMenuVisibility = app.updateUsersMenuVisibility;
+            app.updateUsersMenuVisibility = function () {
+                if (originalUpdateMenuVisibility) originalUpdateMenuVisibility.apply(this, arguments);
+                const configMenu = document.getElementById('menu-config');
+                const fedMenu = document.getElementById('menu-federated');
+                if (this.state.role === 'admin') {
+                    if (configMenu) configMenu.classList.remove('hidden');
+                    if (fedMenu) fedMenu.classList.remove('hidden');
+                } else {
+                    if (configMenu) configMenu.classList.add('hidden');
+                    if (fedMenu) fedMenu.classList.add('hidden');
+                }
+            };
+
+            // Initial call if already in-app
+            if (app.state.token) {
+                app.updateUsersMenuVisibility();
+            }
+
+            window.loadNodeConfig = function () {
+                const editor = document.getElementById('config-editor');
+                const statusDiv = document.getElementById('config-status');
+
+                statusDiv.classList.add('hidden');
+                editor.value = 'Cargando configuración...';
+
+                fetch('/api/config', {
+                    headers: { 'Authorization': localStorage.getItem('jettra_token') || '' }
+                })
+                    .then(res => {
+                        if (!res.ok) throw new Error('Error al cargar config: ' + res.status);
+                        return res.json();
+                    })
+                    .then(data => {
+                        editor.value = JSON.stringify(data, null, 4);
+                    })
+                    .catch(err => {
+                        editor.value = '';
+                        statusDiv.textContent = err.message;
+                        statusDiv.className = 'status-error';
+                        statusDiv.classList.remove('hidden');
+                    });
+            };
+
+            window.saveNodeConfig = function (restart) {
+                const editor = document.getElementById('config-editor');
+                const statusDiv = document.getElementById('config-status');
+
+                try {
+                    const config = JSON.parse(editor.value);
+                    const url = '/api/config' + (restart ? '?restart=true' : '');
+
+                    statusDiv.textContent = 'Guardando...';
+                    statusDiv.className = 'status-success';
+                    statusDiv.classList.remove('hidden');
+
+                    fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': localStorage.getItem('jettra_token') || ''
+                        },
+                        body: JSON.stringify(config)
+                    })
+                        .then(res => {
+                            if (!res.ok) return res.text().then(t => { throw new Error(t) });
+
+                            statusDiv.textContent = restart ? 'Cambios guardados. El servidor se está reiniciando...' : 'Cambios guardados correctamente.';
+                            statusDiv.className = 'status-success';
+
+                            if (restart) {
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 5000);
+                            }
+                        })
+                        .catch(err => {
+                            statusDiv.textContent = 'Error al guardar: ' + err.message;
+                            statusDiv.className = 'status-error';
+                        });
+
+                } catch (e) {
+                    statusDiv.textContent = 'JSON inválido: ' + e.message;
+                    statusDiv.className = 'status-error';
+                    statusDiv.classList.remove('hidden');
+                }
+            };
+
+            app.showAddFederatedModal = function () {
+                const html = `
+                    <div class="form-group">
+                        <label>Server Name</label>
+                        <input type="text" id="fed-name" class="form-control" placeholder="fed-node-X">
+                    </div>
+                    <div class="form-group">
+                        <label>IP or URL</label>
+                        <input type="text" id="fed-url" class="form-control" placeholder="http://localhost:9003">
+                    </div>
+                    <div class="form-group">
+                        <label>Administrative Token / Password</label>
+                        <input type="password" id="fed-token" class="form-control" placeholder="••••••••">
+                    </div>
+                `;
+
+                app.showInputModal("Add Federated Server", html, async () => {
+                    let url = document.getElementById('fed-url').value.trim();
+                    const name = document.getElementById('fed-name').value.trim();
+                    const token = document.getElementById('fed-token').value.trim();
+
+                    if (!url) {
+                        alert("URL is required");
+                        return;
+                    }
+
+                    if (!url.startsWith('http')) url = 'http://' + url;
+
+                    try {
+                        const response = await fetch('/api/federated/raft/addPeer', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': localStorage.getItem('jettra_token') || ''
+                            },
+                            body: JSON.stringify({ url: url, name: name, token: token })
+                        });
+
+                        const result = await response.json();
+                        if (response.ok) {
+                            app.notify("Federated server addition initiated", "success");
+                            loadFederatedStatus();
+                        } else {
+                            app.notify("Error: " + (result.error || result), "danger");
+                        }
+                    } catch (err) {
+                        app.notify("Error: " + err.message, "danger");
+                    }
+                }, "Add Peer");
+            };
+        })();
     </script>
 </body>
 
