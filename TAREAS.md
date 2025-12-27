@@ -138,10 +138,6 @@ Crea la documentacion en el archivo driver.md
 # JettraMemoryDB
 - [] Integrarlo a la red de servidores federados ajustar el formulario Federated
 
-- [] Impedir que se realicen operaciones si no se cuenta con un servidor federado lider que apunte a la base de datos en memoria como lider
-- [] Configurar que al ejecutarse se añada a la red federada y aplica la logica que ocurre con los nodos en el archivo config.json que se actualiza
-con la lista de servidores federados en este caso el archivo memory.json se actualiza con la lista de servidores federados
-en cuanto se conecta y los toma del lider que gestiona jettra-federated.
 
 
 - [] Realizar pruebas con el shell de jettra-memory-shell
@@ -150,6 +146,10 @@ en cuanto se conecta y los toma del lider que gestiona jettra-federated.
 
 Los cambios descritos a continuacion solo deben aplicar a jettra-memory, jettra-memory-drvier y jettra-memory-shell
     
+- [] Impedir que se realicen operaciones si no se cuenta con un servidor federado lider que apunte a la base de datos en memoria como lider
+- [] Configurar que al ejecutarse se añada a la red federada y aplica la logica que ocurre con los nodos en el archivo config.json que se actualiza
+con la lista de servidores federados en este caso el archivo memory.json se actualiza con la lista de servidores federados
+en cuanto se conecta y los toma del lider que gestiona jettra-federated.
 
 
 
