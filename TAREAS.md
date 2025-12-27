@@ -138,26 +138,23 @@ Crea la documentacion en el archivo driver.md
 # JettraMemoryDB
 
 
+Los cambios descritos a continuacion solo deben aplicar a jettra-memory, jettra-memory-drvier y jettra-memory-shell
 
-- [] Implementar en el servidor federado que almacene los datos e interactue con jettra-memory para almacenamiento en
-memoria, y la persistencia debe ser con jettra-server.
-
-- [] Crea la documentacion de jettra-memory-driver, jettra-memory-shell con ejemplos
-
-- [] En la interface web no funciona el formulario Query Console es decir ejecuto algun comando y el resultado es Results
-Error: Not Found
-
-- [] En la interface web la opcion backup no funciona envia el error 
+- [] En el formulario Import / Export Data funciona bien la exportacion de datos pero la opcion de importacion genera el error
+Import / Export Data ❌
 Error
-Backup failed: Not Found
+Import failed: Not Found
 
-- [] El formulario Import / Export Data no realiza la exportacion de datos ni la importacion
+- [] en el formulario Backup/Restore al hacer un backup genera el error ❌
+Error
+Download failed: Not Found
 
-- [] en el formulario User Management no permite registrar usuarios 
 
-- [] La opcion Configuración del Nodo (config.json) no muestra el contenido del archivo memory.json
 
-- [] Debes eliminar la opcion Diagram del menu no se usara
+
+
+
+
 
 
 
@@ -176,6 +173,26 @@ Backup failed: Not Found
 
 
 # JettraMemoryDB
+- [x] Implementar en el servidor federado que almacene los datos e interactue con jettra-memory para almacenamiento en
+memoria, y la persistencia debe ser con jettra-server.
+
+- [x] Crea la documentacion de jettra-memory-driver, jettra-memory-shell con ejemplos
+
+- [x] En la interface web no funciona el formulario Query Console es decir ejecuto algun comando y el resultado es Results
+Error: Not Found
+
+- [x] En la interface web la opcion backup no funciona envia el error 
+Error
+Backup failed: Not Found
+
+- [x] El formulario Import / Export Data no realiza la exportacion de datos ni la importacion
+
+- [x] en el formulario User Management no permite registrar usuarios 
+
+- [x] La opcion Configuración del Nodo (config.json) no muestra el contenido del archivo memory.json
+
+- [x] Debes eliminar la opcion Diagram del menu no se usara
+
 - [x] El jettra-memory-driver debe tener todas las funcionalidades de jettra-driver pero orientado a jettra-memory es decir todo lo almacena en memoria
 - [x] El jettra-memory-shell debe tener todas las funcionalidades de jettra-shell pero orientado a jettra-memory es decir todo lo almacena en memoria
 

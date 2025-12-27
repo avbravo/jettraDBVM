@@ -39,6 +39,19 @@ public class JettraMemoryDB {
     private void initialize() {
         LOGGER.info(() -> "Starting JettraMemoryDB: " + name);
         resourceMonitor.startMonitoring();
+        setupSystemDb();
+    }
+
+    private void setupSystemDb() {
+        MemoryCollection users = createCollection("_system", "users");
+        if (users.size() == 0) {
+            Map<String, Object> admin = new java.util.HashMap<>();
+            admin.put("username", "admin");
+            admin.put("password", config.getAdminPassword());
+            admin.put("description", "Built-in Administrator");
+            admin.put("role", "admin");
+            users.insert("admin", admin, 0);
+        }
     }
 
     public Map<String, MemoryCollection> getDatabase(String dbName) {

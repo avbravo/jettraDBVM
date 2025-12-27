@@ -2,9 +2,13 @@ package io.jettra.memory;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.helidon.webserver.WebServer;
@@ -112,6 +116,7 @@ public class JettraMemoryServer {
     static class ApiService implements io.helidon.webserver.http.HttpService {
         private final ObjectMapper mapper = new ObjectMapper();
         private final java.net.http.HttpClient httpClient = java.net.http.HttpClient.newHttpClient();
+        private final MemoryQueryExecutor queryExecutor = new MemoryQueryExecutor(db);
 
         @Override
         public void routing(HttpRules rules) {
@@ -128,8 +133,6 @@ public class JettraMemoryServer {
             rules.post("/cols", this::createCollection);
             rules.delete("/cols", this::deleteCollection);
             rules.get("/metrics", this::metrics);
-            rules.get("/diagrams", this::listDiagrams);
-            rules.get("/diagrams/content", this::getDiagramContent);
 
             // CRUD
             rules.post("/doc", this::saveDocument);
@@ -138,13 +141,18 @@ public class JettraMemoryServer {
             rules.delete("/doc", this::deleteDocument);
             rules.get("/query", this::queryDocuments);
             rules.get("/count", this::countDocuments);
+            rules.post("/command", this::executeCommand);
             
-            // Placeholder for cluster and config to avoid frontend errors
+            // System and Management
             rules.get("/cluster", (req, res) -> res.send("{\"nodes\":[]}"));
-            rules.get("/config", (req, res) -> res.send("{}"));
-            rules.get("/users", (req, res) -> res.send("[]"));
+            rules.get("/config", this::getConfig);
+            rules.post("/config", this::saveConfig);
+            rules.get("/users", this::listUsers);
+            rules.post("/users", this::createUser);
+            rules.delete("/users", this::deleteUser);
             rules.get("/federated", (req, res) -> res.send("{}"));
-            rules.get("/backups", (req, res) -> res.send("[]"));
+            rules.get("/backups", this::listBackups);
+            rules.post("/backup", this::performBackup);
             rules.get("/index", this::getIndexes);
             rules.post("/index", this::createIndex);
             rules.delete("/index", this::deleteIndex);
@@ -152,6 +160,10 @@ public class JettraMemoryServer {
             rules.get("/version", this::getVersionContent);
             rules.post("/restore-version", this::restoreVersion);
 
+            // Import/Export
+            rules.get("/export", this::exportCollection);
+            rules.post("/import", this::importCollection);
+ 
             // Transactions
             rules.post("/tx/begin", this::beginTransaction);
             rules.post("/tx/commit", this::commitTransaction);
@@ -473,48 +485,164 @@ public class JettraMemoryServer {
             status(req, res);
         }
 
-        private void listDiagrams(ServerRequest req, ServerResponse res) {
+        private void executeCommand(ServerRequest req, ServerResponse res) {
             try {
-                java.io.File dir = new java.io.File("/home/avbravo/NetBeansProjects/golang/jettraDBVM/books/excalidraw");
-                if (!dir.exists()) {
-                    dir = new java.io.File("../books/excalidraw");
-                }
-                if (!dir.exists()) {
-                    res.send("[]");
-                    return;
-                }
-                java.io.File[] files = dir.listFiles((d, name) -> name.endsWith(".excalidraw"));
-                java.util.List<String> fileNames = new java.util.ArrayList<>();
-                if (files != null) {
-                    for (java.io.File f : files) {
-                        fileNames.add(f.getName());
-                    }
-                }
-                res.send(mapper.writeValueAsString(fileNames));
+                String dbName = req.query().get("db");
+                String command = req.content().as(String.class);
+                Object result = queryExecutor.execute(dbName, command);
+                res.send(mapper.writeValueAsString(result));
             } catch (Exception e) {
                 res.status(500).send(e.getMessage());
             }
         }
-
-        private void getDiagramContent(ServerRequest req, ServerResponse res) {
+ 
+        private void getConfig(ServerRequest req, ServerResponse res) {
             try {
-                String name = req.query().get("name");
-                if (name == null) {
-                    res.status(400).send("Missing name");
-                    return;
+                String configPath = System.getProperty("config", "memory.json");
+                java.io.File file = new java.io.File(configPath);
+                if (file.exists()) {
+                    res.send(java.nio.file.Files.readString(file.toPath()));
+                } else {
+                    res.send(mapper.writeValueAsString(config));
                 }
-                java.io.File dir = new java.io.File("/home/avbravo/NetBeansProjects/golang/jettraDBVM/books/excalidraw");
-                if (!dir.exists()) {
-                    dir = new java.io.File("../books/excalidraw");
-                }
-                java.io.File file = new java.io.File(dir, name);
-                if (!file.exists()) {
-                    res.status(404).send("File not found");
-                    return;
-                }
-                res.send(java.nio.file.Files.readString(file.toPath()));
             } catch (Exception e) {
                 res.status(500).send(e.getMessage());
+            }
+        }
+ 
+        private void saveConfig(ServerRequest req, ServerResponse res) {
+            try {
+                String body = req.content().as(String.class);
+                String configPath = System.getProperty("config", "memory.json");
+                java.nio.file.Files.writeString(java.nio.file.Paths.get(configPath), body);
+                res.send(mapper.createObjectNode().put("status", "Config saved").toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+ 
+        private void listUsers(ServerRequest req, ServerResponse res) {
+            try {
+                MemoryCollection users = db.getCollection("_system", "users");
+                if (users != null) {
+                    res.send(mapper.writeValueAsString(users.getAll().values()));
+                } else {
+                    res.send("[]");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+ 
+        private void createUser(ServerRequest req, ServerResponse res) {
+            try {
+                byte[] bytes = req.content().as(byte[].class);
+                Map<String, Object> user = mapper.readValue(bytes, Map.class);
+                String username = (String) user.get("username");
+                if (username == null) username = (String) user.get("_id");
+                if (username == null) {
+                    res.status(400).send("Missing username");
+                    return;
+                }
+                user.put("_id", username);
+                db.createCollection("_system", "users").insert(username, user, 0);
+                res.send(mapper.createObjectNode().put("status", "User created").toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+ 
+        private void deleteUser(ServerRequest req, ServerResponse res) {
+            try {
+                String username = req.query().get("id");
+                MemoryCollection users = db.getCollection("_system", "users");
+                if (users != null) {
+                    users.delete(username, 0);
+                    res.send(mapper.createObjectNode().put("status", "User deleted").toString());
+                } else {
+                    res.status(404).send("Users collection not found");
+                }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+ 
+        private void listBackups(ServerRequest req, ServerResponse res) {
+            try {
+                java.io.File backupDir = new java.io.File("backups");
+                if (!backupDir.exists()) backupDir.mkdirs();
+                java.io.File[] files = backupDir.listFiles((d, name) -> name.endsWith(".json"));
+                java.util.List<Map<String, Object>> backups = new java.util.ArrayList<>();
+                if (files != null) {
+                    for (java.io.File f : files) {
+                        backups.add(Map.of(
+                                "filename", f.getName(),
+                                "date", new java.util.Date(f.lastModified()).toString(),
+                                "size", f.length()
+                        ));
+                    }
+                }
+                res.send(mapper.writeValueAsString(backups));
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+ 
+        private void performBackup(ServerRequest req, ServerResponse res) {
+            try {
+                java.io.File backupDir = new java.io.File("backups");
+                if (!backupDir.exists()) backupDir.mkdirs();
+                String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date());
+                java.io.File backupFile = new java.io.File(backupDir, "manual_backup_" + timestamp + ".json");
+                
+                // Simple state dump
+                Map<String, Object> state = new HashMap<>();
+                for (String dbName : db.getDatabaseNames()) {
+                    Map<String, Object> colData = new HashMap<>();
+                    for (String colName : db.getCollectionNames(dbName)) {
+                        colData.put(colName, db.getCollection(dbName, colName).getAll());
+                    }
+                    state.put(dbName, colData);
+                }
+                mapper.writerWithDefaultPrettyPrinter().writeValue(backupFile, state);
+                res.send(mapper.createObjectNode().put("status", "Backup successful").put("file", backupFile.getName()).toString());
+            } catch (Exception e) {
+                res.status(500).send("Backup failed: " + e.getMessage());
+            }
+        }
+ 
+        private void exportCollection(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                MemoryCollection col = db.getCollection(dbName, colName);
+                if (col == null) {
+                    res.status(404).send("Collection not found");
+                    return;
+                }
+                res.send(mapper.writeValueAsString(col.getAll().values()));
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+ 
+        private void importCollection(ServerRequest req, ServerResponse res) {
+            try {
+                String dbName = req.query().get("db");
+                String colName = req.query().get("col");
+                byte[] bytes = req.content().as(byte[].class);
+                java.util.List<Map<String, Object>> docs = mapper.readValue(bytes, new TypeReference<List<Map<String, Object>>>() {});
+                
+                MemoryCollection col = db.createCollection(dbName, colName);
+                for (Map<String, Object> doc : docs) {
+                    String id = (String) doc.get("_id");
+                    if (id == null) id = (String) doc.get("id");
+                    if (id == null) id = UUID.randomUUID().toString();
+                    col.insert(id, doc, 0);
+                }
+                res.send(mapper.createObjectNode().put("status", "Import successful").put("count", docs.size()).toString());
+            } catch (Exception e) {
+                res.status(500).send("Import failed: " + e.getMessage());
             }
         }
 

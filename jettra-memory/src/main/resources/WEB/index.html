@@ -154,17 +154,6 @@
                                     <span class="flex-1 ml-3 whitespace-nowrap">Federated</span>
                                 </a>
                             </li>
-                            <li id="menu-diagrams">
-                                <a href="#" class="sidebar-link group" onclick="app.showSection('diagrams')">
-                                    <svg class="flex-shrink-0 w-5 h-5 mr-3" aria-hidden="true"
-                                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                        stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
-                                    <span class="flex-1 ml-3 whitespace-nowrap">Diagrams</span>
-                                </a>
-                            </li>
 
                             <li id="menu-config" class="hidden">
                                 <a href="#" class="sidebar-link group" onclick="app.showSection('config')">
@@ -755,33 +744,6 @@
 
                 </div>
 
-                <!-- Diagrams Section -->
-                <div id="diagrams-section" class="section-content hidden">
-                    <div class="p-4" style="padding: 2rem;">
-                        <div class="section-header">
-                            <h2 class="section-title">Excalidraw Diagrams</h2>
-                        </div>
-                        <div class="glass-panel">
-                            <h3 class="text-xl font-semibold mb-4">Available Diagrams</h3>
-                            <ul id="diagrams-list" class="modern-list">
-                                <!-- Populated by JS -->
-                            </ul>
-                        </div>
-
-                        <!-- Viewer Container -->
-                        <div id="diagram-viewer-container" class="glass-panel mt-8 hidden">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 id="current-diagram-title" class="text-xl font-semibold">Diagram Viewer</h3>
-                                <button class="btn btn-secondary btn-sm"
-                                    onclick="appExtended.closeDiagram()">Close</button>
-                            </div>
-                            <div id="diagram-render-area"
-                                style="background: white; border-radius: 8px; overflow: auto; min-height: 400px; padding: 20px; display: flex; justify-content: center; align-items: center;">
-                                <!-- SVG will be rendered here -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
         </div>
     </div>
 
@@ -811,89 +773,6 @@
     </div>
 
     <script src="js/app.bundle.js"></script>
-    <script type="module">
-        // Excalidraw support
-        import { exportToSvg } from "https://esm.sh/@excalidraw/utils@0.1.2";
-
-        window.appExtended = {
-            async loadDiagrams() {
-                try {
-                    const res = await fetch('/api/diagrams');
-                    const files = await res.json();
-                    const list = document.getElementById('diagrams-list');
-                    list.innerHTML = '';
-                    files.forEach(file => {
-                        const li = document.createElement('li');
-                        li.className = 'modern-list-item';
-                        li.style.display = 'flex';
-                        li.style.justifyContent = 'space-between';
-                        li.style.alignItems = 'center';
-                        li.style.padding = '1rem';
-                        li.style.borderBottom = '1px solid var(--border-color)';
-                        li.innerHTML = `
-                            <span>${file}</span>
-                            <button class="btn btn-primary btn-sm" onclick="appExtended.openDiagram('${file}')">Open</button>
-                        `;
-                        list.appendChild(li);
-                    });
-                } catch (err) {
-                    console.error('Failed to load diagrams:', err);
-                }
-            },
-
-            async openDiagram(name) {
-                document.getElementById('current-diagram-title').innerText = `Diagram: ${name}`;
-                document.getElementById('diagram-viewer-container').classList.remove('hidden');
-                const renderArea = document.getElementById('diagram-render-area');
-                renderArea.innerHTML = '<p style="color: #666;">Rendering diagram...</p>';
-
-                try {
-                    const res = await fetch(`/api/diagrams/content?name=${name}`);
-                    if (!res.ok) throw new Error('Failed to fetch diagram content');
-                    const text = await res.text();
-                    const content = JSON.parse(text);
-
-                    const svg = await exportToSvg({
-                        elements: content.elements,
-                        appState: {
-                            ...content.appState,
-                            exportWithDarkMode: document.body.classList.contains('dark-theme')
-                        },
-                        files: content.files || {}
-                    });
-
-                    svg.style.maxWidth = "100%";
-                    svg.style.height = "auto";
-                    renderArea.innerHTML = '';
-                    renderArea.appendChild(svg);
-                } catch (err) {
-                    console.error('Render error:', err);
-                    renderArea.innerHTML = `<p style="color: red;">Error: ${err.message}</p>`;
-                }
-            },
-
-            closeDiagram() {
-                document.getElementById('diagram-viewer-container').classList.add('hidden');
-            }
-        };
-
-        // Hook into app.showSection
-        // Wait for app to be defined
-        function hookApp() {
-            if (window.app && window.app.showSection) {
-                const originalShowSection = window.app.showSection;
-                window.app.showSection = function (section) {
-                    originalShowSection.apply(this, arguments);
-                    if (section === 'diagrams') {
-                        window.appExtended.loadDiagrams();
-                    }
-                };
-            } else {
-                setTimeout(hookApp, 100);
-            }
-        }
-        hookApp();
-    </script>
     <script>
         // Security: Force login on startup by clearing stored tokens
         localStorage.removeItem('jettra_token');
