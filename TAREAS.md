@@ -71,7 +71,13 @@ pero desarrollado sobre el lenguaje quarkus Los proyectos los renombras al final
 jettra-server seria jettra-server-quarkus y debes implementar todas las funcionalidades existentes en el los proyectos.
 
 
-
+# Configuracion StandAlone sin federacion
+- [] Permitir ejecutar la base de datos en memoria en local sin que sea lider
+     es decir no es parte de la red federada con el parametro   "distributed": false, este principio tambien aplica para la base de datos jettra-server. Es decir cuando esta distributed en false
+     la base de datos se ejecuta en standalone y no forma para de una red 
+     federada por lo tanto las operaciones que se realicen no dependen
+     de ningun servidor federado y los driver y el shell  deben tambien soportar esta caracteristica.
+     
 
 # Driver
 
@@ -156,6 +162,8 @@ en cuanto se conecta y los toma del lider que gestiona jettra-federated.
 
 - [] Ejecutar varias instancias de jettra-memory detener el lider y verificar si se asigna uno nuevo
 -[] Verificar que al iniciar un jettra-memory se actualice con la lista de servidores federados
+
+- [] Distribuir la base de datos en memoria del lider a los nodos de bases de datos en memoria
 
 
 
