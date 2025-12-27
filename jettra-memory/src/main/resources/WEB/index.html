@@ -790,6 +790,11 @@
     </script>
     <script>
         (function () {
+            // Compatibility alias for notify
+            if (app && app.showNotification && !app.notify) {
+                app.notify = app.showNotification;
+            }
+
             // Monkey patch app.showSection to trigger data load
             const originalShowSection = app.showSection;
             app.showSection = function (section) {
@@ -818,6 +823,103 @@
             // Initial call if already in-app
             if (app.state.token) {
                 app.updateUsersMenuVisibility();
+            }
+
+            // Monkey-patch loadBackups to handle .json extension and object responses in Jettra-Memory
+            const originalLoadBackups = app.loadBackups;
+            app.loadBackups = async function () {
+                try {
+                    const res = await this.authenticatedFetch('/api/backups');
+                    if (res.ok) {
+                        const items = await res.json();
+                        const tbody = document.getElementById('backups-list');
+                        if (!tbody) return;
+                        tbody.innerHTML = '';
+                        items.forEach(item => {
+                            let f, d;
+                            if (typeof item === 'string') {
+                                f = item;
+                                // Fallback parsing from filename
+                                let dateStr = 'Unknown';
+                                const fClean = f.replace('.json', '').replace('.zip', '');
+                                const parts = fClean.split('_');
+                                if (parts.length > 1) {
+                                    const timePart = parts[parts.length - 1];
+                                    if (timePart.length === 14) {
+                                        dateStr = timePart.substring(0, 4) + '-' + timePart.substring(4, 6) + '-' + timePart.substring(6, 8) + ' ' +
+                                            timePart.substring(8, 10) + ':' + timePart.substring(10, 12) + ':' + timePart.substring(12, 14);
+                                    }
+                                }
+                                d = dateStr;
+                            } else {
+                                f = item.filename;
+                                d = item.date || 'Unknown';
+                            }
+
+                            const tr = document.createElement('tr');
+                            tr.innerHTML = `
+                                <td>${f}</td>
+                                <td>${d}</td>
+                                <td class="actions-cell">
+                                    <button class="btn btn-primary btn-sm" onclick="app.downloadBackup('${f}')">Download</button>
+                                    <button class="btn btn-warning btn-sm" onclick="app.promptRestore('${f}')">Restore</button>
+                                </td>
+                            `;
+                            tbody.appendChild(tr);
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to load backups:', e);
+                }
+            };
+
+            // Monkey-patch performImport to use absolute path and better error handling
+            app.performImport = async function () {
+                const db = document.getElementById('import-db-select').value;
+                const colSelect = document.getElementById('import-col-select').value;
+                const colNew = document.getElementById('import-new-col').value;
+                const format = document.getElementById('import-format').value;
+                const fileInput = document.getElementById('import-file');
+                const col = colNew ? colNew : colSelect;
+
+                if (!db || !col) {
+                    this.showNotification("Select database and collection", "danger");
+                    return;
+                }
+                if (fileInput.files.length === 0) {
+                    this.showNotification("Select a file", "danger");
+                    return;
+                }
+
+                const file = fileInput.files[0];
+                this.showNotification("Importing data...", "info");
+
+                const url = `/api/import?db=${db}&col=${col}&format=${format}`;
+                console.log('Importing to:', url);
+
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': localStorage.getItem('jettra_token') || ''
+                        },
+                        body: file
+                    });
+
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.showNotification(`Imported ${data.count} documents`, "success");
+                        if (colNew) {
+                            this.loadImportCollections();
+                            document.getElementById('import-new-col').value = '';
+                        }
+                    } else {
+                        const text = await res.text();
+                        this.showNotification("Import failed: " + text, "danger");
+                    }
+                } catch (err) {
+                    this.showNotification("Import error: " + err.message, "danger");
+                }
             }
 
             window.loadNodeConfig = function () {
@@ -929,13 +1031,13 @@
 
                         const result = await response.json();
                         if (response.ok) {
-                            app.notify("Federated server addition initiated", "success");
+                            app.showNotification("Federated server addition initiated", "success");
                             loadFederatedStatus();
                         } else {
-                            app.notify("Error: " + (result.error || result), "danger");
+                            app.showNotification("Error: " + (result.error || result), "error");
                         }
                     } catch (err) {
-                        app.notify("Error: " + err.message, "danger");
+                        app.showNotification("Error: " + err.message, "error");
                     }
                 }, "Add Peer");
             };

@@ -136,21 +136,20 @@ Crea la documentacion en el archivo driver.md
 
 
 # JettraMemoryDB
+- [] Integrarlo a la red de servidores federados ajustar el formulario Federated
+
+- [] Impedir que se realicen operaciones si no se cuenta con un servidor federado lider que apunte a la base de datos en memoria como lider
+- [] Configurar que al ejecutarse se añada a la red federada y aplica la logica que ocurre con los nodos en el archivo config.json que se actualiza
+con la lista de servidores federados en este caso el archivo memory.json se actualiza con la lista de servidores federados
+en cuanto se conecta y los toma del lider que gestiona jettra-federated.
+
+
+- [] Realizar pruebas con el shell de jettra-memory-shell
+- [] Realizar pruebas con el driver de jettra-memory-driver
 
 
 Los cambios descritos a continuacion solo deben aplicar a jettra-memory, jettra-memory-drvier y jettra-memory-shell
-
-- [] En el formulario Import / Export Data funciona bien la exportacion de datos pero la opcion de importacion genera el error
-Import / Export Data ❌
-Error
-Import failed: Not Found
-
-- [] en el formulario Backup/Restore al hacer un backup genera el error ❌
-Error
-Download failed: Not Found
-
-
-
+    
 
 
 
@@ -173,6 +172,23 @@ Download failed: Not Found
 
 
 # JettraMemoryDB
+
+- [x] En el formulario Import / Export Data funciona bien la exportacion de datos pero la opcion de importacion genera el error
+Import / Export Data ❌
+Error
+Import failed: Not Found
+
+- [x] en el formulario Backup/Restore al hacer un backup genera el error ❌
+Error
+Download failed: Not Found
+
+
+
+- [x] en el formulario Backup/Restore al hacer un backup lo hace perfecto pero  no muestra la fecha y hora en que fue 
+realizado el backup solo muestra Unknown en la columna Date
+
+
+
 - [x] Implementar en el servidor federado que almacene los datos e interactue con jettra-memory para almacenamiento en
 memoria, y la persistencia debe ser con jettra-server.
 
