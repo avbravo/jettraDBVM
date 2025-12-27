@@ -151,6 +151,12 @@ public class JettraMemoryServer {
             rules.get("/versions", this::getVersions);
             rules.get("/version", this::getVersionContent);
             rules.post("/restore-version", this::restoreVersion);
+
+            // Transactions
+            rules.post("/tx/begin", this::beginTransaction);
+            rules.post("/tx/commit", this::commitTransaction);
+            rules.post("/tx/rollback", this::rollbackTransaction);
+
             rules.get("/versions_placeholder", (req, res) -> res.send("[]"));
         }
 
@@ -626,6 +632,43 @@ public class JettraMemoryServer {
                 } else {
                     res.status(404).send("Collection not found");
                 }
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void beginTransaction(ServerRequest req, ServerResponse res) {
+            try {
+                long txID = db.getTransactionManager().beginTransaction();
+                res.send(mapper.createObjectNode().put("txID", String.valueOf(txID)).toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void commitTransaction(ServerRequest req, ServerResponse res) {
+            try {
+                String txID = req.query().get("txID");
+                if (txID == null) {
+                    res.status(400).send("Missing txID");
+                    return;
+                }
+                db.getTransactionManager().commit(Long.parseLong(txID));
+                res.send(mapper.createObjectNode().put("status", "committed").toString());
+            } catch (Exception e) {
+                res.status(500).send(e.getMessage());
+            }
+        }
+
+        private void rollbackTransaction(ServerRequest req, ServerResponse res) {
+            try {
+                String txID = req.query().get("txID");
+                if (txID == null) {
+                    res.status(400).send("Missing txID");
+                    return;
+                }
+                db.getTransactionManager().rollback(Long.parseLong(txID));
+                res.send(mapper.createObjectNode().put("status", "rolled back").toString());
             } catch (Exception e) {
                 res.status(500).send(e.getMessage());
             }

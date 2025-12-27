@@ -142,18 +142,22 @@ Crea la documentacion en el archivo driver.md
 - [] Implementar en el servidor federado que almacene los datos e interactue con jettra-memory para almacenamiento en
 memoria, y la persistencia debe ser con jettra-server.
 
+- [] Crea la documentacion de jettra-memory-driver, jettra-memory-shell con ejemplos
 
-- [x] Creacion de indices y  versiones de documentos
+- [] En la interface web no funciona el formulario Query Console es decir ejecuto algun comando y el resultado es Results
+Error: Not Found
 
-- [x] En la interface web de jettra-memory colocar las mismas opciones que tiene jettra-server
+- [] En la interface web la opcion backup no funciona envia el error 
+Error
+Backup failed: Not Found
 
+- [] El formulario Import / Export Data no realiza la exportacion de datos ni la importacion
 
-- [x] Configura jettra-memory con un archivo Main.java similar a como esta cofigurado jettra-server y configura tambien el archivo
-pom.xml en la seccion  <build> con la configuracion en  <executions>
+- [] en el formulario User Management no permite registrar usuarios 
 
+- [] La opcion Configuración del Nodo (config.json) no muestra el contenido del archivo memory.json
 
-- [x] Al detenerse el servidor federado lider no asigna un nuevo servidor federedado como lider
-
+- [] Debes eliminar la opcion Diagram del menu no se usara
 
 
 
@@ -168,6 +172,29 @@ pom.xml en la seccion  <build> con la configuracion en  <executions>
 # ---------------------------------------------------------
 # Completadas
 # ------------------------------------------------------------
+
+
+
+# JettraMemoryDB
+- [x] El jettra-memory-driver debe tener todas las funcionalidades de jettra-driver pero orientado a jettra-memory es decir todo lo almacena en memoria
+- [x] El jettra-memory-shell debe tener todas las funcionalidades de jettra-shell pero orientado a jettra-memory es decir todo lo almacena en memoria
+
+
+- [x] Soporte de transacciones desde la interface Web no funciona envia el error [21:22:26] Error starting Tx: 404
+
+- [x] Creacion de indices y  versiones de documentos
+
+- [x] En la interface web de jettra-memory colocar las mismas opciones que tiene jettra-server
+
+
+- [x] Configura jettra-memory con un archivo Main.java similar a como esta cofigurado jettra-server y configura tambien el archivo
+pom.xml en la seccion  <build> con la configuracion en  <executions>
+
+
+- [x] Al detenerse el servidor federado lider no asigna un nuevo servidor federedado como lider
+
+
+
 # Arranque de un servidor Federado
 
 
